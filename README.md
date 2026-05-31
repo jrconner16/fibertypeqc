@@ -3,7 +3,7 @@
 **Muscle fiber segmentation, type classification, and interactive review for immunofluorescence histology images.**
 
 This pipeline processes multi-channel immunofluorescence (IF) microscopy images of muscle tissue to:
-1. **Segment** muscle fibers from membrane/DAPI channel (Cellpose)
+1. **Segment** muscle fibers from a membrane/border channel (Cellpose)
 2. **Classify** fiber types (IIB, IIA, IIX) from marker channels
 3. **Extract** quantitative features and statistical summaries
 4. **Review** classifications interactively (Napari UI)
@@ -17,7 +17,7 @@ This pipeline processes multi-channel immunofluorescence (IF) microscopy images 
 
 ```bash
 # Clone/navigate to this repo
-cd /path/to/fibertyping_v2
+cd /path/to/fibertypeqc
 
 # Install dependencies (requires uv)
 uv sync
@@ -133,7 +133,8 @@ uv run python -m scripts.merge_reviewed_labels \
 ## Model Selection
 
 The v0 pipeline uses `rebaseline_tile_v2_p75p90_iib_iia_iix.joblib`, trained on:
-- Tile-based classification (512×512 crops)
+- Tile-subtraction preprocessing with 512 px training tiles; v0 inference defaults to
+  `--typing-tile-size 256` for background correction
 - Global percentile normalization (p75, p90)
 - Three-class output: IIB, IIA, IIX
 
@@ -168,7 +169,7 @@ data/models/                     # v0.1-alpha default classifier
 
 src/                             # Internal implementation modules during alpha
 
-tests/                           # Unit tests (TODO)
+tests/                           # Basic synthetic unit tests
 ```
 
 ---
@@ -222,7 +223,8 @@ Key dependencies:
 - Review confidence flags in `*_weak_labels.csv`
 - Check model performance on similar images in training data
 
-For detailed validation metrics, see `data/models/rebaseline_tile_v2_p75p90_iib_iia_iix_report.txt`.
+For detailed validation metrics, see [docs/validation_summary.md](docs/validation_summary.md)
+and the scripts under `validation/`.
 
 ---
 
@@ -233,27 +235,28 @@ To extend or modify the pipeline:
 1. **New preprocessing**: Add to `src/preprocess_membrane.py`
 2. **New classifiers**: Train with `src/train_gold_classifier.py`, save to `data/models/`
 3. **Custom parameters**: Create preset configs in `run_batch.py`
-4. **Unit tests**: Add to `tests/` and run `pytest tests/`
+4. **Unit tests**: Run `uv run python -m pytest`
 
 ---
 
 ## Lab Notes
 
-This pipeline was developed for automated typing of dystrophic and control muscle tissue. Primary applications:
+This pipeline was developed initially for internal lab workflows and now maintained as a
+public alpha tool. Primary applications:
 - MDX (dystrophic) vs. WT (control) comparison studies
 - Multi-mouse cohorts with single/multi-section imaging
 - Semi-automated validation workflow
 
-For lab-specific documentation and validation results, see [roadmap.md](roadmap.md).
+Validation and workflow documentation is available under `docs/` and `validation/`.
 
 ---
 
 ## License
 
-Internal use only (insert license here if needed).
+MIT License. See [LICENSE](LICENSE).
 
 ---
 
 ## Contact
 
-For questions or issues, contact the lab or open an issue in the repository.
+For questions, bug reports, or feature requests, open an issue in this repository.
