@@ -1,0 +1,72 @@
+# Python environments & tools
+.venv/
+.env
+.envrc
+__pycache__/
+.Python
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Large binary data files
+*.czi
+*.tif
+*.tiff
+*.zip
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project outputs (generated during runs)
+outputs/
+/data/runs/
+/data/*.csv
+roadmap.md
+
+# Private development notebooks and scratch validation labels
+notebooks/
+/data/labels/
+
+# Experimental/internal scripts not included in v0.1-alpha release surface
+/src/ui_napari.py
+/src/check_mergeability.py
+/src/pseudo_label_merge.py
+/src/train_classifier.py
+/src/train_gold_classifier.py
+/src/plot_biological_story.py
+
+# Model release surface: keep only the v0.1-alpha default classifier.
+/data/models/*
+!/data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib
+!/data/models/README.md
+!/data/models/model_card.md
+
+# Large dataset folders (keep structure only)
+*_mouse*/
+mouse*/
+mdx*/
+*4mo*/
+*12mo*/
+*1mo*/
+*1month*/
+*_TA*/
+*_TA-*/
+test_inputs/
+quad/
+*20x*/
+
+# Keep important folders/files
+!.gitkeep
+!/README.md
+!/src/
+!/data/models/
