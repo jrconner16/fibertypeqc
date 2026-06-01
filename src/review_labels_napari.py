@@ -489,6 +489,7 @@ def launch_review(
         pickable_layers.append(overlay_rgb_layer)
 
     status = QLabel("")
+    status.setWordWrap(True)
     hotkey_label = QLabel(
         "Hotkeys: b IIb | a IIa | x IIx(blank) | h hybrid | u uncertain | e exclude"
     )
@@ -648,6 +649,8 @@ def launch_review(
         target.bind_key("e", _exclude_key, overwrite=True)
 
     panel = QWidget()
+    panel.setMinimumWidth(320)
+    panel.setMaximumWidth(520)
     layout = QVBoxLayout(panel)
     layout.addWidget(hotkey_label)
     layout.addWidget(assign_widget.native)
@@ -657,12 +660,10 @@ def launch_review(
     viewer.window.add_dock_widget(panel, area="right", name="Manual Fiber Type Review")
 
     set_status(
-        "Ready. Composite is threshold-scaled: IIb=magenta, IIa=green, membrane=gray. "
-        f"Type signal below {threshold_floor:.1f}x threshold is hidden; "
-        f"display_downsample={display_downsample}; "
-        f"minimal_layers={minimal_layers}; "
-        "Click a fiber in the image, then press "
-        "b=IIb, a=IIa, x=IIx(blank), h=hybrid, u=uncertain, e=exclude."
+        "Ready. Composite is threshold-scaled: IIb=magenta, IIa=green, membrane=gray.\n"
+        f"Type signal below {threshold_floor:.1f}x threshold is hidden.\n"
+        f"display_downsample={display_downsample}; minimal_layers={minimal_layers}.\n"
+        "Click a fiber, then press b=IIb, a=IIa, x=IIx(blank), h=hybrid, u=uncertain, e=exclude."
     )
     napari.run()
 

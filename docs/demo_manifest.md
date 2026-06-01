@@ -12,22 +12,24 @@ Under `examples/demo_outputs/`:
   Synthetic/sanitized batch summary table with representative status/count fields.
 - `demo_review_corrections.csv`:
   Synthetic/sanitized manual review correction table matching merge schema.
-- `demo_segmentation_overlay_placeholder.md`:
-  Placeholder for a publication-safe segmentation overlay screenshot.
-- `demo_fibertype_overlay_placeholder.md`:
-  Placeholder for a publication-safe fiber-type overlay screenshot.
-- `demo_napari_review_ui_placeholder.md`:
-  Placeholder for a publication-safe Napari review UI screenshot.
-- `demo_batch_validation_summary_placeholder.md`:
-  Placeholder for batch/validation summary screenshot(s).
+- `demo_segmentation.png`:
+  Segmentation view screenshot (raw membrane context with label overlay).
+- `demo_fibertype_overlay.png`:
+  Fiber-type overlay screenshot for full-section visual context.
+- `demo_napari_review_ui_overview.png`:
+  Napari review UI screenshot showing full overlay/workflow context.
+- `demo_napari_review_zoom.png`:
+  Napari review UI zoomed screenshot showing per-fiber confidence/probability context.
+- `demo_batch_summary_plot.png`:
+  Clipped batch/validation summary figure suitable for README display.
 
 ## Data Status
 
 - CSV demo files in `examples/demo_outputs/` are synthetic/sanitized examples.
-- Placeholder markdown files are not analysis outputs; they indicate intended screenshot locations.
+- PNG demo images are public-safe screenshots prepared for workflow communication.
 - Raw microscopy images are not included in this demo package.
-- If screenshots are added from published/cleared JAG images, they should be exported separately and
-  verified as safe for public release before commit.
+- Screenshots derived from published/cleared JAG images should remain de-identified in naming and
+  should avoid exposing private paths in UI captures.
 
 ## Intended Commands For Demo Reproduction
 
@@ -35,8 +37,8 @@ Single-image pipeline:
 
 ```bash
 uv run python -m scripts.run_pipeline \
-  --input path/to/demo_image.czi \
-  --output-dir outputs/demo_run/demo_image \
+  --input test_inputs/demo_screenshots/demo_image_a.czi \
+  --output-dir outputs/demo_run/demo_image_a \
   --type1-channel 0 \
   --type2-channel 1 \
   --membrane-channel 2 \
@@ -58,19 +60,19 @@ Review UI:
 
 ```bash
 uv run python -m scripts.review_labels_napari \
-  --image path/to/demo_image.czi \
-  --labels outputs/demo_run/demo_image/demo_image_cellpose_labels.tif \
-  --fibers outputs/demo_run/demo_image/demo_image_fibers.csv \
-  --output outputs/demo_run/demo_image/demo_image_fibers_manual_review.csv
+  --image test_inputs/demo_screenshots/demo_image_a.czi \
+  --labels outputs/demo_run/demo_image_a/demo_image_a_cellpose_labels.tif \
+  --fibers outputs/demo_run/demo_image_a/demo_image_a_fibers.csv \
+  --output outputs/demo_run/demo_image_a/demo_image_a_fibers_manual_review.csv
 ```
 
 Merge review labels:
 
 ```bash
 uv run python -m scripts.merge_reviewed_labels \
-  --fibers outputs/demo_run/demo_image/demo_image_fibers.csv \
-  --review outputs/demo_run/demo_image/demo_image_fibers_manual_review.csv \
-  --output outputs/demo_run/demo_image/demo_image_fibers_final.csv
+  --fibers outputs/demo_run/demo_image_a/demo_image_a_fibers.csv \
+  --review outputs/demo_run/demo_image_a/demo_image_a_fibers_manual_review.csv \
+  --output outputs/demo_run/demo_image_a/demo_image_a_fibers_final.csv
 ```
 
 ## What The Demo Validates

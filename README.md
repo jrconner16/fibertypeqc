@@ -17,14 +17,19 @@ MyoSight replacement.
 
 Demo assets:
 
-- Segmentation overlay placeholder:
-  [examples/demo_outputs/demo_segmentation_overlay_placeholder.md](examples/demo_outputs/demo_segmentation_overlay_placeholder.md)
-- Fiber-type overlay placeholder:
-  [examples/demo_outputs/demo_fibertype_overlay_placeholder.md](examples/demo_outputs/demo_fibertype_overlay_placeholder.md)
-- Napari review UI placeholder:
-  [examples/demo_outputs/demo_napari_review_ui_placeholder.md](examples/demo_outputs/demo_napari_review_ui_placeholder.md)
-- Batch/validation summary placeholder:
-  [examples/demo_outputs/demo_batch_validation_summary_placeholder.md](examples/demo_outputs/demo_batch_validation_summary_placeholder.md)
+- Segmentation view (raw membrane with labels):
+  [examples/demo_outputs/demo_segmentation.png](examples/demo_outputs/demo_segmentation.png)
+- Fiber-type overlay view:
+  [examples/demo_outputs/demo_fibertype_overlay.png](examples/demo_outputs/demo_fibertype_overlay.png)
+- Napari review UI (overview):
+  [examples/demo_outputs/demo_napari_review_ui_overview.png](examples/demo_outputs/demo_napari_review_ui_overview.png)
+- Napari review UI (zoomed, confidence/probability context):
+  [examples/demo_outputs/demo_napari_review_zoom.png](examples/demo_outputs/demo_napari_review_zoom.png)
+- Batch/validation summary figure:
+  [examples/demo_outputs/demo_batch_summary_plot.png](examples/demo_outputs/demo_batch_summary_plot.png)
+
+The two Napari screenshots intentionally show both full-context review overlay and a zoomed
+inspection view for per-fiber confidence/probability interpretation.
 
 Demo CSV outputs and provenance notes are documented in
 [docs/demo_manifest.md](docs/demo_manifest.md).
