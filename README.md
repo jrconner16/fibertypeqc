@@ -1,4 +1,4 @@
-# FiberTypeQC v0.1-alpha
+# FiberTypeQC v0.1.1-alpha
 
 **Muscle fiber segmentation, type classification, and interactive review for immunofluorescence histology images.**
 
