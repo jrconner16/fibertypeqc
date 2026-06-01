@@ -1,0 +1,4 @@
+image_name,status,error,fiber_count,needs_review_count,summary_path
+demo_image_a,success,,2575,412,outputs/demo_image_a/demo_image_a_summary.csv
+demo_image_b,success,,3327,530,outputs/demo_image_b/demo_image_b_summary.csv
+demo_image_c,success,,1850,175,outputs/demo_image_c/demo_image_c_summary.csv

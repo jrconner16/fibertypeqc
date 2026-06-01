@@ -1,0 +1,6 @@
+fiber_id,fiber_type,model_confidence,model_margin,needs_review,typing_signal_qc_flags,area,area_um2
+101,iib,0.98,0.91,false,,1845,931.6
+102,iia,0.94,0.73,false,,1762,889.7
+103,iix,0.64,0.19,true,low_model_confidence|low_model_margin,1690,853.4
+104,iib,0.88,0.47,false,model_positive_without_clear_signal,1931,975.0
+105,iix,0.57,0.11,true,low_model_confidence|model_iix_with_clear_marker_signal,1604,809.9

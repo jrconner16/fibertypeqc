@@ -9,6 +9,26 @@ This pipeline processes multi-channel immunofluorescence (IF) microscopy images 
 4. **Review** classifications interactively (Napari UI)
 5. **Export** validated results to CSV
 
+## Demo
+
+This repository includes alpha-stage demo artifacts for workflow communication and documentation.
+FiberTypeQC v0.1.x is a review-assisted pipeline release and is not positioned as a final validated
+MyoSight replacement.
+
+Demo assets:
+
+- Segmentation overlay placeholder:
+  [examples/demo_outputs/demo_segmentation_overlay_placeholder.md](examples/demo_outputs/demo_segmentation_overlay_placeholder.md)
+- Fiber-type overlay placeholder:
+  [examples/demo_outputs/demo_fibertype_overlay_placeholder.md](examples/demo_outputs/demo_fibertype_overlay_placeholder.md)
+- Napari review UI placeholder:
+  [examples/demo_outputs/demo_napari_review_ui_placeholder.md](examples/demo_outputs/demo_napari_review_ui_placeholder.md)
+- Batch/validation summary placeholder:
+  [examples/demo_outputs/demo_batch_validation_summary_placeholder.md](examples/demo_outputs/demo_batch_validation_summary_placeholder.md)
+
+Demo CSV outputs and provenance notes are documented in
+[docs/demo_manifest.md](docs/demo_manifest.md).
+
 ---
 
 ## Quick Start

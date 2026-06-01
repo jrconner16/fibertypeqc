@@ -1,11 +1,13 @@
 # Demo Outputs
 
-Placeholder for future demo CSV outputs.
+This directory holds public-safe demo artifacts for FiberTypeQC v0.1.1-alpha.
 
-Expected future files:
+Included now:
 
-- `demo_fiber_table.csv`
-- `demo_batch_summary.csv`
-- `demo_review_corrections.csv`
+- `demo_fiber_table.csv` (synthetic/sanitized)
+- `demo_batch_summary.csv` (synthetic/sanitized)
+- `demo_review_corrections.csv` (synthetic/sanitized)
+- screenshot placeholders for segmentation/type/review/summary visuals
 
-Use only synthetic, anonymized, or explicitly cleared data.
+See [docs/demo_manifest.md](../../docs/demo_manifest.md) for provenance and intended generation
+commands.

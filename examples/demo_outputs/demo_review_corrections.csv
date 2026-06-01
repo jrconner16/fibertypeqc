@@ -1,0 +1,5 @@
+fiber_id,corrected_type,is_uncertain,is_hybrid,is_excluded,label_source
+103,iia,false,false,false,manual_gold
+105,iix,true,false,false,manual_gold
+204,hybrid,false,true,false,manual_gold
+318,exclude,false,false,true,manual_gold
