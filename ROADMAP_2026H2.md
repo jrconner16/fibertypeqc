@@ -35,12 +35,17 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - unresolved/other/uncertain logic
 - Support arbitrary 4-channel panel combinations at the measurement layer, but only allow biological class claims justified by the configured panel.
 
-## Status Snapshot (2026-06-01)
+## Status Snapshot (2026-06-02)
 
 - `v0.1.1-alpha` released as pre-release with demo screenshots and documentation polish.
 - Roadmap milestones created on GitHub: `v0.2`, `v0.3`, `v0.4`.
 - Roadmap issue set generated and created from `docs/github_issues_2026H2.csv`.
-- Next execution focus: start and ship the first `v0.2` issues via issue-linked PRs.
+- `v0.2` foundation work started and partially shipped:
+  - panel-aware YAML config loader added
+  - public CLI cleanup started for pipeline, review, and batch
+  - batch runner remains frozen by default, with explicit opt-in channel overrides
+  - internal quantify/QC helpers now route through `MarkerSpec` seams while preserving legacy outputs
+- Next execution focus: continue `v0.2` from internal generic marker-feature scaffolding, not from public CLI/config cleanup.
 
 ## Strict Baseline Policy
 
@@ -100,6 +105,32 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 - Feature diagnostics scripts with reproducible commands.
 - Command-level smoke tests for pipeline/batch/review/merge.
 - Optional experimental paths disabled by default.
+
+### Progress So Far (2026-06-02)
+
+- Completed:
+  - `fibertypeqc/config.py` with panel-aware schema parsing
+  - `docs/panel_schema.md`
+  - explicit marker-channel CLI support in:
+    - `scripts.run_pipeline`
+    - `scripts.review_labels_napari`
+    - `scripts.run_batch`
+  - legacy alias compatibility:
+    - `type1 -> iib`
+    - `type2 -> iia`
+  - batch warnings when leaving the strict frozen baseline path
+  - tests for channel-config parsing and batch override behavior
+  - initial internal refactor in `src/quantify_classify.py`:
+    - `MarkerSpec`
+    - `MarkerStats`
+    - marker-aware feature/stat/QC seams that still emit legacy columns
+
+- Not done yet:
+  - `fiber_type_source` / direct-vs-inferred provenance in outputs
+  - `docs/modeling.md`
+  - expanded model card failure-mode writeup
+  - feature diagnostics scripts
+  - baseline snapshot checks for frozen legacy defaults
 
 ### Acceptance Criteria
 
@@ -215,11 +246,26 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 ## Weekly Next Steps (Immediate)
 
-1. Milestones created: `v0.2`, `v0.3`, `v0.4`.
-2. Milestone issues created from `docs/github_issues_2026H2.csv`.
-3. Start `v0.2` with `channel-config` + docs/modeling + baseline snapshot checks.
-4. Keep release notes conservative and explicit about alpha limits.
-5. Keep panel-aware expansion staged: config foundation first, generic marker features second, residual inference/DAPI features third.
+1. Finish the next `v0.2` internal slice:
+   - allow optional internal collection of extra marker stats (`i`, `iix`) without changing default classification behavior
+   - keep exported legacy columns unchanged
+2. Add `fiber_type_source` / equivalent provenance fields without changing current default calls.
+3. Add `docs/modeling.md` and expand the model card with current failure modes and panel limits.
+4. Add baseline snapshot checks for frozen legacy defaults.
+5. Keep release notes conservative and explicit about alpha limits.
+
+## Start Here Next Time
+
+When resuming work, start with this slice:
+
+1. Extend `src/quantify_classify.py` so internal marker-stat collection can optionally include extra direct markers (`i`, `iix`) when present.
+2. Do not change the exported default feature table or default `IIb + IIa -> inferred IIx` behavior yet.
+3. After that seam is in place, add output provenance fields such as:
+   - `fiber_type_source`
+   - `available_markers`
+   - optional residual-inference metadata
+
+Short version: next work should continue the internal marker-aware architecture, not revisit CLI/config cleanup.
 
 ---
 
