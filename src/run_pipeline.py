@@ -324,6 +324,8 @@ def main() -> None:
         quant_cfg = QuantifyConfig(
             type1_channel=channel_cfg.type1_channel,
             type2_channel=channel_cfg.type2_channel,
+            i_channel=channel_cfg.i_channel,
+            iix_channel=channel_cfg.iix_channel,
             threshold_mode=args.threshold_mode,
             quantile=args.quantile,
             percentile_q=args.percentile_q,

@@ -32,6 +32,10 @@ Typing features:
 Classification columns:
 
 - `fiber_type`: predicted class, usually `iib`, `iia`, or `iix`.
+- `fiber_type_source`: provenance for the current call. In `v0.2` this is one of
+  `direct_marker`, `hybrid_marker`, `residual_inference`, or `model_prediction`.
+- `available_markers`: pipe-delimited marker channels available for that run, for
+  example `iib|iia` or `iib|iia|i|iix`.
 - `classification_method`: classifier/rule source.
 - `prob_iib`, `prob_iia`, `prob_iix`: model class probabilities when available.
 - `model_confidence`: highest model probability.

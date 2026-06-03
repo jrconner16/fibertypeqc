@@ -17,6 +17,8 @@ from src.label_masks import erode_labels
 class QuantifyConfig:
     type1_channel: int = 0
     type2_channel: int = 1
+    i_channel: int | None = None
+    iix_channel: int | None = None
     threshold_mode: str = "quantile"  # quantile | otsu | yen | fixed
     quantile: float = 0.6
     percentile_q: float = 0.85
@@ -66,7 +68,7 @@ class MarkerStats:
 @dataclass(frozen=True)
 class MarkerSpec:
     marker_name: str
-    legacy_prefix: str
+    legacy_prefix: str | None
     channel_index: int
 
 
@@ -75,6 +77,22 @@ def _default_marker_specs(cfg: QuantifyConfig) -> tuple[MarkerSpec, MarkerSpec]:
         MarkerSpec(marker_name="iib", legacy_prefix="type1", channel_index=int(cfg.type1_channel)),
         MarkerSpec(marker_name="iia", legacy_prefix="type2", channel_index=int(cfg.type2_channel)),
     )
+
+
+def _active_marker_specs(cfg: QuantifyConfig) -> tuple[MarkerSpec, ...]:
+    specs: list[MarkerSpec] = [
+        MarkerSpec(marker_name="iib", legacy_prefix="type1", channel_index=int(cfg.type1_channel)),
+        MarkerSpec(marker_name="iia", legacy_prefix="type2", channel_index=int(cfg.type2_channel)),
+    ]
+    if cfg.i_channel is not None:
+        specs.append(
+            MarkerSpec(marker_name="i", legacy_prefix=None, channel_index=int(cfg.i_channel))
+        )
+    if cfg.iix_channel is not None:
+        specs.append(
+            MarkerSpec(marker_name="iix", legacy_prefix=None, channel_index=int(cfg.iix_channel))
+        )
+    return tuple(specs)
 
 
 def _auto_threshold(values: np.ndarray, mode: str, quantile: float) -> float:
@@ -91,6 +109,10 @@ def _auto_threshold(values: np.ndarray, mode: str, quantile: float) -> float:
 
 
 def _marker_column(spec: MarkerSpec, suffix: str) -> str:
+    if spec.legacy_prefix is None:
+        raise ValueError(
+            f"Marker {spec.marker_name!r} does not have a legacy output-column prefix."
+        )
     return f"{spec.legacy_prefix}_{suffix}"
 
 
@@ -289,6 +311,18 @@ def _legacy_marker_pair_columns(
     return _marker_column(primary_spec, suffix), _marker_column(secondary_spec, suffix)
 
 
+def _available_markers_value(marker_specs: tuple[MarkerSpec, ...]) -> str:
+    return "|".join(spec.marker_name for spec in marker_specs)
+
+
+def _rule_fiber_type_source(fiber_types: pd.Series) -> np.ndarray:
+    out = np.full(len(fiber_types), "direct_marker", dtype=object)
+    labels = fiber_types.astype(str).str.lower()
+    out[labels.eq("mixed").to_numpy()] = "hybrid_marker"
+    out[labels.eq("unknown").to_numpy()] = "residual_inference"
+    return out
+
+
 def _marker_signal_stats(
     *,
     image_chw: np.ndarray,
@@ -364,6 +398,21 @@ def _legacy_typing_feature_columns(
         out[f"{prefix}_pctl"] = stats.pctl
         out[f"{prefix}_coverage"] = stats.coverage
     return out
+
+
+def _marker_stats_metadata(
+    marker_stats: dict[str, MarkerStats],
+) -> dict[str, dict[str, np.ndarray]]:
+    return {
+        marker_name: {
+            "mean": stats.mean.copy(),
+            "p75": stats.p75.copy(),
+            "p90": stats.p90.copy(),
+            "pctl": stats.pctl.copy(),
+            "coverage": stats.coverage.copy(),
+        }
+        for marker_name, stats in marker_stats.items()
+    }
 
 
 def _legacy_signal_thresholds(
@@ -705,6 +754,8 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
                 "typing_interior_area",
                 "typing_erode_px",
                 "fiber_type",
+                "fiber_type_source",
+                "available_markers",
                 "classification_method",
                 "type1_threshold",
                 "type2_threshold",
@@ -732,6 +783,7 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
 
     areas = np.bincount(labels.ravel())[label_ids]
     marker_specs = _default_marker_specs(cfg)
+    active_marker_specs = _active_marker_specs(cfg)
 
     measure_labels = erode_labels(labels, int(cfg.typing_erode_px))
     interior_areas = np.bincount(
@@ -745,7 +797,7 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
         label_ids=label_ids,
         tissue_mask=tissue,
         cfg=cfg,
-        specs=marker_specs,
+        specs=active_marker_specs,
     )
     legacy_feature_columns = _legacy_typing_feature_columns(marker_stats, marker_specs)
 
@@ -763,6 +815,10 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
             **legacy_feature_columns,
         }
     )
+    available_markers_value = _available_markers_value(active_marker_specs)
+    df.attrs["available_markers"] = tuple(spec.marker_name for spec in active_marker_specs)
+    df.attrs["marker_stats"] = _marker_stats_metadata(marker_stats)
+    df["available_markers"] = available_markers_value
 
     if cfg.pixel_size_x_um is not None and cfg.pixel_size_y_um is not None:
         pixel_area_um2 = float(cfg.pixel_size_x_um) * float(cfg.pixel_size_y_um)
@@ -793,6 +849,7 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
             for col in proba_df.columns:
                 df[col] = proba_df[col].to_numpy()
         df["classification_method"] = "model"
+        df["fiber_type_source"] = "model_prediction"
         df["type1_threshold"] = legacy_thresholds["type1_signal"]
         df["type2_threshold"] = legacy_thresholds["type2_signal"]
         df["type1_pctl_threshold"] = np.nan
@@ -812,6 +869,7 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
 
     rule_outputs = _legacy_rule_classification(df, cfg, legacy_thresholds, marker_specs)
     df["fiber_type"] = rule_outputs["fiber_type"]
+    df["fiber_type_source"] = _rule_fiber_type_source(df["fiber_type"])
     method = f"rules:{cfg.threshold_mode}"
     if cfg.use_percentile_gate:
         method += f"+p{int(round(cfg.percentile_q * 100))}"
