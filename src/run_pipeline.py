@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
 
+from fibertypeqc.config import resolve_channel_config
 from src.io_utils import (
     ensure_dir,
     extract_pixel_size_um,
@@ -47,9 +49,63 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--input", type=Path, required=True, help="Input CZI/TIFF")
     p.add_argument("--output-dir", type=Path, required=True, help="Output directory")
 
-    p.add_argument("--membrane-channel", type=int, default=2)
-    p.add_argument("--type1-channel", type=int, default=0)
-    p.add_argument("--type2-channel", type=int, default=1)
+    p.add_argument(
+        "--channel-config",
+        type=Path,
+        default=None,
+        help=(
+            "YAML file with panel-aware channel mapping under 'channels' "
+            "and optional 'classification'."
+        ),
+    )
+    p.add_argument(
+        "--membrane-channel",
+        type=int,
+        default=None,
+        help="Membrane/laminin channel index.",
+    )
+    p.add_argument(
+        "--dapi-channel",
+        type=int,
+        default=None,
+        help="Optional DAPI channel index.",
+    )
+    p.add_argument(
+        "--i-channel",
+        type=int,
+        default=None,
+        help="Optional type I marker channel index.",
+    )
+    p.add_argument(
+        "--iia-channel",
+        type=int,
+        default=None,
+        help="Optional IIa marker channel index.",
+    )
+    p.add_argument(
+        "--iib-channel",
+        type=int,
+        default=None,
+        help="Optional IIb marker channel index.",
+    )
+    p.add_argument(
+        "--iix-channel",
+        type=int,
+        default=None,
+        help="Optional IIx marker channel index.",
+    )
+    p.add_argument(
+        "--type1-channel",
+        type=int,
+        default=None,
+        help="Legacy alias for --iib-channel.",
+    )
+    p.add_argument(
+        "--type2-channel",
+        type=int,
+        default=None,
+        help="Legacy alias for --iia-channel.",
+    )
 
     p.add_argument("--crop-auto", action="store_true", default=True)
     p.add_argument("--crop-ds", type=int, default=8)
@@ -96,6 +152,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--type1-threshold", type=float, default=0.0)
     p.add_argument("--type2-threshold", type=float, default=0.0)
+    p.add_argument(
+        "--iib-threshold",
+        type=float,
+        default=None,
+        help="Preferred alias for --type1-threshold.",
+    )
+    p.add_argument(
+        "--iia-threshold",
+        type=float,
+        default=None,
+        help="Preferred alias for --type2-threshold.",
+    )
     p.add_argument(
         "--typing-preprocess",
         type=str,
@@ -149,6 +217,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    channel_cfg, channel_warnings = resolve_channel_config(
+        channel_config_path=args.channel_config,
+        i_channel=args.i_channel,
+        iia_channel=args.iia_channel,
+        iib_channel=args.iib_channel,
+        iix_channel=args.iix_channel,
+        dapi_channel=args.dapi_channel,
+        type1_channel=args.type1_channel,
+        type2_channel=args.type2_channel,
+        membrane_channel=args.membrane_channel,
+    )
+    for warning in channel_warnings:
+        print(f"Warning: {warning}", file=sys.stderr, flush=True)
 
     total_stages = 7
     t_all = time.perf_counter()
@@ -157,15 +238,31 @@ def main() -> None:
         output_dir = ensure_dir(args.output_dir)
         image = load_multichannel_image(args.input)
         pixel_size_x_um, pixel_size_y_um = extract_pixel_size_um(args.input)
+        n_channels = image.shape[0]
 
-        if args.membrane_channel < 0 or args.membrane_channel >= image.shape[0]:
+        channel_values = {
+            "membrane": channel_cfg.membrane_channel,
+            "dapi": channel_cfg.dapi_channel,
+            "i": channel_cfg.i_channel,
+            "iia": channel_cfg.iia_channel,
+            "iib": channel_cfg.iib_channel,
+            "iix": channel_cfg.iix_channel,
+        }
+        for name, index in channel_values.items():
+            if index is None:
+                continue
+            if index < 0 or index >= n_channels:
+                raise ValueError(
+                    f"Invalid {name} channel {index} for image with {n_channels} channels"
+                )
+        if channel_cfg.iib_channel is None or channel_cfg.iia_channel is None:
             raise ValueError(
-                f"Invalid membrane channel {args.membrane_channel} "
-                f"for image with {image.shape[0]} channels"
+                "The current alpha typing path still requires both IIb and IIa marker channels. "
+                "Panel-aware config is accepted, but non-IIa/IIb typing modes are not active yet."
             )
 
     with stage(2, total_stages, "preprocess membrane channel"):
-        membrane = image[args.membrane_channel]
+        membrane = image[channel_cfg.membrane_channel]
         prep_cfg = PreprocessConfig(
             crop_auto=bool(args.crop_auto),
             crop_ds=args.crop_ds,
@@ -204,15 +301,35 @@ def main() -> None:
         save_labels(labels_path, labels)
 
     with stage(5, total_stages, "extract fiber features + classify types"):
+        iib_threshold = args.iib_threshold
+        iia_threshold = args.iia_threshold
+        if args.type1_threshold != 0.0 and iib_threshold is None:
+            iib_threshold = args.type1_threshold
+            print(
+                "Warning: --type1-threshold is a legacy alias for --iib-threshold",
+                file=sys.stderr,
+                flush=True,
+            )
+        if args.type2_threshold != 0.0 and iia_threshold is None:
+            iia_threshold = args.type2_threshold
+            print(
+                "Warning: --type2-threshold is a legacy alias for --iia-threshold",
+                file=sys.stderr,
+                flush=True,
+            )
+        if iib_threshold is None:
+            iib_threshold = 0.0
+        if iia_threshold is None:
+            iia_threshold = 0.0
         quant_cfg = QuantifyConfig(
-            type1_channel=args.type1_channel,
-            type2_channel=args.type2_channel,
+            type1_channel=channel_cfg.type1_channel,
+            type2_channel=channel_cfg.type2_channel,
             threshold_mode=args.threshold_mode,
             quantile=args.quantile,
             percentile_q=args.percentile_q,
             use_percentile_gate=(not args.no_percentile_gate),
-            type1_threshold=args.type1_threshold,
-            type2_threshold=args.type2_threshold,
+            type1_threshold=iib_threshold,
+            type2_threshold=iia_threshold,
             typing_preprocess=args.typing_preprocess,
             typing_bg_quantile=args.typing_bg_quantile,
             typing_tile_size=args.typing_tile_size,
@@ -258,7 +375,14 @@ def main() -> None:
             "labels_path": str(labels_path),
             "fibers_path": str(fibers_path),
             "runtime_s": round(float(runtime_s), 2),
-            "membrane_channel": int(args.membrane_channel),
+            "membrane_channel": int(channel_cfg.membrane_channel),
+            "dapi_channel": channel_cfg.dapi_channel,
+            "i_channel": channel_cfg.i_channel,
+            "iia_channel": channel_cfg.iia_channel,
+            "iib_channel": channel_cfg.iib_channel,
+            "iix_channel": channel_cfg.iix_channel,
+            "type1_channel": int(channel_cfg.type1_channel),
+            "type2_channel": int(channel_cfg.type2_channel),
             "crop_slices": str(prep.crop_slices),
             "downsample_factor": int(args.downsample_factor),
             "cellpose_model": args.cellpose_model,

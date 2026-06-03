@@ -70,8 +70,8 @@ The **v0 frozen command** is the production-validated baseline for consistent re
 uv run python -m scripts.run_pipeline \
   --input path/to/image.czi \
   --output-dir outputs/v0_run/image_name \
-  --type1-channel 0 \
-  --type2-channel 1 \
+  --iib-channel 0 \
+  --iia-channel 1 \
   --membrane-channel 2 \
   --typing-preprocess tile_subtract \
   --typing-tile-size 256 \
@@ -82,15 +82,17 @@ uv run python -m scripts.run_pipeline \
 **Parameters:**
 - `--input`: Path to .czi or .tiff image
 - `--output-dir`: Where to save results (creates subdirectory per image)
-- `--type1-channel`: Channel for IIb marker signal (default: 0)
-- `--type2-channel`: Channel for IIa marker signal (default: 1)
+- `--iib-channel`: Channel for IIb marker signal (default: 0)
+- `--iia-channel`: Channel for IIa marker signal (default: 1)
 - `--membrane-channel`: Structural membrane/laminin channel for segmentation (default: 2)
 - `--classifier-path`: Path to sklearn classifier (.joblib)
 - All other parameters use frozen v0 defaults (see `src/run_batch.py` for the full set)
 
 The v0.1-alpha channel schema is intentionally narrow: IIx is inferred as the unstained class
 relative to the IIb and IIa channels. General marker-panel configuration is not yet implemented.
-See [docs/quickstart.md](docs/quickstart.md) and [data/models/model_card.md](data/models/model_card.md).
+Legacy aliases `--type1-channel` and `--type2-channel` are still accepted for backward
+compatibility. See [docs/quickstart.md](docs/quickstart.md), [docs/panel_schema.md](docs/panel_schema.md),
+and [data/models/model_card.md](data/models/model_card.md).
 
 ### 3. Batch Processing
 
@@ -111,6 +113,10 @@ The batch runner:
 - Collects results in `batch_summary.csv` with fiber counts and status
 - Logs failures without crashing the batch
 - Creates organized per-image output folders
+
+By default, `scripts.run_batch` preserves the frozen v0 alpha behavior. If you pass
+`--channel-config` or explicit channel overrides, the batch run will log that it is no longer a
+strict frozen-baseline run.
 
 To see v0 parameters:
 ```bash
@@ -253,7 +259,7 @@ Key dependencies:
 - Consider preprocessing with `--cellpose-normalize`
 
 ### Classification errors
-- Verify type marker channels are correct (`--type1-channel`, `--type2-channel`)
+- Verify type marker channels are correct (`--iib-channel`, `--iia-channel`)
 - Review confidence flags in `*_weak_labels.csv`
 - Check model performance on similar images in training data
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import napari
@@ -10,6 +11,7 @@ import tifffile
 from magicgui import magicgui
 from qtpy.QtWidgets import QLabel, QVBoxLayout, QWidget
 
+from fibertypeqc.config import resolve_channel_config
 from src.fiber_type_labels import REVIEW_TYPES, normalize_review_label, to_biological_label
 from src.io_utils import load_multichannel_image
 from src.label_masks import eroded_label_mask
@@ -284,8 +286,8 @@ def launch_review(
     fibers_path: Path,
     output_path: Path | None = None,
     display_channel: int | None = None,
-    type1_channel: int | None = 0,
-    type2_channel: int | None = 1,
+    iib_channel: int | None = 0,
+    iia_channel: int | None = 1,
     membrane_channel: int | None = 2,
     typing_preprocess: str = "global_subtract",
     typing_bg_quantile: float = 0.02,
@@ -322,8 +324,8 @@ def launch_review(
     composite_layer = viewer.add_image(
         typing_composite(
             display_image,
-            type1_channel,
-            type2_channel,
+            iib_channel,
+            iia_channel,
             membrane_channel,
             type1_threshold=type1_threshold,
             type2_threshold=type2_threshold,
@@ -342,8 +344,8 @@ def launch_review(
     pickable_layers.append(composite_layer)
     if not minimal_layers:
         raw_layers = (
-            ("raw_type1", type1_channel, "magenta"),
-            ("raw_type2", type2_channel, "green"),
+            ("raw_iib", iib_channel, "magenta"),
+            ("raw_iia", iia_channel, "green"),
             ("raw_membrane", membrane_channel, "gray"),
         )
         for raw_name, raw_channel, raw_colormap in raw_layers:
@@ -359,8 +361,8 @@ def launch_review(
                 visible=False,
             )
             pickable_layers.append(raw_layer)
-    if (not minimal_layers) and type1_channel is not None:
-        type1 = optional_channel(display_image, type1_channel)
+    if (not minimal_layers) and iib_channel is not None:
+        type1 = optional_channel(display_image, iib_channel)
         if type1 is not None:
             type1_layer = viewer.add_image(
                 typing_signal_for_display(
@@ -375,15 +377,15 @@ def launch_review(
                     threshold_floor=threshold_floor,
                     mask=signal_mask,
                 ),
-                name=f"type1_signal_ch{type1_channel}",
+                name=f"iib_signal_ch{iib_channel}",
                 colormap="magenta",
                 blending="additive",
                 opacity=0.7,
                 visible=False,
             )
             pickable_layers.append(type1_layer)
-    if (not minimal_layers) and type2_channel is not None:
-        type2 = optional_channel(display_image, type2_channel)
+    if (not minimal_layers) and iia_channel is not None:
+        type2 = optional_channel(display_image, iia_channel)
         if type2 is not None:
             type2_layer = viewer.add_image(
                 typing_signal_for_display(
@@ -398,7 +400,7 @@ def launch_review(
                     threshold_floor=threshold_floor,
                     mask=signal_mask,
                 ),
-                name=f"type2_signal_ch{type2_channel}",
+                name=f"iia_signal_ch{iia_channel}",
                 colormap="green",
                 blending="additive",
                 opacity=0.7,
@@ -685,13 +687,67 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output", type=Path, help="Manual review CSV path.")
     parser.add_argument(
+        "--channel-config",
+        type=Path,
+        default=None,
+        help=(
+            "YAML file with panel-aware channel mapping under 'channels' "
+            "and optional 'classification'."
+        ),
+    )
+    parser.add_argument(
         "--display-channel",
         type=int,
         help="Channel to display as grayscale background.",
     )
-    parser.add_argument("--type1-channel", type=int, default=0, help="Type 1 signal channel.")
-    parser.add_argument("--type2-channel", type=int, default=1, help="Type 2 signal channel.")
-    parser.add_argument("--membrane-channel", type=int, default=2, help="Membrane signal channel.")
+    parser.add_argument(
+        "--i-channel",
+        type=int,
+        default=None,
+        help="Optional type I marker channel index.",
+    )
+    parser.add_argument(
+        "--iia-channel",
+        type=int,
+        default=None,
+        help="Optional IIa marker channel index.",
+    )
+    parser.add_argument(
+        "--iib-channel",
+        type=int,
+        default=None,
+        help="Optional IIb marker channel index.",
+    )
+    parser.add_argument(
+        "--iix-channel",
+        type=int,
+        default=None,
+        help="Optional IIx marker channel index.",
+    )
+    parser.add_argument(
+        "--dapi-channel",
+        type=int,
+        default=None,
+        help="Optional DAPI channel index.",
+    )
+    parser.add_argument(
+        "--membrane-channel",
+        type=int,
+        default=None,
+        help="Membrane signal channel.",
+    )
+    parser.add_argument(
+        "--type1-channel",
+        type=int,
+        default=None,
+        help="Legacy alias for --iib-channel.",
+    )
+    parser.add_argument(
+        "--type2-channel",
+        type=int,
+        default=None,
+        help="Legacy alias for --iia-channel.",
+    )
     parser.add_argument(
         "--typing-preprocess",
         type=str,
@@ -762,15 +818,33 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    channel_cfg, channel_warnings = resolve_channel_config(
+        channel_config_path=args.channel_config,
+        i_channel=args.i_channel,
+        iia_channel=args.iia_channel,
+        iib_channel=args.iib_channel,
+        iix_channel=args.iix_channel,
+        dapi_channel=args.dapi_channel,
+        type1_channel=args.type1_channel,
+        type2_channel=args.type2_channel,
+        membrane_channel=args.membrane_channel,
+    )
+    for warning in channel_warnings:
+        print(f"Warning: {warning}", file=sys.stderr, flush=True)
+    if channel_cfg.iib_channel is None or channel_cfg.iia_channel is None:
+        raise ValueError(
+            "The current alpha review workflow still requires both IIb and IIa marker channels. "
+            "Panel-aware config is accepted, but non-IIa/IIb review modes are not active yet."
+        )
     launch_review(
         image_path=args.image,
         labels_path=args.labels,
         fibers_path=args.fibers,
         output_path=args.output,
         display_channel=args.display_channel,
-        type1_channel=args.type1_channel,
-        type2_channel=args.type2_channel,
-        membrane_channel=args.membrane_channel,
+        iib_channel=channel_cfg.iib_channel,
+        iia_channel=channel_cfg.iia_channel,
+        membrane_channel=channel_cfg.membrane_channel,
         typing_preprocess=args.typing_preprocess,
         typing_bg_quantile=args.typing_bg_quantile,
         typing_tile_size=args.typing_tile_size,

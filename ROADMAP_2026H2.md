@@ -19,6 +19,22 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - `type2` = IIa
   - IIx inferred from absent IIb/IIa signal
 
+## Target Architecture Direction
+
+- Move from a fixed `type1/type2` typing model to a panel-aware channel schema.
+- Distinguish three layers explicitly:
+  - observed marker channels
+  - derived biological calls
+  - feature extraction / review metadata
+- Treat `I`, `IIa`, `IIb`, and `IIx` as optional direct marker channels.
+- Treat `membrane` as required for segmentation and `dapi` as optional for nuclear features.
+- Treat inferred classes as decision outputs, not as channels.
+- Record whether a final fiber call came from:
+  - direct marker evidence
+  - residual inference from an omitted class under an allowed panel
+  - unresolved/other/uncertain logic
+- Support arbitrary 4-channel panel combinations at the measurement layer, but only allow biological class claims justified by the configured panel.
+
 ## Status Snapshot (2026-06-01)
 
 - `v0.1.1-alpha` released as pre-release with demo screenshots and documentation polish.
@@ -60,17 +76,25 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 ---
 
-## v0.2 - Model/Feature Transparency + Workflow Hardening
+## v0.2 - Panel-Aware Config Foundation + Workflow Hardening
 
 ### Objectives
 
 - Keep default scientific behavior stable.
 - Improve modeling transparency and usability.
 - Add safer config surface without breaking legacy CLI behavior.
+- Establish the panel-aware architecture without changing default scientific outputs.
 
 ### Deliverables
 
 - `--channel-config` YAML support (legacy flags remain supported).
+- Public-facing channel semantics moved away from `type1/type2` toward explicit marker names.
+- Panel schema supporting:
+  - required `membrane`
+  - optional `dapi`
+  - optional marker channels from `{I, IIa, IIb, IIx}`
+  - explicit residual-inference policy
+- `fiber_type_source` / equivalent metadata in outputs to distinguish direct vs inferred calls.
 - `docs/modeling.md` covering features, uncertainty metrics, and limits.
 - Expanded model card with intended use and failure modes.
 - Feature diagnostics scripts with reproducible commands.
@@ -81,6 +105,10 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 - Legacy commands still reproduce baseline behavior.
 - Config parsing has validation and clear error messages.
+- Default panel remains the current lab workflow:
+  - membrane + IIb + IIa
+  - residual inferred `IIx`
+- Alternate channel names/configs can be expressed even if full multi-panel typing logic is not yet enabled by default.
 - README remains user-facing; modeling detail moved to docs.
 - Lint/tests pass.
 
@@ -88,23 +116,32 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 - Config complexity may reduce usability.
 - Silent drift risk while adding options.
+- Naming cleanup may expose deeper coupling between current feature columns and the frozen model.
 
 ### Test/Validation Gates
 
 - Baseline snapshot check on frozen demo image(s) under legacy path.
 - Automated tests for channel-config parsing and smoke workflows.
+- Explicit tests for panel validation and precedence between config and CLI overrides.
 
 ---
 
-## v0.3 - Classifier Improvement + Baseline Comparison
+## v0.3 - Generic Marker Features + Panel-Aware Typing
 
 ### Objectives
 
-- Improve classification reliability as a first-class deliverable.
+- Generalize typing from a fixed two-marker implementation to a marker-aware feature engine.
+- Support direct-marker and residual-inference typing modes explicitly.
 - Compare candidate behavior explicitly against alpha baseline.
 
 ### Deliverables
 
+- Generic per-marker feature extraction for any present subset of `{I, IIa, IIb, IIx}`.
+- Panel-aware typing rules that distinguish:
+  - direct marker calls
+  - residual inferred calls
+  - unresolved/other outputs when the panel does not justify a named residual class
+- Support for at least one additional non-default panel beyond the current lab panel.
 - Baseline-vs-candidate evaluation report.
 - Feature-set comparison (for example p75/p90 vs p75/p90+coverage/SNR).
 - Held-out image evaluation summary.
@@ -115,6 +152,8 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 ### Acceptance Criteria
 
 - Candidate artifacts are versioned and reproducible.
+- Typing logic no longer assumes `type1/type2` internally for new panel-aware paths.
+- Direct `IIx` stain is supported as a first-class marker when present.
 - Tradeoffs are explicit (accuracy vs review burden vs uncertainty).
 - Any default-behavior change is documented in changelog/release notes.
 
@@ -122,23 +161,30 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 - Limited manual labels for robust metrics.
 - Overfitting to familiar cohorts.
+- Generalizing across panel types may create partial-output cases that are harder to communicate.
 
 ### Test/Validation Gates
 
 - Reproducible evaluation commands in docs.
+- At least one alternate panel mode exercised end-to-end with documented limits.
 - Candidate must meet predeclared metric targets or provide clear rationale.
 
 ---
 
-## v0.4 - Uncertainty-Guided Review Validation
+## v0.4 - Residual Inference Policy + Nuclei Features + Uncertainty-Guided Review
 
 ### Objectives
 
+- Support robust residual-class inference as an explicit panel policy rather than hardcoded `IIx`.
+- Add optional DAPI-derived nuclear features where present.
 - Quantify review utility of confidence/margin/entropy outputs.
 - Improve review-efficiency story without overclaiming biology.
 
 ### Deliverables
 
+- Residual-inference framework allowing any omitted class to be configured as the residual target when biologically justified by the panel.
+- Explicit fallback outputs for insufficient panels (for example `untyped_other` / uncertain rather than overclaimed labels).
+- Optional nuclei outputs such as mono-/multi-nucleation and central nuclei summaries when `dapi` is present.
 - Review-worthy rate by uncertainty bin.
 - Review-efficiency curve.
 - Uncertainty heatmaps.
@@ -147,6 +193,8 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 ### Acceptance Criteria
 
+- Residual inference is panel-gated and never assumed automatically for every omitted class.
+- DAPI-derived outputs are optional and absent cleanly when `dapi` is not configured.
 - Review policy guidance can be written from generated outputs.
 - Reproducible scripts/commands for all figures and tables.
 - Limitation language is explicit and consistent.
@@ -155,11 +203,13 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 - Uncertainty may be misread as biological certainty.
 - High review rates on noisy images may limit practical gains.
+- Residual inference may be overtrusted if provenance is not surfaced clearly in outputs and UI.
 
 ### Test/Validation Gates
 
 - Manual audit subset analyzed by uncertainty tier.
 - Stability check across at least two cohorts/image types.
+- Panel-specific audit showing that residual inferred calls are only enabled where justified.
 
 ---
 
@@ -169,6 +219,7 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 2. Milestone issues created from `docs/github_issues_2026H2.csv`.
 3. Start `v0.2` with `channel-config` + docs/modeling + baseline snapshot checks.
 4. Keep release notes conservative and explicit about alpha limits.
+5. Keep panel-aware expansion staged: config foundation first, generic marker features second, residual inference/DAPI features third.
 
 ---
 

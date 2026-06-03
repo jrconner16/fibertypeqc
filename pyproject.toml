@@ -23,6 +23,7 @@ dependencies = [
   "magicgui>=0.8",
   "cellpose>=3.0",
   "xgboost>=2.1",
+  "PyYAML>=6.0",
   "ruff>=0.15.10",
 ]
 

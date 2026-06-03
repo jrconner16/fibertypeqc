@@ -39,8 +39,8 @@ Single-image pipeline:
 uv run python -m scripts.run_pipeline \
   --input test_inputs/demo_screenshots/demo_image_a.czi \
   --output-dir outputs/demo_run/demo_image_a \
-  --type1-channel 0 \
-  --type2-channel 1 \
+  --iib-channel 0 \
+  --iia-channel 1 \
   --membrane-channel 2 \
   --typing-preprocess tile_subtract \
   --typing-tile-size 256 \

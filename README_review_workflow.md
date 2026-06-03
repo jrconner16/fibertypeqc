@@ -5,8 +5,8 @@ fiber-type correction table, not the segmentation mask.
 
 Current biological mapping:
 
-- `--type1-channel` / old `type1` = **IIb**
-- `--type2-channel` / old `type2` = **IIa**
+- `--iib-channel` / old `type1` = **IIb**
+- `--iia-channel` / old `type2` = **IIa**
 - blank/low marker staining = **IIx candidate**
 - `uncertain` = reviewed but not trustworthy as a biological type
 - `exclude` = artifact/unusable
@@ -19,8 +19,8 @@ Example:
 uv run python -m scripts.run_pipeline \
   --input path/to/image.czi \
   --output-dir outputs/v0_run/image_name \
-  --type1-channel 0 \
-  --type2-channel 1 \
+  --iib-channel 0 \
+  --iia-channel 1 \
   --membrane-channel 2 \
   --typing-erode-px 2
 ```
@@ -49,8 +49,8 @@ uv run python -m scripts.review_labels_napari \
   --image path/to/image.czi \
   --labels outputs/v0_run/image_name/image_name_cellpose_labels.tif \
   --fibers outputs/v0_run/image_name/image_name_fibers.csv \
-  --type1-channel 0 \
-  --type2-channel 1 \
+  --iib-channel 0 \
+  --iia-channel 1 \
   --membrane-channel 2 \
   --typing-preprocess global_subtract \
   --typing-erode-px 2 \
@@ -117,5 +117,6 @@ This prints the prediction, thresholds, signal features, coverage, and scores fo
 - Use `uncertain` liberally for borderline signal.
 - Use `exclude` for artifacts or fibers inside obvious bad regions.
 - Keep channel numbers explicit in commands.
+- Legacy aliases `--type1-channel` and `--type2-channel` are still accepted.
 - Type-channel calls use eroded fiber interiors by default (`--typing-erode-px 2`) to reduce
   membrane/interstitial edge signal.

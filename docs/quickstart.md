@@ -12,8 +12,8 @@ uv sync
 uv run python -m scripts.run_pipeline \
   --input path/to/image.czi \
   --output-dir outputs/v0_run/image_name \
-  --type1-channel 0 \
-  --type2-channel 1 \
+  --iib-channel 0 \
+  --iia-channel 1 \
   --membrane-channel 2 \
   --typing-preprocess tile_subtract \
   --typing-tile-size 256 \
@@ -23,11 +23,12 @@ uv run python -m scripts.run_pipeline \
 
 Channel meanings in v0.1-alpha:
 
-- `--type1-channel`: IIb marker
-- `--type2-channel`: IIa marker
+- `--iib-channel`: IIb marker
+- `--iia-channel`: IIa marker
 - `--membrane-channel`: membrane/laminin segmentation channel
 
 IIx is inferred as the unstained class relative to the IIb and IIa marker channels.
+Legacy aliases `--type1-channel` and `--type2-channel` remain accepted.
 
 ## Run A Batch
 

@@ -11,6 +11,7 @@ import argparse
 import logging
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -31,6 +32,35 @@ V0_PARAMS = {
 
 logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+@dataclass(frozen=True)
+class BatchChannelOverrides:
+    channel_config: Path | None = None
+    membrane_channel: int | None = None
+    dapi_channel: int | None = None
+    i_channel: int | None = None
+    iia_channel: int | None = None
+    iib_channel: int | None = None
+    iix_channel: int | None = None
+    type1_channel: int | None = None
+    type2_channel: int | None = None
+
+    def uses_nonbaseline_channel_config(self) -> bool:
+        return any(
+            value is not None
+            for value in (
+                self.channel_config,
+                self.membrane_channel,
+                self.dapi_channel,
+                self.i_channel,
+                self.iia_channel,
+                self.iib_channel,
+                self.iix_channel,
+                self.type1_channel,
+                self.type2_channel,
+            )
+        )
 
 
 def setup_logging(output_dir: Path) -> None:
@@ -55,9 +85,10 @@ def setup_logging(output_dir: Path) -> None:
     logger.info(f"Batch run log: {log_file}")
 
 
-def build_v0_command(
+def build_batch_command(
     input_file: Path,
     output_dir: Path,
+    channel_overrides: BatchChannelOverrides,
     downsample_factor: int | None = None,
 ) -> list[str]:
     """
@@ -80,12 +111,6 @@ def build_v0_command(
         str(input_file.resolve()),
         "--output-dir",
         str(output_dir.resolve()),
-        "--type1-channel",
-        str(V0_PARAMS["type1_channel"]),
-        "--type2-channel",
-        str(V0_PARAMS["type2_channel"]),
-        "--membrane-channel",
-        str(V0_PARAMS["membrane_channel"]),
         "--typing-preprocess",
         V0_PARAMS["typing_preprocess"],
         "--typing-tile-size",
@@ -101,6 +126,37 @@ def build_v0_command(
         "--downsample-factor",
         str(downsample_factor or V0_PARAMS["downsample_factor"]),
     ]
+
+    if not channel_overrides.uses_nonbaseline_channel_config():
+        cmd.extend(
+            [
+                "--type1-channel",
+                str(V0_PARAMS["type1_channel"]),
+                "--type2-channel",
+                str(V0_PARAMS["type2_channel"]),
+                "--membrane-channel",
+                str(V0_PARAMS["membrane_channel"]),
+            ]
+        )
+        return cmd
+
+    if channel_overrides.channel_config is not None:
+        cmd.extend(["--channel-config", str(channel_overrides.channel_config.resolve())])
+
+    explicit_flags: list[tuple[str, int | Path | None]] = [
+        ("--membrane-channel", channel_overrides.membrane_channel),
+        ("--dapi-channel", channel_overrides.dapi_channel),
+        ("--i-channel", channel_overrides.i_channel),
+        ("--iia-channel", channel_overrides.iia_channel),
+        ("--iib-channel", channel_overrides.iib_channel),
+        ("--iix-channel", channel_overrides.iix_channel),
+        ("--type1-channel", channel_overrides.type1_channel),
+        ("--type2-channel", channel_overrides.type2_channel),
+    ]
+    for flag, value in explicit_flags:
+        if value is not None:
+            cmd.extend([flag, str(value)])
+
     return cmd
 
 
@@ -112,6 +168,7 @@ def output_stem(input_file: Path) -> str:
 def run_single_image(
     input_file: Path,
     output_dir: Path,
+    channel_overrides: BatchChannelOverrides,
     downsample_factor: int | None = None,
 ) -> dict:
     """
@@ -139,7 +196,12 @@ def run_single_image(
     logger.info(f"Processing: {input_file.name}")
 
     # Build and run command
-    cmd = build_v0_command(input_file, image_output_dir, downsample_factor=downsample_factor)
+    cmd = build_batch_command(
+        input_file,
+        image_output_dir,
+        channel_overrides=channel_overrides,
+        downsample_factor=downsample_factor,
+    )
 
     try:
         subprocess.run(
@@ -224,6 +286,23 @@ def main() -> None:
         default=None,
         help="Override segmentation downsample factor for this batch.",
     )
+    parser.add_argument(
+        "--channel-config",
+        type=Path,
+        default=None,
+        help=(
+            "Optional panel-aware channel config. When omitted, the frozen v0 "
+            "channel defaults are used."
+        ),
+    )
+    parser.add_argument("--membrane-channel", type=int, default=None)
+    parser.add_argument("--dapi-channel", type=int, default=None)
+    parser.add_argument("--i-channel", type=int, default=None)
+    parser.add_argument("--iia-channel", type=int, default=None)
+    parser.add_argument("--iib-channel", type=int, default=None)
+    parser.add_argument("--iix-channel", type=int, default=None)
+    parser.add_argument("--type1-channel", type=int, default=None)
+    parser.add_argument("--type2-channel", type=int, default=None)
 
     args = parser.parse_args()
 
@@ -253,6 +332,18 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     setup_logging(output_dir)
 
+    channel_overrides = BatchChannelOverrides(
+        channel_config=args.channel_config,
+        membrane_channel=args.membrane_channel,
+        dapi_channel=args.dapi_channel,
+        i_channel=args.i_channel,
+        iia_channel=args.iia_channel,
+        iib_channel=args.iib_channel,
+        iix_channel=args.iix_channel,
+        type1_channel=args.type1_channel,
+        type2_channel=args.type2_channel,
+    )
+
     logger.info(f"Input directory: {input_dir}")
     logger.info(f"Output directory: {output_dir}")
 
@@ -268,6 +359,26 @@ def main() -> None:
         logger.info(f"  {k}: {v}")
     if args.downsample_factor is not None:
         logger.info(f"Override: downsample_factor={args.downsample_factor}")
+    if channel_overrides.uses_nonbaseline_channel_config():
+        logger.warning(
+            "This batch run is using channel/config overrides and is not "
+            "the strict frozen v0 baseline."
+        )
+        if args.channel_config is not None:
+            logger.warning(f"  channel_config: {args.channel_config}")
+        for key in (
+            "membrane_channel",
+            "dapi_channel",
+            "i_channel",
+            "iia_channel",
+            "iib_channel",
+            "iix_channel",
+            "type1_channel",
+            "type2_channel",
+        ):
+            value = getattr(args, key)
+            if value is not None:
+                logger.warning(f"  override {key}: {value}")
 
     # Process each image
     results = []
@@ -276,6 +387,7 @@ def main() -> None:
         result = run_single_image(
             image_file,
             output_dir,
+            channel_overrides=channel_overrides,
             downsample_factor=args.downsample_factor,
         )
         results.append(result)
