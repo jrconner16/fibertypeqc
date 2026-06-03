@@ -3,7 +3,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.quantify_classify import QuantifyConfig, quantify_labels
+from src.quantify_classify import (
+    MarkerSpec,
+    QCConfig,
+    QuantifyConfig,
+    class_stats_with_ci,
+    qc_flags_from_fibers,
+    quantify_labels,
+)
 
 
 def test_quantify_labels_smoke_with_synthetic_channels():
@@ -48,3 +55,85 @@ def test_quantify_labels_returns_expected_columns_for_empty_labels():
 
     assert fibers.empty
     assert {"label", "fiber_type", "needs_review", "classifier_path"}.issubset(fibers.columns)
+
+
+def test_class_stats_can_canonicalize_legacy_labels():
+    fibers = quantify_labels(
+        np.pad(np.array([[1, 1], [0, 2]], dtype=np.int32), 1),
+        np.pad(
+            np.array(
+                [
+                    [[10.0, 10.0], [0.0, 0.0]],
+                    [[0.0, 0.0], [0.0, 12.0]],
+                ],
+                dtype=np.float32,
+            ),
+            ((0, 0), (1, 1), (1, 1)),
+        ),
+        QuantifyConfig(
+            type1_channel=0,
+            type2_channel=1,
+            threshold_mode="quantile",
+            quantile=0.5,
+            typing_preprocess="raw",
+            typing_erode_px=0,
+            min_coverage=0.1,
+            use_percentile_gate=False,
+            classifier_path=None,
+        ),
+    )
+
+    stats = class_stats_with_ci(
+        fibers,
+        classes=("iib", "iia", "mixed", "iix"),
+        bootstrap_reps=0,
+        canonicalize_labels=True,
+    )
+
+    assert stats["prop_iib"] == pytest.approx(0.5)
+    assert stats["prop_iia"] == pytest.approx(0.5)
+    assert stats["prop_iix"] == pytest.approx(0.0)
+
+
+def test_qc_flags_can_resolve_marker_columns_from_specs():
+    fibers = quantify_labels(
+        np.pad(np.array([[1, 1], [0, 2]], dtype=np.int32), 1),
+        np.pad(
+            np.array(
+                [
+                    [[10.0, 10.0], [0.0, 0.0]],
+                    [[0.0, 0.0], [0.0, 12.0]],
+                ],
+                dtype=np.float32,
+            ),
+            ((0, 0), (1, 1), (1, 1)),
+        ),
+        QuantifyConfig(
+            type1_channel=0,
+            type2_channel=1,
+            threshold_mode="quantile",
+            quantile=0.5,
+            typing_preprocess="raw",
+            typing_erode_px=0,
+            min_coverage=0.1,
+            use_percentile_gate=False,
+            classifier_path=None,
+        ),
+    )
+
+    qc = qc_flags_from_fibers(
+        fibers,
+        QCConfig(
+            min_labels=1,
+            max_unknown_rate=1.0,
+            median_area_min=0.0,
+            median_area_max=100.0,
+            max_type_corr=1.1,
+        ),
+        marker_specs=(
+            MarkerSpec(marker_name="iib", legacy_prefix="type1", channel_index=0),
+            MarkerSpec(marker_name="iia", legacy_prefix="type2", channel_index=1),
+        ),
+    )
+
+    assert qc["qc_status"] == "pass"

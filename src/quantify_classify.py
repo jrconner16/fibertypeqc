@@ -54,6 +54,29 @@ class QCConfig:
     max_type_corr: float = 0.92
 
 
+@dataclass(frozen=True)
+class MarkerStats:
+    mean: np.ndarray
+    p75: np.ndarray
+    p90: np.ndarray
+    pctl: np.ndarray
+    coverage: np.ndarray
+
+
+@dataclass(frozen=True)
+class MarkerSpec:
+    marker_name: str
+    legacy_prefix: str
+    channel_index: int
+
+
+def _default_marker_specs(cfg: QuantifyConfig) -> tuple[MarkerSpec, MarkerSpec]:
+    return (
+        MarkerSpec(marker_name="iib", legacy_prefix="type1", channel_index=int(cfg.type1_channel)),
+        MarkerSpec(marker_name="iia", legacy_prefix="type2", channel_index=int(cfg.type2_channel)),
+    )
+
+
 def _auto_threshold(values: np.ndarray, mode: str, quantile: float) -> float:
     values = np.asarray(values, dtype=np.float32)
     if values.size == 0:
@@ -67,30 +90,64 @@ def _auto_threshold(values: np.ndarray, mode: str, quantile: float) -> float:
     raise ValueError(f"Unsupported auto threshold mode: {mode}")
 
 
-def _build_features(df: pd.DataFrame) -> pd.DataFrame:
+def _marker_column(spec: MarkerSpec, suffix: str) -> str:
+    return f"{spec.legacy_prefix}_{suffix}"
+
+
+def _build_features(
+    df: pd.DataFrame,
+    marker_specs: tuple[MarkerSpec, MarkerSpec],
+) -> pd.DataFrame:
     eps = 1e-6
+    primary_spec, secondary_spec = marker_specs
+    primary_prefix = primary_spec.legacy_prefix
+    secondary_prefix = secondary_spec.legacy_prefix
+
+    primary_mean = df[_marker_column(primary_spec, "mean")].astype(np.float32)
+    secondary_mean = df[_marker_column(secondary_spec, "mean")].astype(np.float32)
+    primary_pctl = df[_marker_column(primary_spec, "pctl")].astype(np.float32)
+    secondary_pctl = df[_marker_column(secondary_spec, "pctl")].astype(np.float32)
+    primary_p75 = df.get(
+        _marker_column(primary_spec, "p75"),
+        df[_marker_column(primary_spec, "pctl")],
+    ).astype(np.float32)
+    secondary_p75 = df.get(
+        _marker_column(secondary_spec, "p75"),
+        df[_marker_column(secondary_spec, "pctl")],
+    ).astype(np.float32)
+    primary_p90 = df.get(
+        _marker_column(primary_spec, "p90"),
+        df[_marker_column(primary_spec, "pctl")],
+    ).astype(np.float32)
+    secondary_p90 = df.get(
+        _marker_column(secondary_spec, "p90"),
+        df[_marker_column(secondary_spec, "pctl")],
+    ).astype(np.float32)
+    primary_coverage = df[_marker_column(primary_spec, "coverage")].astype(np.float32)
+    secondary_coverage = df[_marker_column(secondary_spec, "coverage")].astype(np.float32)
+
     out = pd.DataFrame(index=df.index)
     out["area"] = df["area"].astype(np.float32)
-    out["type1_mean"] = df["type1_mean"].astype(np.float32)
-    out["type2_mean"] = df["type2_mean"].astype(np.float32)
-    out["type1_p75"] = df.get("type1_p75", df["type1_pctl"]).astype(np.float32)
-    out["type2_p75"] = df.get("type2_p75", df["type2_pctl"]).astype(np.float32)
-    out["type1_p90"] = df.get("type1_p90", df["type1_pctl"]).astype(np.float32)
-    out["type2_p90"] = df.get("type2_p90", df["type2_pctl"]).astype(np.float32)
-    out["type1_pctl"] = df["type1_pctl"].astype(np.float32)
-    out["type2_pctl"] = df["type2_pctl"].astype(np.float32)
-    out["type1_coverage"] = df["type1_coverage"].astype(np.float32)
-    out["type2_coverage"] = df["type2_coverage"].astype(np.float32)
-    out["type_ratio"] = out["type1_mean"] / (out["type2_mean"] + eps)
-    out["type_diff"] = out["type1_mean"] - out["type2_mean"]
-    out["type_pctl_ratio"] = out["type1_pctl"] / (out["type2_pctl"] + eps)
-    out["type_pctl_diff"] = out["type1_pctl"] - out["type2_pctl"]
-    out["type_p75_ratio"] = out["type1_p75"] / (out["type2_p75"] + eps)
-    out["type_p75_diff"] = out["type1_p75"] - out["type2_p75"]
-    out["type_p90_ratio"] = out["type1_p90"] / (out["type2_p90"] + eps)
-    out["type_p90_diff"] = out["type1_p90"] - out["type2_p90"]
-    out["type_cov_ratio"] = out["type1_coverage"] / (out["type2_coverage"] + eps)
-    out["type_cov_diff"] = out["type1_coverage"] - out["type2_coverage"]
+    out[f"{primary_prefix}_mean"] = primary_mean
+    out[f"{secondary_prefix}_mean"] = secondary_mean
+    out[f"{primary_prefix}_p75"] = primary_p75
+    out[f"{secondary_prefix}_p75"] = secondary_p75
+    out[f"{primary_prefix}_p90"] = primary_p90
+    out[f"{secondary_prefix}_p90"] = secondary_p90
+    out[f"{primary_prefix}_pctl"] = primary_pctl
+    out[f"{secondary_prefix}_pctl"] = secondary_pctl
+    out[f"{primary_prefix}_coverage"] = primary_coverage
+    out[f"{secondary_prefix}_coverage"] = secondary_coverage
+    out["type_ratio"] = primary_mean / (secondary_mean + eps)
+    out["type_diff"] = primary_mean - secondary_mean
+    out["type_pctl_ratio"] = primary_pctl / (secondary_pctl + eps)
+    out["type_pctl_diff"] = primary_pctl - secondary_pctl
+    out["type_p75_ratio"] = primary_p75 / (secondary_p75 + eps)
+    out["type_p75_diff"] = primary_p75 - secondary_p75
+    out["type_p90_ratio"] = primary_p90 / (secondary_p90 + eps)
+    out["type_p90_diff"] = primary_p90 - secondary_p90
+    out["type_cov_ratio"] = primary_coverage / (secondary_coverage + eps)
+    out["type_cov_diff"] = primary_coverage - secondary_coverage
     return out
 
 
@@ -214,6 +271,266 @@ def _class_probability_name(class_name: object) -> str:
     return f"prob_{safe or 'class'}"
 
 
+def _canonical_fiber_type_label(label: str) -> str:
+    mapping = {
+        "type1": "iib",
+        "type2": "iia",
+        "unknown": "iix",
+        "iix_candidate": "iix",
+    }
+    return mapping.get(str(label).strip().lower(), str(label).strip().lower())
+
+
+def _legacy_marker_pair_columns(
+    marker_specs: tuple[MarkerSpec, MarkerSpec],
+    suffix: str,
+) -> tuple[str, str]:
+    primary_spec, secondary_spec = marker_specs
+    return _marker_column(primary_spec, suffix), _marker_column(secondary_spec, suffix)
+
+
+def _marker_signal_stats(
+    *,
+    image_chw: np.ndarray,
+    labels: np.ndarray,
+    label_ids: np.ndarray,
+    tissue_mask: np.ndarray,
+    cfg: QuantifyConfig,
+    spec: MarkerSpec,
+) -> MarkerStats:
+    channel = _preprocess_typing_channel(
+        image_chw[spec.channel_index],
+        mode=cfg.typing_preprocess,
+        bg_quantile=cfg.typing_bg_quantile,
+        tile_size=cfg.typing_tile_size,
+        bg_sigma=cfg.typing_bg_sigma,
+        smooth_sigma=cfg.typing_smooth_sigma,
+    )
+    mean = np.asarray(ndi_mean(channel, labels=labels, index=label_ids), dtype=np.float32)
+    p75 = _label_percentiles(channel, labels, label_ids, 0.75)
+    p90 = _label_percentiles(channel, labels, label_ids, 0.90)
+    pctl = _label_percentiles(channel, labels, label_ids, cfg.percentile_q)
+    cutoff = (
+        float(np.quantile(channel[tissue_mask], cfg.coverage_quantile))
+        if np.any(tissue_mask)
+        else 0.0
+    )
+    coverage = np.asarray(
+        ndi_mean((channel >= cutoff).astype(np.float32), labels=labels, index=label_ids),
+        dtype=np.float32,
+    )
+    return MarkerStats(
+        mean=mean,
+        p75=p75,
+        p90=p90,
+        pctl=pctl,
+        coverage=coverage,
+    )
+
+
+def _collect_marker_stats(
+    *,
+    image_chw: np.ndarray,
+    labels: np.ndarray,
+    label_ids: np.ndarray,
+    tissue_mask: np.ndarray,
+    cfg: QuantifyConfig,
+    specs: tuple[MarkerSpec, ...],
+) -> dict[str, MarkerStats]:
+    return {
+        spec.marker_name: _marker_signal_stats(
+            image_chw=image_chw,
+            labels=labels,
+            label_ids=label_ids,
+            tissue_mask=tissue_mask,
+            cfg=cfg,
+            spec=spec,
+        )
+        for spec in specs
+    }
+
+
+def _legacy_typing_feature_columns(
+    marker_stats: dict[str, MarkerStats],
+    marker_specs: tuple[MarkerSpec, ...],
+) -> dict[str, np.ndarray]:
+    out: dict[str, np.ndarray] = {}
+    for spec in marker_specs:
+        stats = marker_stats[spec.marker_name]
+        prefix = spec.legacy_prefix
+        out[f"{prefix}_mean"] = stats.mean
+        out[f"{prefix}_p75"] = stats.p75
+        out[f"{prefix}_p90"] = stats.p90
+        out[f"{prefix}_pctl"] = stats.pctl
+        out[f"{prefix}_coverage"] = stats.coverage
+    return out
+
+
+def _legacy_signal_thresholds(
+    df: pd.DataFrame,
+    cfg: QuantifyConfig,
+    marker_specs: tuple[MarkerSpec, MarkerSpec],
+) -> dict[str, float]:
+    primary_spec, secondary_spec = marker_specs
+    return {
+        "type1_signal": _auto_threshold(
+            df[_marker_column(primary_spec, "mean")].to_numpy(),
+            cfg.threshold_mode,
+            cfg.quantile,
+        ),
+        "type2_signal": _auto_threshold(
+            df[_marker_column(secondary_spec, "mean")].to_numpy(),
+            cfg.threshold_mode,
+            cfg.quantile,
+        ),
+        "type1_p75": _auto_threshold(
+            df[_marker_column(primary_spec, "p75")].to_numpy(),
+            cfg.threshold_mode,
+            cfg.quantile,
+        ),
+        "type2_p75": _auto_threshold(
+            df[_marker_column(secondary_spec, "p75")].to_numpy(),
+            cfg.threshold_mode,
+            cfg.quantile,
+        ),
+        "type1_p90": _auto_threshold(
+            df[_marker_column(primary_spec, "p90")].to_numpy(),
+            cfg.threshold_mode,
+            cfg.quantile,
+        ),
+        "type2_p90": _auto_threshold(
+            df[_marker_column(secondary_spec, "p90")].to_numpy(),
+            cfg.threshold_mode,
+            cfg.quantile,
+        ),
+    }
+
+
+def _add_legacy_signal_evidence(
+    df: pd.DataFrame,
+    cfg: QuantifyConfig,
+    thresholds: dict[str, float],
+    marker_specs: tuple[MarkerSpec, MarkerSpec],
+) -> None:
+    primary_spec, secondary_spec = marker_specs
+    df["type1_signal_evidence"] = _signal_evidence(
+        df[_marker_column(primary_spec, "mean")],
+        df[_marker_column(primary_spec, "p75")],
+        df[_marker_column(primary_spec, "p90")],
+        df[_marker_column(primary_spec, "coverage")],
+        thresholds["type1_signal"],
+        thresholds["type1_p75"],
+        thresholds["type1_p90"],
+        cfg.min_coverage,
+    )
+    df["type2_signal_evidence"] = _signal_evidence(
+        df[_marker_column(secondary_spec, "mean")],
+        df[_marker_column(secondary_spec, "p75")],
+        df[_marker_column(secondary_spec, "p90")],
+        df[_marker_column(secondary_spec, "coverage")],
+        thresholds["type2_signal"],
+        thresholds["type2_p75"],
+        thresholds["type2_p90"],
+        cfg.min_coverage,
+    )
+    df["type1_p75_threshold"] = thresholds["type1_p75"]
+    df["type2_p75_threshold"] = thresholds["type2_p75"]
+    df["type1_p90_threshold"] = thresholds["type1_p90"]
+    df["type2_p90_threshold"] = thresholds["type2_p90"]
+
+
+def _legacy_rule_classification(
+    df: pd.DataFrame,
+    cfg: QuantifyConfig,
+    thresholds: dict[str, float],
+    marker_specs: tuple[MarkerSpec, MarkerSpec],
+) -> dict[str, np.ndarray | float]:
+    primary_spec, secondary_spec = marker_specs
+    primary_mean = df[_marker_column(primary_spec, "mean")]
+    secondary_mean = df[_marker_column(secondary_spec, "mean")]
+    primary_pctl = df[_marker_column(primary_spec, "pctl")]
+    secondary_pctl = df[_marker_column(secondary_spec, "pctl")]
+    primary_p75 = df[_marker_column(primary_spec, "p75")]
+    secondary_p75 = df[_marker_column(secondary_spec, "p75")]
+    primary_coverage = df[_marker_column(primary_spec, "coverage")]
+    secondary_coverage = df[_marker_column(secondary_spec, "coverage")]
+
+    if cfg.threshold_mode in {"quantile", "otsu", "yen"}:
+        t1 = thresholds["type1_signal"]
+        t2 = thresholds["type2_signal"]
+        t1p = _auto_threshold(primary_pctl.to_numpy(), cfg.threshold_mode, cfg.quantile)
+        t2p = _auto_threshold(secondary_pctl.to_numpy(), cfg.threshold_mode, cfg.quantile)
+        t1p75 = thresholds["type1_p75"]
+        t2p75 = thresholds["type2_p75"]
+        t1p90 = thresholds["type1_p90"]
+        t2p90 = thresholds["type2_p90"]
+    else:
+        t1 = float(cfg.type1_threshold)
+        t2 = float(cfg.type2_threshold)
+        t1p = t1
+        t2p = t2
+        t1p75 = t1
+        t2p75 = t2
+        t1p90 = t1
+        t2p90 = t2
+
+    has1 = primary_mean >= t1
+    has2 = secondary_mean >= t2
+    if cfg.use_percentile_gate:
+        has1 = has1 | (primary_pctl >= t1p) | (primary_p75 >= t1p75)
+        has2 = has2 | (secondary_pctl >= t2p) | (secondary_p75 >= t2p75)
+    c1 = primary_coverage >= float(cfg.min_coverage)
+    c2 = secondary_coverage >= float(cfg.min_coverage)
+    has1 = has1 & c1
+    has2 = has2 & c2
+
+    score1 = np.maximum(
+        _norm_gain(primary_mean.to_numpy(), t1),
+        _norm_gain(primary_pctl.to_numpy(), t1p),
+    )
+    score2 = np.maximum(
+        _norm_gain(secondary_mean.to_numpy(), t2),
+        _norm_gain(secondary_pctl.to_numpy(), t2p),
+    )
+    score1 = score1 + (
+        (primary_coverage.to_numpy(dtype=np.float32) / max(cfg.min_coverage, 1e-6))
+        - 1.0
+    )
+    score2 = score2 + (
+        (secondary_coverage.to_numpy(dtype=np.float32) / max(cfg.min_coverage, 1e-6))
+        - 1.0
+    )
+
+    both = has1 & has2
+    fiber_type = np.full(len(df), "unknown", dtype=object)
+    fiber_type[has1 & ~has2] = "type1"
+    fiber_type[~has1 & has2] = "type2"
+    if np.any(both):
+        diff = np.abs(score1 - score2)
+        close = diff <= float(cfg.mixed_balance_tolerance)
+        fiber_type[both & close] = "mixed"
+        fiber_type[both & ~close & (score1 > score2)] = "type1"
+        fiber_type[both & ~close & (score2 > score1)] = "type2"
+
+    confidence = np.abs(score1 - score2) / (np.abs(score1) + np.abs(score2) + 1e-6)
+    return {
+        "fiber_type": fiber_type,
+        "score_type1": score1,
+        "score_type2": score2,
+        "confidence": confidence.astype(np.float32),
+        "type1_threshold": t1,
+        "type2_threshold": t2,
+        "type1_p75_threshold": t1p75,
+        "type2_p75_threshold": t2p75,
+        "type1_p90_threshold": t1p90,
+        "type2_p90_threshold": t2p90,
+        "type1_pctl_threshold": t1p,
+        "type2_pctl_threshold": t2p,
+        "type1_cov_threshold": float(cfg.min_coverage),
+        "type2_cov_threshold": float(cfg.min_coverage),
+    }
+
+
 def _add_model_signal_qc(df: pd.DataFrame, cfg: QuantifyConfig) -> pd.DataFrame:
     out = df.copy()
     pred = out["fiber_type"].astype(str).str.lower()
@@ -291,6 +608,7 @@ def apply_auto_profile(
 def _predict_with_classifier(
     df: pd.DataFrame,
     classifier_path: str | None,
+    marker_specs: tuple[MarkerSpec, MarkerSpec],
 ) -> tuple[np.ndarray | None, pd.DataFrame | None, str | None]:
     if not classifier_path:
         return None, None, None
@@ -302,7 +620,7 @@ def _predict_with_classifier(
     import joblib
 
     model = joblib.load(model_path)
-    feats = _build_features(df)
+    feats = _build_features(df, marker_specs)
 
     if hasattr(model, "feature_names_in_"):
         cols = [c for c in model.feature_names_in_ if c in feats.columns]
@@ -413,63 +731,28 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
         )
 
     areas = np.bincount(labels.ravel())[label_ids]
-    ch1 = _preprocess_typing_channel(
-        image_chw[cfg.type1_channel],
-        mode=cfg.typing_preprocess,
-        bg_quantile=cfg.typing_bg_quantile,
-        tile_size=cfg.typing_tile_size,
-        bg_sigma=cfg.typing_bg_sigma,
-        smooth_sigma=cfg.typing_smooth_sigma,
-    )
-    ch2 = _preprocess_typing_channel(
-        image_chw[cfg.type2_channel],
-        mode=cfg.typing_preprocess,
-        bg_quantile=cfg.typing_bg_quantile,
-        tile_size=cfg.typing_tile_size,
-        bg_sigma=cfg.typing_bg_sigma,
-        smooth_sigma=cfg.typing_smooth_sigma,
-    )
+    marker_specs = _default_marker_specs(cfg)
 
     measure_labels = erode_labels(labels, int(cfg.typing_erode_px))
     interior_areas = np.bincount(
         measure_labels.ravel(),
         minlength=int(label_ids.max()) + 1,
     )[label_ids]
-
-    means1 = np.asarray(ndi_mean(ch1, labels=measure_labels, index=label_ids), dtype=np.float32)
-    means2 = np.asarray(ndi_mean(ch2, labels=measure_labels, index=label_ids), dtype=np.float32)
-    p75_1 = _label_percentiles(ch1, measure_labels, label_ids, 0.75)
-    p75_2 = _label_percentiles(ch2, measure_labels, label_ids, 0.75)
-    p90_1 = _label_percentiles(ch1, measure_labels, label_ids, 0.90)
-    p90_2 = _label_percentiles(ch2, measure_labels, label_ids, 0.90)
-    pctl1 = _label_percentiles(ch1, measure_labels, label_ids, cfg.percentile_q)
-    pctl2 = _label_percentiles(ch2, measure_labels, label_ids, cfg.percentile_q)
     tissue = measure_labels > 0
-    p1 = float(np.quantile(ch1[tissue], cfg.coverage_quantile)) if np.any(tissue) else 0.0
-    p2 = float(np.quantile(ch2[tissue], cfg.coverage_quantile)) if np.any(tissue) else 0.0
-    cov1 = np.asarray(
-        ndi_mean((ch1 >= p1).astype(np.float32), labels=measure_labels, index=label_ids),
-        dtype=np.float32,
+    marker_stats = _collect_marker_stats(
+        image_chw=image_chw,
+        labels=measure_labels,
+        label_ids=label_ids,
+        tissue_mask=tissue,
+        cfg=cfg,
+        specs=marker_specs,
     )
-    cov2 = np.asarray(
-        ndi_mean((ch2 >= p2).astype(np.float32), labels=measure_labels, index=label_ids),
-        dtype=np.float32,
-    )
+    legacy_feature_columns = _legacy_typing_feature_columns(marker_stats, marker_specs)
 
     df = pd.DataFrame(
         {
             "label": label_ids.astype(np.int32),
             "area": areas.astype(np.int32),
-            "type1_mean": means1,
-            "type2_mean": means2,
-            "type1_p75": p75_1,
-            "type2_p75": p75_2,
-            "type1_p90": p90_1,
-            "type2_p90": p90_2,
-            "type1_pctl": pctl1,
-            "type2_pctl": pctl2,
-            "type1_coverage": cov1,
-            "type2_coverage": cov2,
             "typing_interior_area": interior_areas.astype(np.int32),
             "typing_erode_px": int(cfg.typing_erode_px),
             "typing_preprocess": str(cfg.typing_preprocess),
@@ -477,6 +760,7 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
             "typing_tile_size": int(cfg.typing_tile_size),
             "typing_bg_sigma": float(cfg.typing_bg_sigma),
             "typing_smooth_sigma": float(cfg.typing_smooth_sigma),
+            **legacy_feature_columns,
         }
     )
 
@@ -499,46 +783,18 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
                 csa_areas.astype(np.float32) * pixel_area_um2
             )
 
-    t1_signal = _auto_threshold(df["type1_mean"].to_numpy(), cfg.threshold_mode, cfg.quantile)
-    t2_signal = _auto_threshold(df["type2_mean"].to_numpy(), cfg.threshold_mode, cfg.quantile)
-    t1p75 = _auto_threshold(df["type1_p75"].to_numpy(), cfg.threshold_mode, cfg.quantile)
-    t2p75 = _auto_threshold(df["type2_p75"].to_numpy(), cfg.threshold_mode, cfg.quantile)
-    t1p90 = _auto_threshold(df["type1_p90"].to_numpy(), cfg.threshold_mode, cfg.quantile)
-    t2p90 = _auto_threshold(df["type2_p90"].to_numpy(), cfg.threshold_mode, cfg.quantile)
-    df["type1_signal_evidence"] = _signal_evidence(
-        df["type1_mean"],
-        df["type1_p75"],
-        df["type1_p90"],
-        df["type1_coverage"],
-        t1_signal,
-        t1p75,
-        t1p90,
-        cfg.min_coverage,
-    )
-    df["type2_signal_evidence"] = _signal_evidence(
-        df["type2_mean"],
-        df["type2_p75"],
-        df["type2_p90"],
-        df["type2_coverage"],
-        t2_signal,
-        t2p75,
-        t2p90,
-        cfg.min_coverage,
-    )
-    df["type1_p75_threshold"] = t1p75
-    df["type2_p75_threshold"] = t2p75
-    df["type1_p90_threshold"] = t1p90
-    df["type2_p90_threshold"] = t2p90
+    legacy_thresholds = _legacy_signal_thresholds(df, cfg, marker_specs)
+    _add_legacy_signal_evidence(df, cfg, legacy_thresholds, marker_specs)
 
-    pred, proba_df, model_path = _predict_with_classifier(df, cfg.classifier_path)
+    pred, proba_df, model_path = _predict_with_classifier(df, cfg.classifier_path, marker_specs)
     if pred is not None:
         df["fiber_type"] = pred
         if proba_df is not None:
             for col in proba_df.columns:
                 df[col] = proba_df[col].to_numpy()
         df["classification_method"] = "model"
-        df["type1_threshold"] = t1_signal
-        df["type2_threshold"] = t2_signal
+        df["type1_threshold"] = legacy_thresholds["type1_signal"]
+        df["type2_threshold"] = legacy_thresholds["type2_signal"]
         df["type1_pctl_threshold"] = np.nan
         df["type2_pctl_threshold"] = np.nan
         df["type1_cov_threshold"] = np.nan
@@ -554,84 +810,30 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
         df = _add_model_signal_qc(df, cfg)
         return df
 
-    if cfg.threshold_mode in {"quantile", "otsu", "yen"}:
-        t1 = t1_signal
-        t2 = t2_signal
-        t1p = _auto_threshold(df["type1_pctl"].to_numpy(), cfg.threshold_mode, cfg.quantile)
-        t2p = _auto_threshold(df["type2_pctl"].to_numpy(), cfg.threshold_mode, cfg.quantile)
-    else:
-        t1 = float(cfg.type1_threshold)
-        t2 = float(cfg.type2_threshold)
-        t1p = t1
-        t2p = t2
-        t1p75 = t1
-        t2p75 = t2
-        t1p90 = t1
-        t2p90 = t2
-        df["type1_p75_threshold"] = t1p75
-        df["type2_p75_threshold"] = t2p75
-        df["type1_p90_threshold"] = t1p90
-        df["type2_p90_threshold"] = t2p90
-
-    has1 = df["type1_mean"] >= t1
-    has2 = df["type2_mean"] >= t2
-    if cfg.use_percentile_gate:
-        has1 = has1 | (df["type1_pctl"] >= t1p) | (df["type1_p75"] >= t1p75)
-        has2 = has2 | (df["type2_pctl"] >= t2p) | (df["type2_p75"] >= t2p75)
-    c1 = df["type1_coverage"] >= float(cfg.min_coverage)
-    c2 = df["type2_coverage"] >= float(cfg.min_coverage)
-    has1 = has1 & c1
-    has2 = has2 & c2
-
-    score1 = np.maximum(
-        _norm_gain(df["type1_mean"].to_numpy(), t1),
-        _norm_gain(df["type1_pctl"].to_numpy(), t1p),
-    )
-    score2 = np.maximum(
-        _norm_gain(df["type2_mean"].to_numpy(), t2),
-        _norm_gain(df["type2_pctl"].to_numpy(), t2p),
-    )
-    score1 = score1 + (
-        (df["type1_coverage"].to_numpy(dtype=np.float32) / max(cfg.min_coverage, 1e-6))
-        - 1.0
-    )
-    score2 = score2 + (
-        (df["type2_coverage"].to_numpy(dtype=np.float32) / max(cfg.min_coverage, 1e-6))
-        - 1.0
-    )
-
-    both = has1 & has2
-    fiber_type = np.full(len(df), "unknown", dtype=object)
-    fiber_type[has1 & ~has2] = "type1"
-    fiber_type[~has1 & has2] = "type2"
-    if np.any(both):
-        diff = np.abs(score1 - score2)
-        close = diff <= float(cfg.mixed_balance_tolerance)
-        fiber_type[both & close] = "mixed"
-        fiber_type[both & ~close & (score1 > score2)] = "type1"
-        fiber_type[both & ~close & (score2 > score1)] = "type2"
-
-    df["fiber_type"] = fiber_type
+    rule_outputs = _legacy_rule_classification(df, cfg, legacy_thresholds, marker_specs)
+    df["fiber_type"] = rule_outputs["fiber_type"]
     method = f"rules:{cfg.threshold_mode}"
     if cfg.use_percentile_gate:
         method += f"+p{int(round(cfg.percentile_q * 100))}"
     method += f"+cov{int(round(cfg.min_coverage * 100))}"
     method += f"+mx{int(round(cfg.mixed_balance_tolerance * 100))}"
     df["classification_method"] = method
-    df["type1_threshold"] = t1
-    df["type2_threshold"] = t2
-    df["type1_p75_threshold"] = t1p75
-    df["type2_p75_threshold"] = t2p75
-    df["type1_p90_threshold"] = t1p90
-    df["type2_p90_threshold"] = t2p90
-    df["type1_pctl_threshold"] = t1p
-    df["type2_pctl_threshold"] = t2p
-    df["type1_cov_threshold"] = float(cfg.min_coverage)
-    df["type2_cov_threshold"] = float(cfg.min_coverage)
-    df["score_type1"] = score1
-    df["score_type2"] = score2
-    conf = np.abs(score1 - score2) / (np.abs(score1) + np.abs(score2) + 1e-6)
-    df["confidence"] = conf.astype(np.float32)
+    for col in (
+        "type1_threshold",
+        "type2_threshold",
+        "type1_p75_threshold",
+        "type2_p75_threshold",
+        "type1_p90_threshold",
+        "type2_p90_threshold",
+        "type1_pctl_threshold",
+        "type2_pctl_threshold",
+        "type1_cov_threshold",
+        "type2_cov_threshold",
+        "score_type1",
+        "score_type2",
+        "confidence",
+    ):
+        df[col] = rule_outputs[col]
     df["model_confidence"] = np.nan
     df["model_margin"] = np.nan
     df["prob_iib"] = np.nan
@@ -652,6 +854,7 @@ def class_stats_with_ci(
     classes: tuple[str, ...] = ("type1", "type2", "mixed", "unknown"),
     bootstrap_reps: int = 1000,
     seed: int = 0,
+    canonicalize_labels: bool = False,
 ) -> dict[str, float]:
     out: dict[str, float] = {}
     n = int(len(fibers))
@@ -664,7 +867,10 @@ def class_stats_with_ci(
             out[f"ci95_high_{c}"] = np.nan
         return out
 
-    labels = fibers["fiber_type"].astype(str).to_numpy()
+    labels = fibers["fiber_type"].astype(str)
+    if canonicalize_labels:
+        labels = labels.map(_canonical_fiber_type_label)
+    labels = labels.to_numpy()
     rng = np.random.default_rng(seed)
 
     for c in classes:
@@ -690,6 +896,7 @@ def class_stats_with_ci(
 def qc_flags_from_fibers(
     fibers: pd.DataFrame,
     cfg: QCConfig,
+    marker_specs: tuple[MarkerSpec, MarkerSpec] | None = None,
 ) -> dict[str, str | float | int | bool]:
     n = int(len(fibers))
     if n == 0:
@@ -708,8 +915,14 @@ def qc_flags_from_fibers(
     median_area = float(np.median(fibers["area"]))
     unknown_rate = float((fibers["fiber_type"] == "unknown").mean())
 
-    t1 = fibers["type1_mean"].to_numpy(dtype=np.float32)
-    t2 = fibers["type2_mean"].to_numpy(dtype=np.float32)
+    if marker_specs is None:
+        marker_specs = (
+            MarkerSpec(marker_name="iib", legacy_prefix="type1", channel_index=0),
+            MarkerSpec(marker_name="iia", legacy_prefix="type2", channel_index=1),
+        )
+    primary_mean_col, secondary_mean_col = _legacy_marker_pair_columns(marker_specs, "mean")
+    t1 = fibers[primary_mean_col].to_numpy(dtype=np.float32)
+    t2 = fibers[secondary_mean_col].to_numpy(dtype=np.float32)
     if np.std(t1) < 1e-8 or np.std(t2) < 1e-8:
         type_corr = 1.0
     else:
