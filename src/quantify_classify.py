@@ -262,6 +262,37 @@ def build_feature_table(
     return out
 
 
+def build_feature_diagnostics_table(
+    fibers: pd.DataFrame,
+    cfg: QuantifyConfig,
+) -> pd.DataFrame:
+    marker_specs = _default_marker_specs(cfg)
+    feature_table = build_feature_table(
+        fibers,
+        marker_specs,
+        marker_stats_metadata=fibers.attrs.get("marker_stats"),
+    )
+    metadata_cols = [
+        col
+        for col in (
+            "label",
+            "fiber_type",
+            "fiber_type_source",
+            "classification_method",
+            "available_markers",
+            "needs_review",
+            "model_confidence",
+            "model_margin",
+            "prob_iib",
+            "prob_iia",
+            "prob_iix",
+        )
+        if col in fibers.columns
+    ]
+    metadata = fibers.loc[:, metadata_cols].copy()
+    return pd.concat([metadata, feature_table], axis=1)
+
+
 def _label_percentiles(
     image: np.ndarray,
     labels: np.ndarray,

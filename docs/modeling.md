@@ -181,6 +181,12 @@ Future-facing optional diagnostic outputs are reasonable, for example:
 but they should remain optional and not part of the stable public schema until the added features
 prove useful.
 
+Current `v0.2` direction:
+
+- stable `*_fibers.csv` stays focused on biological/review output;
+- optional diagnostics exports can expose model-development features in a separate table;
+- diagnostics exports are disabled by default.
+
 ## Comparison Workflow
 
 Use the feature comparison utility to compare:

@@ -27,6 +27,7 @@ from src.quantify_classify import (
     QCConfig,
     QuantifyConfig,
     apply_auto_profile,
+    build_feature_diagnostics_table,
     class_stats_with_ci,
     qc_flags_from_fibers,
     quantify_labels,
@@ -203,6 +204,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional sklearn model (.joblib/.pkl)",
     )
+    p.add_argument(
+        "--export-diagnostics",
+        action="store_true",
+        help=(
+            "Write an optional *_feature_diagnostics.csv file for model/feature debugging. "
+            "Does not change the stable fibers CSV."
+        ),
+    )
 
     p.add_argument("--bootstrap-reps", type=int, default=500)
     p.add_argument("--bootstrap-seed", type=int, default=0)
@@ -356,6 +365,11 @@ def main() -> None:
         fibers = quantify_labels(labels, image, quant_cfg)
         fibers_path = output_dir / f"{stem}_fibers.csv"
         save_dataframe(fibers_path, fibers)
+        diagnostics_path = None
+        if args.export_diagnostics:
+            diagnostics = build_feature_diagnostics_table(fibers, quant_cfg)
+            diagnostics_path = output_dir / f"{stem}_feature_diagnostics.csv"
+            save_dataframe(diagnostics_path, diagnostics)
 
     with stage(6, total_stages, "compute summary + QC"):
         qc_cfg = QCConfig(
@@ -376,6 +390,9 @@ def main() -> None:
             "input": str(args.input),
             "labels_path": str(labels_path),
             "fibers_path": str(fibers_path),
+            "feature_diagnostics_path": (
+                str(diagnostics_path) if diagnostics_path is not None else ""
+            ),
             "runtime_s": round(float(runtime_s), 2),
             "membrane_channel": int(channel_cfg.membrane_channel),
             "dapi_channel": channel_cfg.dapi_channel,
@@ -430,6 +447,8 @@ def main() -> None:
 
     print("saved labels:", labels_path)
     print("saved fibers:", fibers_path)
+    if diagnostics_path is not None:
+        print("saved diagnostics:", diagnostics_path)
     print("saved summary:", summary_path)
     print(f"total runtime: {time.perf_counter() - t_all:.1f}s")
     print("summary:", summary)

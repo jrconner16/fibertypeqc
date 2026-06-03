@@ -90,6 +90,7 @@ def build_batch_command(
     output_dir: Path,
     channel_overrides: BatchChannelOverrides,
     downsample_factor: int | None = None,
+    export_diagnostics: bool = False,
 ) -> list[str]:
     """
     Build the frozen v0 pipeline command for a single image.
@@ -126,6 +127,8 @@ def build_batch_command(
         "--downsample-factor",
         str(downsample_factor or V0_PARAMS["downsample_factor"]),
     ]
+    if export_diagnostics:
+        cmd.append("--export-diagnostics")
 
     if not channel_overrides.uses_nonbaseline_channel_config():
         cmd.extend(
@@ -170,6 +173,7 @@ def run_single_image(
     output_dir: Path,
     channel_overrides: BatchChannelOverrides,
     downsample_factor: int | None = None,
+    export_diagnostics: bool = False,
 ) -> dict:
     """
     Process a single image through the v0 pipeline.
@@ -187,6 +191,7 @@ def run_single_image(
         "error": None,
         "fiber_count": None,
         "summary_path": None,
+        "feature_diagnostics_path": None,
     }
 
     # Create per-image output directory
@@ -201,6 +206,7 @@ def run_single_image(
         image_output_dir,
         channel_overrides=channel_overrides,
         downsample_factor=downsample_factor,
+        export_diagnostics=export_diagnostics,
     )
 
     try:
@@ -221,6 +227,9 @@ def run_single_image(
             df = pd.read_csv(fibers_csv)
             result["fiber_count"] = len(df)
             result["summary_path"] = str(image_output_dir / f"{stem}_summary.csv")
+            diagnostics_csv = image_output_dir / f"{stem}_feature_diagnostics.csv"
+            if diagnostics_csv.exists():
+                result["feature_diagnostics_path"] = str(diagnostics_csv)
 
     except subprocess.TimeoutExpired:
         result["status"] = "timeout"
@@ -303,6 +312,13 @@ def main() -> None:
     parser.add_argument("--iix-channel", type=int, default=None)
     parser.add_argument("--type1-channel", type=int, default=None)
     parser.add_argument("--type2-channel", type=int, default=None)
+    parser.add_argument(
+        "--export-diagnostics",
+        action="store_true",
+        help=(
+            "Write optional per-image *_feature_diagnostics.csv files for model/feature debugging."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -389,6 +405,7 @@ def main() -> None:
             output_dir,
             channel_overrides=channel_overrides,
             downsample_factor=args.downsample_factor,
+            export_diagnostics=args.export_diagnostics,
         )
         results.append(result)
 

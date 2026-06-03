@@ -6,6 +6,8 @@ FiberTypeQC writes one output folder per image.
 
 - `*_cellpose_labels.tif`: integer label mask; `0` is background.
 - `*_fibers.csv`: one row per segmented fiber.
+- `*_feature_diagnostics.csv`: optional model-development/debugging table written only when
+  diagnostics export is enabled.
 - `*_summary.csv`: one row with image-level processing settings, counts, QC metrics, and summaries.
 - `*_fibers_manual_review.csv`: manual review table written by the Napari review UI.
 - `*_weak_labels.csv`: fibers prioritized for review.
@@ -20,6 +22,9 @@ Core columns:
 - `area_um2`: raw label area in square microns when image pixel-size metadata is available.
 - `area_erode_<N>px`: area after inward label erosion by `N` pixels, when requested.
 - `area_erode_<N>px_um2`: eroded area in square microns when pixel-size metadata is available.
+
+The stable `*_fibers.csv` is the conservative biological/review output. Experimental modeling
+features are intentionally kept out of this table by default.
 
 Typing features:
 
@@ -43,6 +48,20 @@ Classification columns:
 - `needs_review`: `True` when confidence or margin thresholds flag the fiber.
 - `typing_signal_qc_flags`: signal/model consistency flags separated by `|`.
 - `classifier_path`: classifier file used for the run.
+
+## Optional Diagnostics Table
+
+When `--export-diagnostics` is enabled, FiberTypeQC also writes `*_feature_diagnostics.csv`.
+
+This file is intended for model-development/debugging work, not for stable biological reporting.
+It may include:
+
+- stable metadata columns such as `label`, `fiber_type`, `fiber_type_source`, and `needs_review`;
+- the frozen alpha baseline model features;
+- experimental coverage/SNR/extra-marker features used for diagnostics.
+
+This optional file does not change classifier predictions or expand the stable `*_fibers.csv`
+schema by default.
 
 ## Review Table Columns
 

@@ -50,3 +50,17 @@ def test_build_batch_command_uses_panel_aware_flags_when_configured(tmp_path):
     assert "--type1-channel" not in cmd
     assert "--type2-channel" not in cmd
     assert cmd[cmd.index("--downsample-factor") + 1] == "3"
+
+
+def test_build_batch_command_can_export_diagnostics(tmp_path):
+    input_file = tmp_path / "image.czi"
+    output_dir = tmp_path / "out"
+
+    cmd = build_batch_command(
+        input_file,
+        output_dir,
+        channel_overrides=BatchChannelOverrides(),
+        export_diagnostics=True,
+    )
+
+    assert "--export-diagnostics" in cmd
