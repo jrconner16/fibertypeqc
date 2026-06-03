@@ -63,6 +63,8 @@ class MarkerStats:
     p90: np.ndarray
     pctl: np.ndarray
     coverage: np.ndarray
+    tissue_median: float
+    tissue_mad: float
 
 
 @dataclass(frozen=True)
@@ -108,6 +110,31 @@ def _auto_threshold(values: np.ndarray, mode: str, quantile: float) -> float:
     raise ValueError(f"Unsupported auto threshold mode: {mode}")
 
 
+FROZEN_ALPHA_BASELINE_FEATURES: tuple[str, ...] = (
+    "area",
+    "type1_mean",
+    "type2_mean",
+    "type1_p75",
+    "type2_p75",
+    "type1_p90",
+    "type2_p90",
+    "type1_pctl",
+    "type2_pctl",
+    "type1_coverage",
+    "type2_coverage",
+    "type_ratio",
+    "type_diff",
+    "type_pctl_ratio",
+    "type_pctl_diff",
+    "type_p75_ratio",
+    "type_p75_diff",
+    "type_p90_ratio",
+    "type_p90_diff",
+    "type_cov_ratio",
+    "type_cov_diff",
+)
+
+
 def _marker_column(spec: MarkerSpec, suffix: str) -> str:
     if spec.legacy_prefix is None:
         raise ValueError(
@@ -116,9 +143,15 @@ def _marker_column(spec: MarkerSpec, suffix: str) -> str:
     return f"{spec.legacy_prefix}_{suffix}"
 
 
-def _build_features(
+def _marker_snr(values: pd.Series, tissue_median: float, tissue_mad: float) -> pd.Series:
+    denom = max(float(tissue_mad), 1e-6)
+    return ((values.astype(np.float32) - float(tissue_median)) / denom).astype(np.float32)
+
+
+def build_feature_table(
     df: pd.DataFrame,
     marker_specs: tuple[MarkerSpec, MarkerSpec],
+    marker_stats_metadata: dict[str, dict[str, np.ndarray | float]] | None = None,
 ) -> pd.DataFrame:
     eps = 1e-6
     primary_spec, secondary_spec = marker_specs
@@ -170,6 +203,62 @@ def _build_features(
     out["type_p90_diff"] = primary_p90 - secondary_p90
     out["type_cov_ratio"] = primary_coverage / (secondary_coverage + eps)
     out["type_cov_diff"] = primary_coverage - secondary_coverage
+    out["type_cov_sum"] = primary_coverage + secondary_coverage
+    out["type_cov_max"] = np.maximum(primary_coverage, secondary_coverage)
+    out["type_cov_min"] = np.minimum(primary_coverage, secondary_coverage)
+    out["type_cov_balance"] = np.abs(primary_coverage - secondary_coverage)
+    out["type_cov_product"] = primary_coverage * secondary_coverage
+
+    if marker_stats_metadata is not None:
+        primary_stats = marker_stats_metadata.get(primary_spec.marker_name, {})
+        secondary_stats = marker_stats_metadata.get(secondary_spec.marker_name, {})
+        primary_snr_mean = _marker_snr(
+            primary_mean,
+            float(primary_stats.get("tissue_median", 0.0)),
+            float(primary_stats.get("tissue_mad", 1.0)),
+        )
+        secondary_snr_mean = _marker_snr(
+            secondary_mean,
+            float(secondary_stats.get("tissue_median", 0.0)),
+            float(secondary_stats.get("tissue_mad", 1.0)),
+        )
+        primary_snr_p90 = _marker_snr(
+            primary_p90,
+            float(primary_stats.get("tissue_median", 0.0)),
+            float(primary_stats.get("tissue_mad", 1.0)),
+        )
+        secondary_snr_p90 = _marker_snr(
+            secondary_p90,
+            float(secondary_stats.get("tissue_median", 0.0)),
+            float(secondary_stats.get("tissue_mad", 1.0)),
+        )
+        out["type1_snr_mean"] = primary_snr_mean
+        out["type2_snr_mean"] = secondary_snr_mean
+        out["type1_snr_p90"] = primary_snr_p90
+        out["type2_snr_p90"] = secondary_snr_p90
+        out["type_snr_ratio"] = primary_snr_mean / (secondary_snr_mean + eps)
+        out["type_snr_diff"] = primary_snr_mean - secondary_snr_mean
+        out["type1_cov_x_snr"] = primary_coverage * primary_snr_mean
+        out["type2_cov_x_snr"] = secondary_coverage * secondary_snr_mean
+
+        for marker_name, stats in marker_stats_metadata.items():
+            if marker_name in {primary_spec.marker_name, secondary_spec.marker_name}:
+                continue
+            prefix = f"marker_{marker_name}"
+            mean = pd.Series(np.asarray(stats["mean"], dtype=np.float32), index=df.index)
+            p75 = pd.Series(np.asarray(stats["p75"], dtype=np.float32), index=df.index)
+            p90 = pd.Series(np.asarray(stats["p90"], dtype=np.float32), index=df.index)
+            pctl = pd.Series(np.asarray(stats["pctl"], dtype=np.float32), index=df.index)
+            coverage = pd.Series(np.asarray(stats["coverage"], dtype=np.float32), index=df.index)
+            tissue_median = float(stats.get("tissue_median", 0.0))
+            tissue_mad = float(stats.get("tissue_mad", 1.0))
+            out[f"{prefix}_mean"] = mean
+            out[f"{prefix}_p75"] = p75
+            out[f"{prefix}_p90"] = p90
+            out[f"{prefix}_pctl"] = pctl
+            out[f"{prefix}_coverage"] = coverage
+            out[f"{prefix}_snr_mean"] = _marker_snr(mean, tissue_median, tissue_mad)
+            out[f"{prefix}_snr_p90"] = _marker_snr(p90, tissue_median, tissue_mad)
     return out
 
 
@@ -353,12 +442,21 @@ def _marker_signal_stats(
         ndi_mean((channel >= cutoff).astype(np.float32), labels=labels, index=label_ids),
         dtype=np.float32,
     )
+    tissue_pixels = channel[tissue_mask]
+    if tissue_pixels.size:
+        tissue_median = float(np.median(tissue_pixels))
+        tissue_mad = float(np.median(np.abs(tissue_pixels - tissue_median)))
+    else:
+        tissue_median = 0.0
+        tissue_mad = 1.0
     return MarkerStats(
         mean=mean,
         p75=p75,
         p90=p90,
         pctl=pctl,
         coverage=coverage,
+        tissue_median=tissue_median,
+        tissue_mad=tissue_mad,
     )
 
 
@@ -410,6 +508,8 @@ def _marker_stats_metadata(
             "p90": stats.p90.copy(),
             "pctl": stats.pctl.copy(),
             "coverage": stats.coverage.copy(),
+            "tissue_median": float(stats.tissue_median),
+            "tissue_mad": float(stats.tissue_mad),
         }
         for marker_name, stats in marker_stats.items()
     }
@@ -669,7 +769,7 @@ def _predict_with_classifier(
     import joblib
 
     model = joblib.load(model_path)
-    feats = _build_features(df, marker_specs)
+    feats = build_feature_table(df, marker_specs, df.attrs.get("marker_stats"))
 
     if hasattr(model, "feature_names_in_"):
         cols = [c for c in model.feature_names_in_ if c in feats.columns]
@@ -677,27 +777,7 @@ def _predict_with_classifier(
             raise ValueError("Classifier has feature_names_in_ but none match available features")
         x = feats[cols]
     else:
-        x = feats[
-            [
-                "area",
-                "type1_mean",
-                "type2_mean",
-                "type1_p75",
-                "type2_p75",
-                "type1_p90",
-                "type2_p90",
-                "type1_pctl",
-                "type2_pctl",
-                "type1_coverage",
-                "type2_coverage",
-                "type_ratio",
-                "type_diff",
-                "type_pctl_ratio",
-                "type_pctl_diff",
-                "type_cov_ratio",
-                "type_cov_diff",
-            ]
-        ]
+        x = feats[list(FROZEN_ALPHA_BASELINE_FEATURES)]
 
     pred = model.predict(x)
     proba_df = pd.DataFrame(index=df.index)

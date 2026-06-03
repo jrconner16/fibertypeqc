@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from src.quantify_classify import (
+    FROZEN_ALPHA_BASELINE_FEATURES,
     MarkerSpec,
     QCConfig,
     QuantifyConfig,
+    build_feature_table,
     class_stats_with_ci,
     qc_flags_from_fibers,
     quantify_labels,
@@ -185,3 +188,62 @@ def test_qc_flags_can_resolve_marker_columns_from_specs():
     )
 
     assert qc["qc_status"] == "pass"
+
+
+def test_build_feature_table_preserves_frozen_baseline_and_adds_experimental_columns():
+    df = pd.DataFrame(
+        {
+            "area": [10, 20],
+            "type1_mean": [1.0, 2.0],
+            "type2_mean": [3.0, 4.0],
+            "type1_p75": [1.5, 2.5],
+            "type2_p75": [3.5, 4.5],
+            "type1_p90": [1.8, 2.8],
+            "type2_p90": [3.8, 4.8],
+            "type1_pctl": [1.7, 2.7],
+            "type2_pctl": [3.7, 4.7],
+            "type1_coverage": [0.2, 0.3],
+            "type2_coverage": [0.4, 0.5],
+        }
+    )
+    feats = build_feature_table(
+        df,
+        marker_specs=(
+            MarkerSpec(marker_name="iib", legacy_prefix="type1", channel_index=0),
+            MarkerSpec(marker_name="iia", legacy_prefix="type2", channel_index=1),
+        ),
+        marker_stats_metadata={
+            "iib": {
+                "mean": np.array([1.0, 2.0], dtype=np.float32),
+                "p75": np.array([1.5, 2.5], dtype=np.float32),
+                "p90": np.array([1.8, 2.8], dtype=np.float32),
+                "pctl": np.array([1.7, 2.7], dtype=np.float32),
+                "coverage": np.array([0.2, 0.3], dtype=np.float32),
+                "tissue_median": 0.5,
+                "tissue_mad": 0.25,
+            },
+            "iia": {
+                "mean": np.array([3.0, 4.0], dtype=np.float32),
+                "p75": np.array([3.5, 4.5], dtype=np.float32),
+                "p90": np.array([3.8, 4.8], dtype=np.float32),
+                "pctl": np.array([3.7, 4.7], dtype=np.float32),
+                "coverage": np.array([0.4, 0.5], dtype=np.float32),
+                "tissue_median": 1.0,
+                "tissue_mad": 0.5,
+            },
+            "i": {
+                "mean": np.array([5.0, 6.0], dtype=np.float32),
+                "p75": np.array([5.5, 6.5], dtype=np.float32),
+                "p90": np.array([5.8, 6.8], dtype=np.float32),
+                "pctl": np.array([5.7, 6.7], dtype=np.float32),
+                "coverage": np.array([0.1, 0.2], dtype=np.float32),
+                "tissue_median": 0.8,
+                "tissue_mad": 0.4,
+            },
+        },
+    )
+
+    assert set(FROZEN_ALPHA_BASELINE_FEATURES).issubset(feats.columns)
+    assert {"type_cov_sum", "type1_snr_mean", "marker_i_mean", "marker_i_snr_mean"}.issubset(
+        feats.columns
+    )
