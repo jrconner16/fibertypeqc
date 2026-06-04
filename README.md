@@ -108,6 +108,12 @@ Legacy aliases `--type1-channel` and `--type2-channel` are still accepted for ba
 compatibility. See [docs/quickstart.md](docs/quickstart.md), [docs/panel_schema.md](docs/panel_schema.md),
 and [data/models/model_card.md](data/models/model_card.md).
 
+Advanced/model-development note:
+
+- `--export-diagnostics` is available for optional feature/model debugging output.
+- It is off by default.
+- It writes a separate diagnostics CSV and does not expand the stable `*_fibers.csv` schema.
+
 ### 3. Batch Processing
 
 Process multiple images in a directory:
@@ -149,6 +155,7 @@ Each image produces:
 outputs/v0_run/image_name/
 ├── image_name_cellpose_labels.tif          # Segmentation masks
 ├── image_name_fibers.csv                   # Feature table (rows=fibers)
+├── image_name_feature_diagnostics.csv      # Optional diagnostics table (advanced/debugging)
 ├── image_name_summary.csv                  # Class statistics + confidence intervals
 ├── image_name_fibers_manual_review.csv     # Empty; filled by review UI
 └── image_name_weak_labels.csv              # Model confidence flags

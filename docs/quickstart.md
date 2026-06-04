@@ -30,6 +30,12 @@ Channel meanings in v0.1-alpha:
 IIx is inferred as the unstained class relative to the IIb and IIa marker channels.
 Legacy aliases `--type1-channel` and `--type2-channel` remain accepted.
 
+Advanced/model-development option:
+
+- `--export-diagnostics` writes a separate `*_feature_diagnostics.csv`
+- it does not change the stable `*_fibers.csv`
+- it is intended for diagnostics/model-development, not routine biological output
+
 ## Run A Batch
 
 ```bash
@@ -56,7 +62,6 @@ uv run python -m scripts.merge_reviewed_labels \
   --review outputs/v0_run/image_name/image_name_fibers_manual_review.csv \
   --output outputs/v0_run/image_name/image_name_fibers_final.csv
 ```
-# Quickstart
 
 ## Tests
 

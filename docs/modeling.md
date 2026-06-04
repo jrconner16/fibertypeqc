@@ -165,6 +165,10 @@ for mean, percentiles, coverage, and background-relative summaries.
 These are currently intended for diagnostics and later model experiments, not for stable default
 classification behavior.
 
+The same applies to optional diagnostics exports such as `*_feature_diagnostics.csv`: they are
+useful for model-development and feature-comparison work, but they should not be treated as part of
+the stable biological output contract unless a later version explicitly promotes them.
+
 ## Stable vs Experimental Output Policy
 
 Current policy:

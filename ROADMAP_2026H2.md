@@ -41,12 +41,15 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 - Roadmap milestones created on GitHub: `v0.2`, `v0.3`, `v0.4`.
 - Roadmap issue set generated and created from `docs/github_issues_2026H2.csv`.
 - `v0.2` foundation work started and partially shipped:
+  - `docs/modeling.md` and the expanded frozen alpha model card are in place
   - panel-aware YAML config loader added
   - public CLI cleanup shipped for pipeline, review, and batch
   - batch runner remains frozen by default, with explicit opt-in channel overrides
   - internal quantify/QC helpers now route through `MarkerSpec` seams while preserving legacy outputs
   - provenance fields and optional diagnostics export landed without changing the stable fibers CSV
-- Next execution focus: finish the remaining `v0.2` hardening items before moving into candidate-model evaluation.
+  - baseline snapshot tests now guard the frozen legacy feature contract and rule path
+  - fast vs integration test split is in place for predictable default pytest runs
+- Next execution focus: decide whether to finish a little more `v0.2` documentation polish or start explicit candidate-model evaluation work.
 
 ## Strict Baseline Policy
 
@@ -107,12 +110,13 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 - Command-level smoke tests for pipeline/batch/review/merge.
 - Optional experimental paths disabled by default.
 
-### Progress So Far (2026-06-02)
+### Progress So Far (2026-06-03)
 
 - Completed:
   - `fibertypeqc/config.py` with panel-aware schema parsing
   - `docs/panel_schema.md`
   - `docs/modeling.md`
+  - expanded `data/models/model_card.md`
   - explicit marker-channel CLI support in:
     - `scripts.run_pipeline`
     - `scripts.review_labels_napari`
@@ -137,10 +141,16 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
     - `--export-diagnostics`
     - `*_feature_diagnostics.csv`
   - smoke tests for diagnostics export path
+  - baseline snapshot tests for frozen defaults:
+    - frozen alpha feature-contract check
+    - legacy rule-path regression snapshot
+  - pytest split into:
+    - fast synthetic default path
+    - optional `integration` path
 
 - Not done yet:
-  - expanded model card failure-mode writeup
-  - baseline snapshot checks for frozen legacy defaults
+  - decide how prominently diagnostics export should appear in user-facing docs
+  - choose whether the next milestone step is more `v0.2` hardening or `v0.3` candidate-model evaluation
 
 ### Acceptance Criteria
 
@@ -256,26 +266,28 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 ## Weekly Next Steps (Immediate)
 
-1. Expand `data/models/model_card.md` with current failure modes, panel assumptions, and diagnostics-table caveats.
-2. Add baseline snapshot checks for frozen legacy defaults.
-3. Decide whether `--export-diagnostics` should be documented in README/quickstart now or kept primarily in modeling docs.
-4. Keep release notes conservative and explicit about alpha limits.
-5. Do not promote experimental features into the stable fibers CSV without explicit validation.
+1. Decide whether `--export-diagnostics` should be documented in README/quickstart now or kept primarily in modeling docs.
+2. Keep release notes conservative and explicit about alpha limits.
+3. Do not promote experimental features into the stable fibers CSV without explicit validation.
+4. Choose the next milestone step explicitly:
+   - more `v0.2` workflow/documentation hardening, or
+   - `v0.3` candidate-model evaluation using the experimental feature set
+5. If candidate-model work starts, define the comparison target and evaluation outputs before training anything.
 
 ## Start Here Next Time
 
 When resuming work, start with this slice:
 
-1. Update `data/models/model_card.md` so it matches the current `v0.2` reality:
-   - explicit frozen alpha feature contract
-   - diagnostics export caveat
-   - current failure modes and panel limits
-2. Add baseline snapshot checks for frozen legacy defaults.
-3. After that, decide whether the next milestone step is:
-   - candidate-model evaluation using the experimental feature set, or
-   - more workflow hardening/documentation inside `v0.2`
+1. Make the next milestone decision explicitly:
+   - continue `v0.2` with doc/workflow polish, or
+   - start `v0.3` candidate-model evaluation
+2. If staying in `v0.2`, the highest-value small item is deciding whether `--export-diagnostics` belongs in README/quickstart.
+3. If moving into `v0.3`, define the comparison plan first:
+   - frozen alpha baseline
+   - experimental feature set
+   - evaluation outputs and acceptance criteria
 
-Short version: next work should finish `v0.2` hardening and validation guardrails before starting a true candidate-model path.
+Short version: the remaining work is less about plumbing now and more about deciding whether to polish `v0.2` a bit further or begin a real candidate-model comparison path.
 
 ---
 
