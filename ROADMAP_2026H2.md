@@ -140,6 +140,7 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - optional diagnostics export:
     - `--export-diagnostics`
     - `*_feature_diagnostics.csv`
+  - diagnostics export documented in user-facing docs as an advanced/model-development option
   - smoke tests for diagnostics export path
   - baseline snapshot tests for frozen defaults:
     - frozen alpha feature-contract check
@@ -149,7 +150,6 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
     - optional `integration` path
 
 - Not done yet:
-  - decide how prominently diagnostics export should appear in user-facing docs
   - choose whether the next milestone step is more `v0.2` hardening or `v0.3` candidate-model evaluation
 
 ### Acceptance Criteria
@@ -266,13 +266,12 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 ## Weekly Next Steps (Immediate)
 
-1. Decide whether `--export-diagnostics` should be documented in README/quickstart now or kept primarily in modeling docs.
-2. Keep release notes conservative and explicit about alpha limits.
-3. Do not promote experimental features into the stable fibers CSV without explicit validation.
-4. Choose the next milestone step explicitly:
+1. Keep release notes conservative and explicit about alpha limits.
+2. Do not promote experimental features into the stable fibers CSV without explicit validation.
+3. Choose the next milestone step explicitly:
    - more `v0.2` workflow/documentation hardening, or
    - `v0.3` candidate-model evaluation using the experimental feature set
-5. If candidate-model work starts, define the comparison target and evaluation outputs before training anything.
+4. If candidate-model work starts, define the comparison target and evaluation outputs before training anything.
 
 ## Start Here Next Time
 
@@ -281,7 +280,7 @@ When resuming work, start with this slice:
 1. Make the next milestone decision explicitly:
    - continue `v0.2` with doc/workflow polish, or
    - start `v0.3` candidate-model evaluation
-2. If staying in `v0.2`, the highest-value small item is deciding whether `--export-diagnostics` belongs in README/quickstart.
+2. If staying in `v0.2`, the highest-value small items are release polish and GitHub release prep.
 3. If moving into `v0.3`, define the comparison plan first:
    - frozen alpha baseline
    - experimental feature set
