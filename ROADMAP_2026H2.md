@@ -200,6 +200,54 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 - Error analysis by class/image context.
 - Hard vs soft composition comparison.
 
+### Progress So Far (2026-06-04)
+
+- Completed:
+  - `docs/baseline_comparison_protocol.md`
+  - candidate feature-table assembly:
+    - `src/build_candidate_feature_table.py`
+    - `validation/build_candidate_feature_table.py`
+  - candidate split-manifest tooling:
+    - `src/build_candidate_split_manifest.py`
+    - `validation/build_candidate_split_manifest.py`
+  - accepted image-level `train` / `dev` / `heldout` split for the 32-image MyoSight-comparable set
+  - rerun of the 32-image validation batch with diagnostics export enabled
+  - assembled `outputs/validation/candidate_feature_table.csv`
+  - first candidate-model training/evaluation workflow:
+    - `src/train_candidate_from_feature_table.py`
+    - `validation/train_candidate_from_feature_table.py`
+  - first candidate comparison on `dev`:
+    - `baseline_rf`
+    - `baseline_gb`
+    - `expanded_rf`
+    - `expanded_gb`
+  - result so far:
+    - frozen baseline `baseline_rf` remains best on `dev`
+    - expanded features and boosting did not beat the frozen baseline in first-pass evaluation
+  - matched-ROI MyoSight audit tooling:
+    - `src/build_matched_myosight_audit.py`
+    - `validation/build_matched_myosight_audit.py`
+  - combined audit-set tooling:
+    - `src/build_combined_audit_set.py`
+    - `validation/build_combined_audit_set.py`
+  - audit sampling tooling:
+    - `src/sample_combined_audit_set.py`
+    - `validation/sample_combined_audit_set.py`
+  - dedicated audit-review Napari helper with adjudication output:
+    - `src/review_audit_napari.py`
+    - `validation/review_audit_napari.py`
+
+- Current interpretation:
+  - the modeling runway is in place
+  - first-pass candidate-model changes did not improve held-out biology by themselves
+  - the next likely bottleneck is supervision quality, not another blind feature/model-family sweep
+
+- Not done yet:
+  - build a consolidated reviewed-audit label table across images
+  - use reviewed audit fibers as a formal benchmark
+  - define and test weighted-supervision candidate training using reviewed fibers
+  - decide whether matched MyoSight labels should be used only for audit/evaluation or also as weak supervision
+
 ### Acceptance Criteria
 
 - Candidate artifacts are versioned and reproducible.
@@ -207,18 +255,24 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 - Direct `IIx` stain is supported as a first-class marker when present.
 - Tradeoffs are explicit (accuracy vs review burden vs uncertainty).
 - Any default-behavior change is documented in changelog/release notes.
+- Reviewed audit fibers are kept separate from ordinary pipeline outputs and can be reused as a higher-trust benchmark.
+- No corrected audit labels are silently written back into the stable `*_fibers.csv` outputs.
 
 ### Risks
 
 - Limited manual labels for robust metrics.
 - Overfitting to familiar cohorts.
 - Generalizing across panel types may create partial-output cases that are harder to communicate.
+- Candidate training may overfit to weak comparator labels if matched MyoSight labels are treated as ordinary truth.
+- Small reviewed audit sets can be highly informative, but only if some portion is held back from training.
 
 ### Test/Validation Gates
 
 - Reproducible evaluation commands in docs.
 - At least one alternate panel mode exercised end-to-end with documented limits.
 - Candidate must meet predeclared metric targets or provide clear rationale.
+- Reviewed audit labels should first be used as an evaluation benchmark before they are used as training supervision.
+- If reviewed fibers are used in training, retain a separate untouched reviewed subset for evaluation.
 
 ---
 
@@ -269,21 +323,21 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 1. Keep release notes conservative and explicit about alpha limits.
 2. Do not promote experimental features into the stable fibers CSV without explicit validation.
 3. Use `docs/baseline_comparison_protocol.md` as the entry point for `v0.3` candidate-model work.
-4. Build the candidate feature-table generation script before training any new model artifact.
+4. Treat reviewed audit fibers as a benchmark first, then as weighted supervision only after a holdback/evaluation split is defined.
 
 ## Start Here Next Time
 
 When resuming work, start with this slice:
 
 1. Follow `docs/baseline_comparison_protocol.md`.
-2. Build the candidate feature-table generation script for the experimental feature set.
-3. Keep the frozen alpha baseline as the explicit comparator for every candidate run.
-3. If moving into `v0.3`, define the comparison plan first:
-   - frozen alpha baseline
-   - experimental feature set
-   - evaluation outputs and acceptance criteria
+2. Consolidate reviewed audit outputs into a reusable benchmark table.
+3. Split reviewed audit fibers into:
+   - benchmark-only / holdback reviewed subset
+   - optional weighted-supervision reviewed subset
+4. Keep the frozen alpha baseline as the explicit comparator for every candidate run.
+5. Only after that, test weighted-supervision candidate training.
 
-Short version: the remaining work is less about plumbing now and more about deciding whether to polish `v0.2` a bit further or begin a real candidate-model comparison path.
+Short version: the remaining work is now more about supervision quality and benchmark design than about more plumbing or blind model-family search.
 
 ---
 

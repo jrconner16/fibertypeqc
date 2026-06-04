@@ -1,0 +1,46 @@
+from __future__ import annotations
+
+import pandas as pd
+
+from src.review_audit_napari import _load_or_create_review_table, _save_review_table
+
+
+def test_load_or_create_review_table_restores_existing_audit_labels(tmp_path):
+    audit = pd.DataFrame(
+        [
+            {"image_id": "img1", "label": 1, "fiber_type": "iix"},
+            {"image_id": "img1", "label": 2, "fiber_type": "iia"},
+        ]
+    )
+    review_output = tmp_path / "audit_reviewed_img1.csv"
+    saved = pd.DataFrame(
+        [
+            {
+                "image_id": "img1",
+                "label": 2,
+                "audit_corrected_type": "iib",
+                "audit_is_uncertain": False,
+                "audit_is_excluded": False,
+                "audit_notes": "checked",
+            }
+        ]
+    )
+    saved.to_csv(review_output, index=False)
+
+    out = _load_or_create_review_table(audit, review_output)
+
+    row1 = out.loc[out["label"] == 1].iloc[0]
+    assert row1["audit_corrected_type"] == ""
+    row2 = out.loc[out["label"] == 2].iloc[0]
+    assert row2["audit_corrected_type"] == "iib"
+    assert row2["audit_notes"] == "checked"
+
+
+def test_save_review_table_writes_csv(tmp_path):
+    review_output = tmp_path / "audit_reviewed_img1.csv"
+    table = pd.DataFrame(
+        [{"image_id": "img1", "label": 1, "audit_corrected_type": "iix"}]
+    )
+    _save_review_table(table, review_output)
+    loaded = pd.read_csv(review_output)
+    assert loaded.loc[0, "audit_corrected_type"] == "iix"
