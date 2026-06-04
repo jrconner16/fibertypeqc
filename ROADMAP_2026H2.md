@@ -268,19 +268,16 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 1. Keep release notes conservative and explicit about alpha limits.
 2. Do not promote experimental features into the stable fibers CSV without explicit validation.
-3. Choose the next milestone step explicitly:
-   - more `v0.2` workflow/documentation hardening, or
-   - `v0.3` candidate-model evaluation using the experimental feature set
-4. If candidate-model work starts, define the comparison target and evaluation outputs before training anything.
+3. Use `docs/baseline_comparison_protocol.md` as the entry point for `v0.3` candidate-model work.
+4. Build the candidate feature-table generation script before training any new model artifact.
 
 ## Start Here Next Time
 
 When resuming work, start with this slice:
 
-1. Make the next milestone decision explicitly:
-   - continue `v0.2` with doc/workflow polish, or
-   - start `v0.3` candidate-model evaluation
-2. If staying in `v0.2`, the highest-value small items are release polish and GitHub release prep.
+1. Follow `docs/baseline_comparison_protocol.md`.
+2. Build the candidate feature-table generation script for the experimental feature set.
+3. Keep the frozen alpha baseline as the explicit comparator for every candidate run.
 3. If moving into `v0.3`, define the comparison plan first:
    - frozen alpha baseline
    - experimental feature set

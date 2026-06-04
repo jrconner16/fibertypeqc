@@ -193,6 +193,10 @@ Current `v0.2` direction:
 
 ## Comparison Workflow
 
+The candidate-model evaluation protocol is documented in:
+
+- `docs/baseline_comparison_protocol.md`
+
 Use the feature comparison utility to compare:
 
 - the frozen alpha model feature contract
