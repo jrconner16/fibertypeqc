@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import joblib
 import numpy as np
 import pandas as pd
 import pytest
@@ -247,3 +248,79 @@ def test_build_feature_table_preserves_frozen_baseline_and_adds_experimental_col
     assert {"type_cov_sum", "type1_snr_mean", "marker_i_mean", "marker_i_snr_mean"}.issubset(
         feats.columns
     )
+
+
+@pytest.mark.integration
+def test_frozen_alpha_model_feature_contract_matches_code_baseline():
+    model = joblib.load("data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib")
+    assert tuple(model.feature_names_in_) == FROZEN_ALPHA_BASELINE_FEATURES
+
+
+def test_legacy_rule_path_snapshot_for_frozen_alpha_regression():
+    labels = np.zeros((20, 30), dtype=np.int32)
+    labels[2:10, 2:10] = 1
+    labels[2:10, 12:20] = 2
+    labels[2:10, 22:28] = 3
+
+    image = np.zeros((2, 20, 30), dtype=np.float32)
+    image[0, labels == 1] = 12.0
+    image[1, labels == 2] = 11.0
+    image[0, labels == 3] = 1.0
+    image[1, labels == 3] = 1.0
+
+    fibers = quantify_labels(
+        labels,
+        image,
+        QuantifyConfig(classifier_path=None),
+    ).sort_values("label").reset_index(drop=True)
+
+    observed = (
+        fibers[
+            [
+                "label",
+                "fiber_type",
+                "classification_method",
+                "type1_mean",
+                "type2_mean",
+                "type1_p75",
+                "type2_p75",
+                "type1_coverage",
+                "type2_coverage",
+                "type1_threshold",
+                "type2_threshold",
+                "confidence",
+                "needs_review",
+            ]
+        ]
+        .assign(
+            type1_mean=lambda df: df["type1_mean"].round(4),
+            type2_mean=lambda df: df["type2_mean"].round(4),
+            type1_p75=lambda df: df["type1_p75"].round(4),
+            type2_p75=lambda df: df["type2_p75"].round(4),
+            type1_coverage=lambda df: df["type1_coverage"].round(4),
+            type2_coverage=lambda df: df["type2_coverage"].round(4),
+            type1_threshold=lambda df: df["type1_threshold"].round(4),
+            type2_threshold=lambda df: df["type2_threshold"].round(4),
+            confidence=lambda df: df["confidence"].round(4),
+        )
+    )
+
+    expected = pd.DataFrame(
+        {
+            "label": [1, 2, 3],
+            "fiber_type": ["type1", "type2", "unknown"],
+            "classification_method": ["rules:quantile+p85+cov6+mx25"] * 3,
+            "type1_mean": [11.9947, 0.0, 0.9993],
+            "type2_mean": [0.0, 10.9952, 0.9993],
+            "type1_p75": [11.9960, 0.0, 0.9996],
+            "type2_p75": [0.0, 10.9964, 0.9996],
+            "type1_coverage": [0.75, 0.0, 0.0],
+            "type2_coverage": [0.0, 0.75, 0.0],
+            "type1_threshold": [3.1984, 3.1984, 3.1984],
+            "type2_threshold": [2.9985, 2.9985, 2.9985],
+            "confidence": [1.0, 1.0, 0.0062],
+            "needs_review": [False, False, True],
+        }
+    )
+
+    pd.testing.assert_frame_equal(observed, expected, check_dtype=False)

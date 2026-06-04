@@ -57,3 +57,6 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "integration: slow or full-stack tests kept out of the default fast synthetic test path",
+]

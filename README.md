@@ -62,6 +62,20 @@ source .venv/bin/activate
 
 For detailed setup instructions, see [README_uv_setup.md](README_uv_setup.md).
 
+### 1.1 Tests
+
+Fast synthetic/default test path:
+
+```bash
+uv run python -m pytest -m "not integration"
+```
+
+Optional integration path:
+
+```bash
+uv run python -m pytest -m integration
+```
+
 ### 2. Run the Frozen v0 Pipeline
 
 The **v0 frozen command** is the production-validated baseline for consistent results.

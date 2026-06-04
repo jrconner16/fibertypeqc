@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
+import pytest
 
 import src.run_pipeline as run_pipeline
 
@@ -32,6 +33,7 @@ def _mock_pipeline_primitives(monkeypatch):
     monkeypatch.setattr(run_pipeline, "paste_crop_labels", lambda arr, shape, crop: arr)
 
 
+@pytest.mark.integration
 def test_run_pipeline_export_diagnostics_flag_controls_output(tmp_path, monkeypatch):
     _mock_pipeline_primitives(monkeypatch)
     input_path = tmp_path / "image.tif"

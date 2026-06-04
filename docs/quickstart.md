@@ -56,3 +56,18 @@ uv run python -m scripts.merge_reviewed_labels \
   --review outputs/v0_run/image_name/image_name_fibers_manual_review.csv \
   --output outputs/v0_run/image_name/image_name_fibers_final.csv
 ```
+# Quickstart
+
+## Tests
+
+Fast synthetic/default test path:
+
+```bash
+uv run python -m pytest -m "not integration"
+```
+
+Optional integration path:
+
+```bash
+uv run python -m pytest -m integration
+```
