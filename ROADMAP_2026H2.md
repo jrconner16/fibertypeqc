@@ -35,17 +35,18 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - unresolved/other/uncertain logic
 - Support arbitrary 4-channel panel combinations at the measurement layer, but only allow biological class claims justified by the configured panel.
 
-## Status Snapshot (2026-06-02)
+## Status Snapshot (2026-06-03)
 
 - `v0.1.1-alpha` released as pre-release with demo screenshots and documentation polish.
 - Roadmap milestones created on GitHub: `v0.2`, `v0.3`, `v0.4`.
 - Roadmap issue set generated and created from `docs/github_issues_2026H2.csv`.
 - `v0.2` foundation work started and partially shipped:
   - panel-aware YAML config loader added
-  - public CLI cleanup started for pipeline, review, and batch
+  - public CLI cleanup shipped for pipeline, review, and batch
   - batch runner remains frozen by default, with explicit opt-in channel overrides
   - internal quantify/QC helpers now route through `MarkerSpec` seams while preserving legacy outputs
-- Next execution focus: continue `v0.2` from internal generic marker-feature scaffolding, not from public CLI/config cleanup.
+  - provenance fields and optional diagnostics export landed without changing the stable fibers CSV
+- Next execution focus: finish the remaining `v0.2` hardening items before moving into candidate-model evaluation.
 
 ## Strict Baseline Policy
 
@@ -111,6 +112,7 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 - Completed:
   - `fibertypeqc/config.py` with panel-aware schema parsing
   - `docs/panel_schema.md`
+  - `docs/modeling.md`
   - explicit marker-channel CLI support in:
     - `scripts.run_pipeline`
     - `scripts.review_labels_napari`
@@ -124,12 +126,20 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
     - `MarkerSpec`
     - `MarkerStats`
     - marker-aware feature/stat/QC seams that still emit legacy columns
+  - internal optional extra-marker stats for direct `i` / `iix`
+  - output provenance fields:
+    - `fiber_type_source`
+    - `available_markers`
+  - feature-set comparison tooling:
+    - `src/compare_feature_sets.py`
+    - `validation/compare_feature_sets.py`
+  - optional diagnostics export:
+    - `--export-diagnostics`
+    - `*_feature_diagnostics.csv`
+  - smoke tests for diagnostics export path
 
 - Not done yet:
-  - `fiber_type_source` / direct-vs-inferred provenance in outputs
-  - `docs/modeling.md`
   - expanded model card failure-mode writeup
-  - feature diagnostics scripts
   - baseline snapshot checks for frozen legacy defaults
 
 ### Acceptance Criteria
@@ -246,26 +256,26 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 ## Weekly Next Steps (Immediate)
 
-1. Finish the next `v0.2` internal slice:
-   - allow optional internal collection of extra marker stats (`i`, `iix`) without changing default classification behavior
-   - keep exported legacy columns unchanged
-2. Add `fiber_type_source` / equivalent provenance fields without changing current default calls.
-3. Add `docs/modeling.md` and expand the model card with current failure modes and panel limits.
-4. Add baseline snapshot checks for frozen legacy defaults.
-5. Keep release notes conservative and explicit about alpha limits.
+1. Expand `data/models/model_card.md` with current failure modes, panel assumptions, and diagnostics-table caveats.
+2. Add baseline snapshot checks for frozen legacy defaults.
+3. Decide whether `--export-diagnostics` should be documented in README/quickstart now or kept primarily in modeling docs.
+4. Keep release notes conservative and explicit about alpha limits.
+5. Do not promote experimental features into the stable fibers CSV without explicit validation.
 
 ## Start Here Next Time
 
 When resuming work, start with this slice:
 
-1. Extend `src/quantify_classify.py` so internal marker-stat collection can optionally include extra direct markers (`i`, `iix`) when present.
-2. Do not change the exported default feature table or default `IIb + IIa -> inferred IIx` behavior yet.
-3. After that seam is in place, add output provenance fields such as:
-   - `fiber_type_source`
-   - `available_markers`
-   - optional residual-inference metadata
+1. Update `data/models/model_card.md` so it matches the current `v0.2` reality:
+   - explicit frozen alpha feature contract
+   - diagnostics export caveat
+   - current failure modes and panel limits
+2. Add baseline snapshot checks for frozen legacy defaults.
+3. After that, decide whether the next milestone step is:
+   - candidate-model evaluation using the experimental feature set, or
+   - more workflow hardening/documentation inside `v0.2`
 
-Short version: next work should continue the internal marker-aware architecture, not revisit CLI/config cleanup.
+Short version: next work should finish `v0.2` hardening and validation guardrails before starting a true candidate-model path.
 
 ---
 
