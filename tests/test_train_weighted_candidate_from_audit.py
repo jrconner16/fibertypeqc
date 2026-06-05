@@ -84,6 +84,8 @@ def test_train_weighted_candidates_uses_manual_train_and_manual_eval_holdout():
         feature_table,
         manual_split,
         manual_weight=6.0,
+        model_families=("rf", "gb"),
+        feature_sets_filter=("baseline", "expanded"),
     )
 
     assert best_name in {"baseline_rf", "expanded_rf", "baseline_gb", "expanded_gb"}

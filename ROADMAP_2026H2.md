@@ -255,12 +255,18 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
     - using `manual_train` rows with strong weight improves protected manual-holdout performance
     - current best weighted candidate is `baseline_gb`
     - promising signal, but not enough evidence yet for any default-model change
+  - refreshed weighted-supervision result on the larger reviewed set:
+    - `manual_train` override rows increased from the small initial probe to `216`
+    - protected `manual_eval_holdout` rows increased to `221`
+    - baseline-feature `baseline_gb` improves to about `0.615` accuracy / `0.616` balanced accuracy
+    - accuracy trend is improving as manual review expands, which matters more now because the benchmark is driven by manual biological adjudication rather than legacy model self-labels
 
 - Current interpretation:
   - the modeling runway is in place
   - first-pass candidate-model changes did not improve held-out biology by themselves under legacy labels
   - manually reviewed benchmark rows are already shifting the model ranking
   - a first weighted-supervision probe already improves protected manual-holdout performance
+  - the upward weighted-manual trend is encouraging, especially because it reflects manually adjudicated labels rather than chasing legacy model agreement
   - the next likely bottleneck is supervision quality and class coverage, not another blind feature/model-family sweep
   - the current reviewed benchmark is still too small and too `IIa`-sparse to serve as the final supervision set
 

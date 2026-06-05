@@ -35,6 +35,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=8.0,
         help="Sample weight assigned to reviewed manual-train rows.",
     )
+    parser.add_argument(
+        "--model-families",
+        type=str,
+        default="rf,gb",
+        help="Comma-separated model families to evaluate.",
+    )
+    parser.add_argument(
+        "--feature-sets",
+        type=str,
+        default="baseline,expanded",
+        help="Comma-separated feature sets to evaluate.",
+    )
     return parser
 
 
@@ -121,15 +133,29 @@ def train_weighted_candidates(
     manual_split: pd.DataFrame,
     *,
     manual_weight: float = 8.0,
+    model_families: tuple[str, ...] = ("rf", "gb"),
+    feature_sets_filter: tuple[str, ...] = ("baseline", "expanded"),
 ) -> tuple[str, dict[str, object]]:
     train_df, eval_df = _prepare_weighted_training_table(
         feature_table, manual_split, manual_weight=manual_weight
     )
 
-    feature_sets = {
+    all_feature_sets = {
         "baseline": list(FROZEN_ALPHA_BASELINE_FEATURES),
         "expanded": _expanded_feature_columns(feature_table),
     }
+    feature_sets = {
+        name: cols for name, cols in all_feature_sets.items() if name in set(feature_sets_filter)
+    }
+    model_builders = {
+        name: builder
+        for name, builder in _candidate_model_builders().items()
+        if name in set(model_families)
+    }
+    if not feature_sets:
+        raise ValueError("No feature sets selected.")
+    if not model_builders:
+        raise ValueError("No model families selected.")
 
     rows: list[dict[str, object]] = []
     prediction_frames: list[pd.DataFrame] = []
@@ -139,7 +165,7 @@ def train_weighted_candidates(
         "manual_train_rows": int((train_df["sample_weight"] > 1.0).sum()),
     }
 
-    for model_suffix, model_builder in _candidate_model_builders().items():
+    for model_suffix, model_builder in model_builders.items():
         for feature_prefix, feature_columns in feature_sets.items():
             name = f"{feature_prefix}_{model_suffix}"
             model = model_builder()
@@ -204,10 +230,14 @@ def main() -> None:
     args = build_parser().parse_args()
     feature_table = _load_feature_table(args.feature_table)
     manual_split = _load_manual_split(args.manual_split)
+    model_families = tuple(s.strip() for s in args.model_families.split(",") if s.strip())
+    feature_sets = tuple(s.strip() for s in args.feature_sets.split(",") if s.strip())
     best_name, results = train_weighted_candidates(
         feature_table,
         manual_split,
         manual_weight=args.manual_weight,
+        model_families=model_families,
+        feature_sets_filter=feature_sets,
     )
 
     best = results[best_name]
