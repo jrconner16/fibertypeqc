@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.review_audit_napari import _load_or_create_review_table, _save_review_table
+from src.review_audit_napari import (
+    _load_or_create_review_table,
+    _save_review_table,
+    _scaled_display_data,
+)
 
 
 def test_load_or_create_review_table_restores_existing_audit_labels(tmp_path):
@@ -44,3 +48,11 @@ def test_save_review_table_writes_csv(tmp_path):
     _save_review_table(table, review_output)
     loaded = pd.read_csv(review_output)
     assert loaded.loc[0, "audit_corrected_type"] == "iix"
+
+
+def test_scaled_display_data_clips_to_unit_interval():
+    scaled = _scaled_display_data([0.2, 0.7, 1.0], gain=0.5)
+    assert list(scaled) == [0.1, 0.35, 0.5]
+
+    clipped = _scaled_display_data([0.6, 0.8, 1.0], gain=2.0)
+    assert list(clipped) == [1.0, 1.0, 1.0]

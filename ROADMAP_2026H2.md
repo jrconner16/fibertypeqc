@@ -236,16 +236,40 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - dedicated audit-review Napari helper with adjudication output:
     - `src/review_audit_napari.py`
     - `validation/review_audit_napari.py`
+  - consolidated reviewed-audit benchmark tables:
+    - `outputs/validation/reviewed_audit_all.csv`
+    - `outputs/validation/audit_benchmark_labels.csv`
+  - reviewed benchmark evaluation workflow:
+    - `src/evaluate_against_audit_benchmark.py`
+    - `validation/evaluate_against_audit_benchmark.py`
+  - reviewed benchmark split tooling:
+    - `src/split_reviewed_benchmark.py`
+    - `validation/split_reviewed_benchmark.py`
+  - experimental weighted-supervision candidate training workflow:
+    - `src/train_weighted_candidate_from_audit.py`
+    - `validation/train_weighted_candidate_from_audit.py`
+  - reviewed benchmark result so far:
+    - `expanded_rf` looks best on the manually reviewed benchmark
+    - this differs from the earlier self-label `dev` result and confirms the need for manual supervision
+  - first weighted-supervision probe result so far:
+    - using `manual_train` rows with strong weight improves protected manual-holdout performance
+    - current best weighted candidate is `baseline_gb`
+    - promising signal, but not enough evidence yet for any default-model change
 
 - Current interpretation:
   - the modeling runway is in place
-  - first-pass candidate-model changes did not improve held-out biology by themselves
-  - the next likely bottleneck is supervision quality, not another blind feature/model-family sweep
+  - first-pass candidate-model changes did not improve held-out biology by themselves under legacy labels
+  - manually reviewed benchmark rows are already shifting the model ranking
+  - a first weighted-supervision probe already improves protected manual-holdout performance
+  - the next likely bottleneck is supervision quality and class coverage, not another blind feature/model-family sweep
+  - the current reviewed benchmark is still too small and too `IIa`-sparse to serve as the final supervision set
 
 - Not done yet:
-  - build a consolidated reviewed-audit label table across images
-  - use reviewed audit fibers as a formal benchmark
-  - define and test weighted-supervision candidate training using reviewed fibers
+  - grow the manual label set substantially, with deliberate `IIa` enrichment
+  - build and review a much larger round-2 sample with two separate intents:
+    - benchmark-enrichment rows with broader image spread and tighter image caps
+    - supervision-enrichment rows with denser `IIa` / `IIa-iix` sampling and looser image caps
+  - repeat weighted-supervision candidate training after each meaningful expansion of the reviewed manual set
   - decide whether matched MyoSight labels should be used only for audit/evaluation or also as weak supervision
 
 ### Acceptance Criteria
@@ -257,6 +281,8 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 - Any default-behavior change is documented in changelog/release notes.
 - Reviewed audit fibers are kept separate from ordinary pipeline outputs and can be reused as a higher-trust benchmark.
 - No corrected audit labels are silently written back into the stable `*_fibers.csv` outputs.
+- Manual reviewed fibers are split into benchmark holdback vs optional training supervision before retraining.
+- Manual supervision expansion intentionally includes underrepresented classes, especially `IIa`.
 
 ### Risks
 
@@ -265,6 +291,8 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 - Generalizing across panel types may create partial-output cases that are harder to communicate.
 - Candidate training may overfit to weak comparator labels if matched MyoSight labels are treated as ordinary truth.
 - Small reviewed audit sets can be highly informative, but only if some portion is held back from training.
+- Review-display settings can bias manual supervision if one marker channel is visually over-amplified relative to the raw evidence.
+- If manual-label sampling is not stratified, the review set will keep collapsing toward already-common `IIb` / `IIx` cases and fail to improve `IIa` supervision.
 
 ### Test/Validation Gates
 
@@ -273,6 +301,9 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 - Candidate must meet predeclared metric targets or provide clear rationale.
 - Reviewed audit labels should first be used as an evaluation benchmark before they are used as training supervision.
 - If reviewed fibers are used in training, retain a separate untouched reviewed subset for evaluation.
+- Any enlarged manual-label campaign should track class balance explicitly and not rely on passive/random review alone.
+- Manual-label sampling should use distinct benchmark-enrichment and supervision-enrichment pools rather than one undifferentiated random sample.
+- Mixed manual review sessions are acceptable, but downstream consolidation/splitting must still preserve the intended role of each sampled row (`manual_eval_candidate` vs `manual_train_candidate`) to avoid training/evaluation leakage.
 
 ---
 
@@ -320,22 +351,26 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 ## Weekly Next Steps (Immediate)
 
-1. Keep release notes conservative and explicit about alpha limits.
-2. Do not promote experimental features into the stable fibers CSV without explicit validation.
-3. Use `docs/baseline_comparison_protocol.md` as the entry point for `v0.3` candidate-model work.
+1. Keep corrected manual labels separate from stable pipeline outputs.
+2. Expand the manual label set with deliberate `IIa` enrichment rather than only collecting more `IIb`/`IIx` examples.
+3. Use separate round-2 sampling pools:
+   - benchmark enrichment with broader image diversity
+   - supervision enrichment with denser `IIa` / ambiguity coverage
 4. Treat reviewed audit fibers as a benchmark first, then as weighted supervision only after a holdback/evaluation split is defined.
+5. Weighted-supervision probes are useful now, but no default-model decision should rely on them until the manual set is larger and better balanced.
 
 ## Start Here Next Time
 
 When resuming work, start with this slice:
 
-1. Follow `docs/baseline_comparison_protocol.md`.
-2. Consolidate reviewed audit outputs into a reusable benchmark table.
-3. Split reviewed audit fibers into:
-   - benchmark-only / holdback reviewed subset
-   - optional weighted-supervision reviewed subset
+1. Build and review the round-2 manual-labeling sample.
+2. Expand the reviewed audit set with deliberate `IIa` and `IIa/iix` enrichment before expecting meaningful supervised gains.
+3. Rerun:
+   - `validation.consolidate_reviewed_audit`
+   - `validation.split_reviewed_benchmark`
+   - while preserving `manual_round2_pool` intent downstream even if the review session itself was mixed
 4. Keep the frozen alpha baseline as the explicit comparator for every candidate run.
-5. Only after that, test weighted-supervision candidate training.
+5. Re-run the weighted-supervision probe after each meaningful manual-label expansion and watch whether the protected manual holdout continues to improve.
 
 Short version: the remaining work is now more about supervision quality and benchmark design than about more plumbing or blind model-family search.
 
