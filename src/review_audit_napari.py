@@ -11,6 +11,14 @@ from magicgui import magicgui
 from qtpy.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from src.io_utils import load_multichannel_image
+from src.label_masks import eroded_label_mask
+from src.typing_display import (
+    normalize_for_display,
+    optional_channel,
+    threshold_from_table,
+    typing_composite,
+    typing_signal_for_display,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,6 +34,23 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=2,
         help="Channel index to show as grayscale background for multichannel images.",
+    )
+    parser.add_argument("--iib-channel", type=int, default=0)
+    parser.add_argument("--iia-channel", type=int, default=1)
+    parser.add_argument("--membrane-channel", type=int, default=2)
+    parser.add_argument("--signal-scale", type=float, default=5.0)
+    parser.add_argument("--threshold-floor", type=float, default=1.0)
+    parser.add_argument("--typing-preprocess", type=str, default="global_subtract")
+    parser.add_argument("--typing-bg-quantile", type=float, default=0.02)
+    parser.add_argument("--typing-tile-size", type=int, default=512)
+    parser.add_argument("--typing-bg-sigma", type=float, default=24.0)
+    parser.add_argument("--typing-smooth-sigma", type=float, default=0.8)
+    parser.add_argument("--typing-erode-px", type=int, default=2)
+    parser.add_argument(
+        "--display-downsample",
+        type=int,
+        default=1,
+        help="Downsample factor for display layers. Use 2 or 4 for large section exports.",
     )
     parser.add_argument(
         "--review-output",
@@ -78,6 +103,30 @@ def _find_output_files(output_root: Path, image_id: str) -> tuple[Path, Path]:
     return labels_path, fibers_path
 
 
+def _display_channel(image: np.ndarray, channel: int | None) -> np.ndarray:
+    if image.ndim == 2:
+        return image
+    if channel is None:
+        return image[0]
+    if channel < 0 or channel >= image.shape[0]:
+        raise ValueError(f"Display channel {channel} out of range for image shape {image.shape}")
+    return image[channel]
+
+
+def _downsample_2d(data: np.ndarray, factor: int) -> np.ndarray:
+    if factor <= 1:
+        return data
+    return data[::factor, ::factor]
+
+
+def _downsample_image_chw(image: np.ndarray, factor: int) -> np.ndarray:
+    if factor <= 1:
+        return image
+    if image.ndim == 2:
+        return _downsample_2d(image, factor)
+    return image[:, ::factor, ::factor]
+
+
 def _default_review_output(audit_csv: Path, image_id: str) -> Path:
     stem = audit_csv.stem
     return audit_csv.with_name(f"{stem}_reviewed_{image_id}.csv")
@@ -103,6 +152,12 @@ def _target_mask(labels: np.ndarray, label_id: int) -> np.ndarray:
     out = np.zeros_like(labels, dtype=np.int32)
     out[labels == label_id] = 1
     return out
+
+
+def _scaled_display_data(data: np.ndarray, gain: float) -> np.ndarray:
+    gain = max(0.0, float(gain))
+    scaled = np.asarray(data, dtype=np.float32) * gain
+    return np.clip(scaled, 0.0, 1.0)
 
 
 def _build_points(
@@ -150,6 +205,22 @@ def _row_text(row: pd.Series) -> str:
     for col in sorted(candidate_cols):
         fields.append(f"{col}={row.get(col, '')}")
     return "\n".join(fields)
+
+
+def _toggle_layer_visibility(viewer: napari.Viewer, layer_name: str) -> None:
+    layer = viewer.layers.get(layer_name)
+    if layer is None:
+        return
+    layer.visible = not bool(layer.visible)
+
+
+def _show_only_layers(viewer: napari.Viewer, visible_names: set[str]) -> None:
+    persistent = {"cellpose_labels", "audit_target", "audit_points"}
+    for layer in viewer.layers:
+        if layer.name in persistent:
+            layer.visible = True
+        else:
+            layer.visible = layer.name in visible_names
 
 
 def _load_or_create_review_table(audit: pd.DataFrame, review_output: Path) -> pd.DataFrame:
@@ -202,6 +273,7 @@ def _save_review_table(review_table: pd.DataFrame, review_output: Path) -> None:
 
 def main() -> None:
     args = build_parser().parse_args()
+    display_downsample = max(1, int(args.display_downsample))
     audit = _load_audit_subset(args.audit_csv, args.image_id)
     review_output = args.review_output or _default_review_output(args.audit_csv, args.image_id)
     audit = _load_or_create_review_table(audit, review_output)
@@ -209,39 +281,175 @@ def main() -> None:
     source_image = Path(str(manifest_row["source_image"]))
     labels_path, fibers_path = _find_output_files(args.output_root, args.image_id)
 
-    background = _load_background_image(source_image, args.display_channel)
+    full_image = load_multichannel_image(source_image)
     labels = np.asarray(tifffile.imread(labels_path))
     if labels.ndim != 2:
         labels = np.squeeze(labels)
     if labels.ndim != 2:
         raise ValueError(f"Expected 2D labels image, got shape {labels.shape}")
+    fibers = pd.read_csv(fibers_path)
+    display_image = _downsample_image_chw(full_image, display_downsample)
+    display_labels = _downsample_2d(labels, display_downsample).astype(np.int32)
+    display_background = _display_channel(display_image, args.display_channel)
 
     target_labels = audit["label"].astype(int).tolist()
-    centroid_map = _label_centroid_map(labels, target_labels)
+    centroid_map = _label_centroid_map(display_labels, target_labels)
     points, properties = _build_points(audit, centroid_map)
+    type1_threshold = threshold_from_table(fibers, "type1_threshold")
+    type2_threshold = threshold_from_table(fibers, "type2_threshold")
+    display_erode_px = max(1, int(round(args.typing_erode_px / display_downsample)))
+    signal_mask = eroded_label_mask(
+        display_labels.astype(np.int32), display_erode_px
+    ).astype(np.float32)
 
     viewer = napari.Viewer(title=f"Audit review: {args.image_id}")
-    viewer.add_image(background, name="background", colormap="gray")
-    viewer.add_labels(labels, name="cellpose_labels", opacity=0.25)
-    target_layer = viewer.add_labels(
-        np.zeros_like(labels, dtype=np.int32), name="audit_target", opacity=0.8
+    viewer.add_image(
+        typing_composite(
+            display_image,
+            args.iib_channel,
+            args.iia_channel,
+            args.membrane_channel,
+            type1_threshold=type1_threshold,
+            type2_threshold=type2_threshold,
+            preprocess=args.typing_preprocess,
+            bg_quantile=args.typing_bg_quantile,
+            tile_size=args.typing_tile_size,
+            bg_sigma=args.typing_bg_sigma,
+            smooth_sigma=args.typing_smooth_sigma,
+            signal_scale=args.signal_scale,
+            threshold_floor=args.threshold_floor,
+            signal_mask=signal_mask,
+        ),
+        name="typing_composite_threshold_scaled",
+        rgb=True,
+        visible=False,
     )
+    viewer.add_image(display_background, name="single_channel_gray", colormap="gray", visible=False)
+
+    raw_layer_specs = (
+        ("raw_iib", args.iib_channel, "magenta", True),
+        ("raw_iia", args.iia_channel, "green", True),
+        ("raw_membrane", args.membrane_channel, "gray", True),
+    )
+    for raw_name, raw_channel, raw_colormap, raw_visible in raw_layer_specs:
+        raw = optional_channel(display_image, raw_channel)
+        if raw is None:
+            continue
+        viewer.add_image(
+            raw if raw_colormap != "gray" else normalize_for_display(raw),
+            name=f"{raw_name}_ch{raw_channel}",
+            colormap=raw_colormap,
+            blending="additive" if raw_colormap != "gray" else "translucent",
+            opacity=0.75 if raw_colormap != "gray" else 0.45,
+            visible=raw_visible,
+        )
+
+    raw_iia_layer = None
+    for layer in viewer.layers:
+        if layer.name == f"raw_iia_ch{args.iia_channel}":
+            raw_iia_layer = layer
+            break
+
+    iib_signal = optional_channel(display_image, args.iib_channel)
+    if iib_signal is not None:
+        viewer.add_image(
+            typing_signal_for_display(
+                iib_signal,
+                threshold=type1_threshold,
+                preprocess=args.typing_preprocess,
+                bg_quantile=args.typing_bg_quantile,
+                tile_size=args.typing_tile_size,
+                bg_sigma=args.typing_bg_sigma,
+                smooth_sigma=args.typing_smooth_sigma,
+                signal_scale=args.signal_scale,
+                threshold_floor=args.threshold_floor,
+                mask=signal_mask,
+            ),
+            name=f"iib_signal_ch{args.iib_channel}",
+            colormap="magenta",
+            blending="additive",
+            opacity=0.8,
+            visible=False,
+        )
+
+    iia_signal = optional_channel(display_image, args.iia_channel)
+    iia_signal_display = None
+    iia_signal_layer = None
+    if iia_signal is not None:
+        iia_signal_display = typing_signal_for_display(
+            iia_signal,
+            threshold=type2_threshold,
+            preprocess=args.typing_preprocess,
+            bg_quantile=args.typing_bg_quantile,
+            tile_size=args.typing_tile_size,
+            bg_sigma=args.typing_bg_sigma,
+            smooth_sigma=args.typing_smooth_sigma,
+            signal_scale=args.signal_scale,
+            threshold_floor=args.threshold_floor,
+            mask=signal_mask,
+        )
+        iia_signal_layer = viewer.add_image(
+            iia_signal_display,
+            name=f"iia_signal_ch{args.iia_channel}",
+            colormap="green",
+            blending="additive",
+            opacity=0.8,
+            visible=False,
+        )
+
+    display_settings = {
+        "iia_gain": 1.0,
+        "iia_opacity": 0.8,
+        "raw_iia_opacity": 0.75,
+    }
+
+    def apply_display_settings() -> None:
+        if iia_signal_layer is not None and iia_signal_display is not None:
+            iia_signal_layer.data = _scaled_display_data(
+                iia_signal_display, display_settings["iia_gain"]
+            )
+            iia_signal_layer.opacity = float(display_settings["iia_opacity"])
+        if raw_iia_layer is not None:
+            raw_iia_layer.opacity = float(display_settings["raw_iia_opacity"])
+
+    apply_display_settings()
+
+    labels_layer = viewer.add_labels(display_labels, name="cellpose_labels", opacity=0.25)
+    if hasattr(labels_layer, "contour"):
+        labels_layer.contour = 1
+    target_layer = viewer.add_labels(
+        np.zeros_like(display_labels, dtype=np.int32), name="audit_target", opacity=0.8
+    )
+    if hasattr(target_layer, "color"):
+        try:
+            target_layer.color = {1: "white"}
+        except Exception:
+            pass
+    if hasattr(target_layer, "contour"):
+        target_layer.contour = 2
     viewer.add_points(
         points,
         name="audit_points",
         properties=properties,
         text={"string": "{label}", "size": 10, "color": "yellow", "anchor": "upper_left"},
-        face_color="transparent",
-        edge_color="yellow",
+        face_color="yellow",
+        border_color="yellow",
+        border_width=0.2,
+        opacity=0.8,
         size=10,
     )
 
     state = {"index": 0}
     info_label = QLabel()
     info_label.setWordWrap(True)
+    save_label = QLabel("Review not saved yet.")
+    save_label.setWordWrap(True)
 
     def save_current_state() -> None:
         _save_review_table(audit, review_output)
+        message = f"Saved review CSV: {review_output}"
+        save_label.setText(message)
+        print(message)
 
     def set_current_label(label_name: str) -> None:
         idx = state["index"]
@@ -265,7 +473,7 @@ def main() -> None:
         state["index"] = int(max(0, min(index, len(audit) - 1)))
         row = audit.iloc[state["index"]]
         label_id = int(row["label"])
-        target_layer.data = _target_mask(labels, label_id)
+        target_layer.data = _target_mask(display_labels, label_id)
         centroid = centroid_map.get(label_id)
         if centroid is not None:
             viewer.camera.center = (centroid[0], centroid[1])
@@ -312,9 +520,45 @@ def main() -> None:
     def save_review() -> None:
         save_current_state()
 
+    @magicgui(
+        auto_call=True,
+        iia_gain={
+            "widget_type": "FloatSlider",
+            "label": "IIa Enhanced Gain",
+            "min": 0.1,
+            "max": 1.5,
+            "step": 0.05,
+        },
+        iia_opacity={
+            "widget_type": "FloatSlider",
+            "label": "IIa Enhanced Opacity",
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.05,
+        },
+        raw_iia_opacity={
+            "widget_type": "FloatSlider",
+            "label": "IIa Raw Opacity",
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.05,
+        },
+    )
+    def adjust_iia_display(
+        iia_gain: float = 1.0,
+        iia_opacity: float = 0.8,
+        raw_iia_opacity: float = 0.75,
+    ) -> None:
+        display_settings["iia_gain"] = float(iia_gain)
+        display_settings["iia_opacity"] = float(iia_opacity)
+        display_settings["raw_iia_opacity"] = float(raw_iia_opacity)
+        apply_display_settings()
+
     panel = QWidget()
     layout = QVBoxLayout()
     layout.addWidget(info_label)
+    layout.addWidget(save_label)
+    layout.addWidget(adjust_iia_display.native)
     layout.addWidget(mark_iib.native)
     layout.addWidget(mark_iia.native)
     layout.addWidget(mark_iix.native)
@@ -364,12 +608,73 @@ def main() -> None:
     def _clear(event=None) -> None:
         clear_label()
 
+    @viewer.bind_key("1")
+    def _toggle_raw_iib(event=None) -> None:
+        _toggle_layer_visibility(viewer, f"raw_iib_ch{args.iib_channel}")
+
+    @viewer.bind_key("2")
+    def _toggle_raw_iia(event=None) -> None:
+        _toggle_layer_visibility(viewer, f"raw_iia_ch{args.iia_channel}")
+
+    @viewer.bind_key("3")
+    def _toggle_iib_signal(event=None) -> None:
+        _toggle_layer_visibility(viewer, f"iib_signal_ch{args.iib_channel}")
+
+    @viewer.bind_key("4")
+    def _toggle_iia_signal(event=None) -> None:
+        _toggle_layer_visibility(viewer, f"iia_signal_ch{args.iia_channel}")
+
+    @viewer.bind_key("5")
+    def _toggle_membrane(event=None) -> None:
+        _toggle_layer_visibility(viewer, f"raw_membrane_ch{args.membrane_channel}")
+
+    @viewer.bind_key("6")
+    def _toggle_composite(event=None) -> None:
+        _toggle_layer_visibility(viewer, "typing_composite_threshold_scaled")
+
+    @viewer.bind_key("0")
+    def _show_context_only(event=None) -> None:
+        _show_only_layers(viewer, set())
+
+    @viewer.bind_key("7")
+    def _show_raw_context(event=None) -> None:
+        _show_only_layers(
+            viewer,
+            {
+                f"raw_iib_ch{args.iib_channel}",
+                f"raw_iia_ch{args.iia_channel}",
+                f"raw_membrane_ch{args.membrane_channel}",
+            },
+        )
+
+    @viewer.bind_key("8")
+    def _show_enhanced_context(event=None) -> None:
+        _show_only_layers(
+            viewer,
+            {
+                f"iib_signal_ch{args.iib_channel}",
+                f"iia_signal_ch{args.iia_channel}",
+                f"raw_membrane_ch{args.membrane_channel}",
+            },
+        )
+
+    @viewer.bind_key("9")
+    def _show_composite_context(event=None) -> None:
+        _show_only_layers(viewer, {"typing_composite_threshold_scaled"})
+
     update_view(0)
     print(f"source image: {source_image}")
     print(f"labels: {labels_path}")
     print(f"fibers: {fibers_path}")
     print(f"audit rows: {len(audit)}")
     print(f"review output: {review_output}")
+    print(f"display downsample: {display_downsample}")
+    print("Hotkeys: n/p nav | b/a/x/h/u/e classify | c clear")
+    print("Layer hotkeys: 1 raw IIb | 2 raw IIa | 3 enhanced IIb | 4 enhanced IIa")
+    print(
+        "Layer hotkeys: 5 membrane | 6 composite | 0 labels-only | "
+        "7 raw set | 8 enhanced set | 9 composite set"
+    )
     napari.run()
 
 
