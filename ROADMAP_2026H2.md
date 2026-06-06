@@ -260,6 +260,12 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
     - protected `manual_eval_holdout` rows increased to `221`
     - baseline-feature `baseline_gb` improves to about `0.615` accuracy / `0.616` balanced accuracy
     - accuracy trend is improving as manual review expands, which matters more now because the benchmark is driven by manual biological adjudication rather than legacy model self-labels
+  - merged supervision result after adding the confirmed `true_iia_hunt` positives:
+    - reviewed benchmark expanded to `1275` rows across `31` images
+    - `manual_train` now includes meaningful confirmed `IIa` labels (`122`)
+    - protected `manual_eval_holdout` now includes meaningful confirmed `IIa` labels (`40`)
+    - weighted baseline-feature `baseline_gb` improves further to about `0.761` accuracy / `0.815` balanced accuracy
+    - this is the strongest evidence so far that supervision quality, not model family search, was the main bottleneck
 
 - Current interpretation:
   - the modeling runway is in place
@@ -267,8 +273,9 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - manually reviewed benchmark rows are already shifting the model ranking
   - a first weighted-supervision probe already improves protected manual-holdout performance
   - the upward weighted-manual trend is encouraging, especially because it reflects manually adjudicated labels rather than chasing legacy model agreement
+  - adding a curated positive `IIa` anchor set materially strengthens the weighted-manual result, which supports the idea that explicit positive-definition work is as important as negative/error cleanup
   - the next likely bottleneck is supervision quality and class coverage, not another blind feature/model-family sweep
-  - the current reviewed benchmark is still too small and too `IIa`-sparse to serve as the final supervision set
+  - the reviewed benchmark is now materially stronger, but still should be treated as an evolving supervision asset rather than a final locked benchmark
 
 - Not done yet:
   - grow the manual label set substantially, with deliberate `IIa` enrichment
