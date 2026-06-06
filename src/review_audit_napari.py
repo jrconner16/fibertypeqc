@@ -70,9 +70,17 @@ def _load_audit_subset(path: Path, image_id: str) -> pd.DataFrame:
     if subset.empty:
         raise ValueError(f"No audit rows found for image_id={image_id}")
     subset["label"] = subset["label"].astype(int)
-    return subset.sort_values(
-        ["audit_bucket_count", "label"], ascending=[False, True]
-    ).reset_index(drop=True)
+    sort_cols: list[str] = []
+    ascending: list[bool] = []
+    if "audit_bucket_count" in subset.columns:
+        sort_cols.append("audit_bucket_count")
+        ascending.append(False)
+    elif "iia_evidence_score" in subset.columns:
+        sort_cols.append("iia_evidence_score")
+        ascending.append(False)
+    sort_cols.append("label")
+    ascending.append(True)
+    return subset.sort_values(sort_cols, ascending=ascending).reset_index(drop=True)
 
 
 def _load_manifest_row(path: Path, image_id: str) -> pd.Series:
@@ -158,6 +166,21 @@ def _scaled_display_data(data: np.ndarray, gain: float) -> np.ndarray:
     gain = max(0.0, float(gain))
     scaled = np.asarray(data, dtype=np.float32) * gain
     return np.clip(scaled, 0.0, 1.0)
+
+
+def _focus_viewer_canvas(viewer: napari.Viewer) -> None:
+    for attr_chain in (
+        ("window", "_qt_viewer", "canvas", "native"),
+        ("window", "qt_viewer", "canvas", "native"),
+    ):
+        obj = viewer
+        try:
+            for attr in attr_chain:
+                obj = getattr(obj, attr)
+            obj.setFocus()
+            return
+        except Exception:
+            continue
 
 
 def _build_points(
@@ -442,6 +465,8 @@ def main() -> None:
     state = {"index": 0}
     info_label = QLabel()
     info_label.setWordWrap(True)
+    decision_label = QLabel("Current audit decision: <none>")
+    decision_label.setWordWrap(True)
     save_label = QLabel("Review not saved yet.")
     save_label.setWordWrap(True)
 
@@ -458,6 +483,7 @@ def main() -> None:
         audit.loc[idx, "audit_is_excluded"] = label_name == "exclude"
         save_current_state()
         update_view(idx)
+        _focus_viewer_canvas(viewer)
 
     def clear_current_label() -> None:
         idx = state["index"]
@@ -466,6 +492,7 @@ def main() -> None:
         audit.loc[idx, "audit_is_excluded"] = False
         save_current_state()
         update_view(idx)
+        _focus_viewer_canvas(viewer)
 
     def update_view(index: int) -> None:
         if audit.empty:
@@ -479,6 +506,13 @@ def main() -> None:
             viewer.camera.center = (centroid[0], centroid[1])
             viewer.camera.zoom = max(viewer.camera.zoom, 3.0)
         info_label.setText(_row_text(row))
+        if bool(row.get("audit_is_excluded", False)):
+            decision = "exclude"
+        elif bool(row.get("audit_is_uncertain", False)):
+            decision = "uncertain"
+        else:
+            decision = str(row.get("audit_corrected_type", "")).strip() or "<none>"
+        decision_label.setText(f"Current audit decision: {decision}")
 
     @magicgui(call_button="Next")
     def next_fiber() -> None:
@@ -557,6 +591,7 @@ def main() -> None:
     panel = QWidget()
     layout = QVBoxLayout()
     layout.addWidget(info_label)
+    layout.addWidget(decision_label)
     layout.addWidget(save_label)
     layout.addWidget(adjust_iia_display.native)
     layout.addWidget(mark_iib.native)
@@ -571,6 +606,7 @@ def main() -> None:
     layout.addWidget(next_fiber.native)
     panel.setLayout(layout)
     viewer.window.add_dock_widget(panel, area="right", name="Audit Review")
+    _focus_viewer_canvas(viewer)
 
     @viewer.bind_key("n")
     def _next(event=None) -> None:
