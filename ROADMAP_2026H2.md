@@ -266,6 +266,13 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
     - protected `manual_eval_holdout` now includes meaningful confirmed `IIa` labels (`40`)
     - weighted baseline-feature `baseline_gb` improves further to about `0.761` accuracy / `0.815` balanced accuracy
     - this is the strongest evidence so far that supervision quality, not model family search, was the main bottleneck
+  - `IIa` gate analysis on the rebuilt manual benchmark:
+    - `src/analyze_iia_gate.py`
+    - `validation/analyze_iia_gate.py`
+    - strict `IIa` evidence gating proved that the false-positive `IIa` problem is real, but the first hard gate (`q=0.10`) was too aggressive and hurt balanced accuracy
+    - a softer `IIa` gate derived from confirmed `true_iia_hunt` positives (`q=0.01`) is now the leading candidate on the protected manual holdout
+    - `baseline_gb_gated_iia_q0.01` reaches about `0.801` accuracy / `0.839` balanced accuracy on `manual_eval_holdout`
+    - this soft gate also improves image-level `IIa` agreement against the consolidated MyoSight summary as a secondary comparison layer
 
 - Current interpretation:
   - the modeling runway is in place
@@ -274,16 +281,20 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - a first weighted-supervision probe already improves protected manual-holdout performance
   - the upward weighted-manual trend is encouraging, especially because it reflects manually adjudicated labels rather than chasing legacy model agreement
   - adding a curated positive `IIa` anchor set materially strengthens the weighted-manual result, which supports the idea that explicit positive-definition work is as important as negative/error cleanup
+  - the `IIa` boundary now looks like a decision-threshold problem as much as a model problem; a soft evidence gate improves both the primary manual benchmark and the secondary MyoSight `IIa` composition comparison
   - the next likely bottleneck is supervision quality and class coverage, not another blind feature/model-family sweep
   - the reviewed benchmark is now materially stronger, but still should be treated as an evolving supervision asset rather than a final locked benchmark
 
 - Not done yet:
-  - grow the manual label set substantially, with deliberate `IIa` enrichment
-  - build and review a much larger round-2 sample with two separate intents:
-    - benchmark-enrichment rows with broader image spread and tighter image caps
-    - supervision-enrichment rows with denser `IIa` / `IIa-iix` sampling and looser image caps
+  - operationalize the best soft `IIa` gate candidate (`q=0.01`) into a reproducible candidate pipeline path, rather than keeping it only as an analysis artifact
+  - validate the soft-gated candidate on additional heldout/external image sets before considering any default-behavior change
+  - grow the manual label set further where it still adds signal, especially for edge-case `IIa/iix` and difficult image-quality regimes
   - repeat weighted-supervision candidate training after each meaningful expansion of the reviewed manual set
-  - decide whether matched MyoSight labels should be used only for audit/evaluation or also as weak supervision
+  - test a three-tier supervision scheme explicitly:
+    - baseline/self labels with low weight
+    - matched MyoSight weak labels with medium weight
+    - manual reviewed labels with high weight
+  - note: matched MyoSight labels have **not yet** been used in training with medium weight; that remains untested
 
 ### Acceptance Criteria
 
