@@ -91,6 +91,7 @@ def build_batch_command(
     channel_overrides: BatchChannelOverrides,
     downsample_factor: int | None = None,
     export_diagnostics: bool = False,
+    retain_mode: str = "full",
 ) -> list[str]:
     """
     Build the frozen v0 pipeline command for a single image.
@@ -126,6 +127,8 @@ def build_batch_command(
         str(V0_PARAMS["model_margin_threshold"]),
         "--downsample-factor",
         str(downsample_factor or V0_PARAMS["downsample_factor"]),
+        "--retain-mode",
+        retain_mode,
     ]
     if export_diagnostics:
         cmd.append("--export-diagnostics")
@@ -174,6 +177,7 @@ def run_single_image(
     channel_overrides: BatchChannelOverrides,
     downsample_factor: int | None = None,
     export_diagnostics: bool = False,
+    retain_mode: str = "full",
 ) -> dict:
     """
     Process a single image through the v0 pipeline.
@@ -207,6 +211,7 @@ def run_single_image(
         channel_overrides=channel_overrides,
         downsample_factor=downsample_factor,
         export_diagnostics=export_diagnostics,
+        retain_mode=retain_mode,
     )
 
     try:
@@ -319,6 +324,16 @@ def main() -> None:
             "Write optional per-image *_feature_diagnostics.csv files for model/feature debugging."
         ),
     )
+    parser.add_argument(
+        "--retain-mode",
+        type=str,
+        default="full",
+        choices=["full", "tables", "summary"],
+        help=(
+            "Control retained per-image outputs after successful runs. "
+            "'tables' removes label TIFFs; 'summary' keeps only summary CSVs."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -406,6 +421,7 @@ def main() -> None:
             channel_overrides=channel_overrides,
             downsample_factor=args.downsample_factor,
             export_diagnostics=args.export_diagnostics,
+            retain_mode=args.retain_mode,
         )
         results.append(result)
 

@@ -87,6 +87,21 @@ Recommended split metadata:
 - source of manual labels, if any
 - whether image was previously used for baseline development
 
+Use the seeded manifest generator to pre-populate filename-derived biology and baseline-derived
+technical columns before manual curation:
+
+```bash
+uv run python -m validation.build_candidate_split_manifest \
+  --output outputs/validation/candidate_split_manifest.csv
+```
+
+The generated manifest is intended to be edited by hand for:
+
+- final `split`
+- manual quality notes
+- saturation/difficulty notes
+- any explicit inclusion/exclusion decisions
+
 ## Evaluation Outputs
 
 Each candidate comparison should produce these outputs.

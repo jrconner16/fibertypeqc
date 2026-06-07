@@ -131,6 +131,29 @@ def derive_iia_gate_thresholds(
     }
 
 
+def derive_iib_redirect_thresholds(
+    true_iib_reviewed: pd.DataFrame, gate_quantile: float = 0.10
+) -> dict[str, float]:
+    upper_quantile = 1.0 - gate_quantile
+    return {
+        "min_type1_snr_mean": float(
+            pd.to_numeric(true_iib_reviewed["type1_snr_mean"]).quantile(gate_quantile)
+        ),
+        "min_type1_coverage": float(
+            pd.to_numeric(true_iib_reviewed["type1_coverage"]).quantile(gate_quantile)
+        ),
+        "min_type1_cov_x_snr": float(
+            pd.to_numeric(true_iib_reviewed["type1_cov_x_snr"]).quantile(gate_quantile)
+        ),
+        "max_type2_snr_mean": float(
+            pd.to_numeric(true_iib_reviewed["type2_snr_mean"]).quantile(upper_quantile)
+        ),
+        "max_type2_coverage": float(
+            pd.to_numeric(true_iib_reviewed["type2_coverage"]).quantile(upper_quantile)
+        ),
+    }
+
+
 def _resolve_feature_column(df: pd.DataFrame, base_name: str) -> str:
     candidates = [base_name, f"{base_name}_x", f"{base_name}_y"]
     for candidate in candidates:
@@ -169,10 +192,51 @@ def _gate_mask(df: pd.DataFrame, thresholds: dict[str, float]) -> pd.Series:
     )
 
 
+def _iib_redirect_mask(df: pd.DataFrame, thresholds: dict[str, float]) -> pd.Series:
+    type1_snr_mean = _resolve_feature_column(df, "type1_snr_mean")
+    type1_coverage = _resolve_feature_column(df, "type1_coverage")
+    type1_cov_x_snr = _resolve_feature_column(df, "type1_cov_x_snr")
+    type2_snr_mean = _resolve_feature_column(df, "type2_snr_mean")
+    type2_coverage = _resolve_feature_column(df, "type2_coverage")
+    type1_mean = _resolve_feature_column(df, "type1_mean")
+    type2_mean = _resolve_feature_column(df, "type2_mean")
+    return (
+        pd.to_numeric(df[type1_snr_mean], errors="coerce").ge(
+            thresholds["min_type1_snr_mean"]
+        )
+        & pd.to_numeric(df[type1_coverage], errors="coerce").ge(
+            thresholds["min_type1_coverage"]
+        )
+        & pd.to_numeric(df[type1_cov_x_snr], errors="coerce").ge(
+            thresholds["min_type1_cov_x_snr"]
+        )
+        & pd.to_numeric(df[type2_snr_mean], errors="coerce").le(
+            thresholds["max_type2_snr_mean"]
+        )
+        & pd.to_numeric(df[type2_coverage], errors="coerce").le(
+            thresholds["max_type2_coverage"]
+        )
+        & pd.to_numeric(df[type1_mean], errors="coerce").gt(
+            pd.to_numeric(df[type2_mean], errors="coerce")
+        )
+    )
+
+
 def _apply_iia_gate(pred: pd.Series, gate_ok: pd.Series) -> pd.Series:
     out = pred.astype(str).str.lower().copy()
     demote = out.eq("iia") & ~gate_ok.fillna(False)
     out.loc[demote] = "iix"
+    return out
+
+
+def _apply_iia_gate_with_iib_redirect(
+    pred: pd.Series, iia_gate_ok: pd.Series, iib_redirect_ok: pd.Series
+) -> pd.Series:
+    out = pred.astype(str).str.lower().copy()
+    demote = out.eq("iia") & ~iia_gate_ok.fillna(False)
+    redirect_to_iib = demote & iib_redirect_ok.fillna(False)
+    out.loc[demote] = "iix"
+    out.loc[redirect_to_iib] = "iib"
     return out
 
 
@@ -316,6 +380,33 @@ def analyze_iia_gate(
     )
 
     y_true = merged["audit_final_label"].astype(str).str.lower()
+    true_iib_reviewed = (
+        benchmark_split.loc[benchmark_split["audit_final_label"].eq("iib"), ["image_id", "label"]]
+        .drop_duplicates()
+        .merge(
+            feature_table[
+                [
+                    c
+                    for c in [
+                        "image_id",
+                        "label",
+                        "type1_mean",
+                        "type2_mean",
+                        "type1_coverage",
+                        "type2_coverage",
+                        "type1_cov_x_snr",
+                        "type1_snr_mean",
+                        "type2_cov_x_snr",
+                        "type2_snr_mean",
+                    ]
+                    if c in feature_table.columns
+                ]
+            ],
+            on=["image_id", "label"],
+            how="left",
+            validate="one_to_one",
+        )
+    )
     metric_rows = [
         _metric_row("pipeline_current", y_true, merged["pred_pipeline_current"]),
         _metric_row(candidate_name, y_true, merged[f"pred_{candidate_name}"]),
@@ -324,40 +415,68 @@ def analyze_iia_gate(
     best_quantile = gate_quantiles[0]
     best_gated_metrics: dict[str, float] | None = None
     best_gate_ok: pd.Series | None = None
+    best_iib_redirect_ok: pd.Series | None = None
     best_pipeline_pred: pd.Series | None = None
     best_candidate_pred: pd.Series | None = None
+    best_pipeline_pred_redirect: pd.Series | None = None
+    best_candidate_pred_redirect: pd.Series | None = None
     for gate_quantile in gate_quantiles:
         thresholds = derive_iia_gate_thresholds(true_iia_reviewed, gate_quantile)
+        iib_thresholds = derive_iib_redirect_thresholds(true_iib_reviewed, gate_quantile)
         gate_ok = _gate_mask(merged, thresholds)
+        iib_redirect_ok = _iib_redirect_mask(merged, iib_thresholds)
         pred_pipeline_gated = _apply_iia_gate(merged["pred_pipeline_current"], gate_ok)
         pred_candidate_gated = _apply_iia_gate(merged[f"pred_{candidate_name}"], gate_ok)
+        pred_pipeline_redirect = _apply_iia_gate_with_iib_redirect(
+            merged["pred_pipeline_current"], gate_ok, iib_redirect_ok
+        )
+        pred_candidate_redirect = _apply_iia_gate_with_iib_redirect(
+            merged[f"pred_{candidate_name}"], gate_ok, iib_redirect_ok
+        )
         pipeline_name = f"pipeline_gated_iia_q{gate_quantile:.2f}"
         candidate_gate_name = f"{candidate_name}_gated_iia_q{gate_quantile:.2f}"
+        pipeline_redirect_name = f"pipeline_gated_iia_iib_redirect_q{gate_quantile:.2f}"
+        candidate_redirect_name = (
+            f"{candidate_name}_gated_iia_iib_redirect_q{gate_quantile:.2f}"
+        )
         metric_rows.append(_metric_row(pipeline_name, y_true, pred_pipeline_gated))
         candidate_metrics = _metric_row(candidate_gate_name, y_true, pred_candidate_gated)
         metric_rows.append(candidate_metrics)
+        metric_rows.append(_metric_row(pipeline_redirect_name, y_true, pred_pipeline_redirect))
+        candidate_redirect_metrics = _metric_row(
+            candidate_redirect_name, y_true, pred_candidate_redirect
+        )
+        metric_rows.append(candidate_redirect_metrics)
         threshold_blocks.append(
             "\n".join(
                 [
                     f"Gate q={gate_quantile:.2f}:",
                     *(f"- {k}: {v:.6f}" for k, v in thresholds.items()),
+                    *(f"- redirect_{k}: {v:.6f}" for k, v in iib_thresholds.items()),
                 ]
             )
         )
+        best_this_quantile = max(
+            [candidate_metrics, candidate_redirect_metrics],
+            key=lambda row: (row["balanced_accuracy"], row["accuracy"]),
+        )
         if (
             best_gated_metrics is None
-            or candidate_metrics["balanced_accuracy"] > best_gated_metrics["balanced_accuracy"]
+            or best_this_quantile["balanced_accuracy"] > best_gated_metrics["balanced_accuracy"]
             or (
-                candidate_metrics["balanced_accuracy"]
+                best_this_quantile["balanced_accuracy"]
                 == best_gated_metrics["balanced_accuracy"]
-                and candidate_metrics["accuracy"] > best_gated_metrics["accuracy"]
+                and best_this_quantile["accuracy"] > best_gated_metrics["accuracy"]
             )
         ):
             best_quantile = gate_quantile
-            best_gated_metrics = candidate_metrics
+            best_gated_metrics = best_this_quantile
             best_gate_ok = gate_ok
+            best_iib_redirect_ok = iib_redirect_ok
             best_pipeline_pred = pred_pipeline_gated
             best_candidate_pred = pred_candidate_gated
+            best_pipeline_pred_redirect = pred_pipeline_redirect
+            best_candidate_pred_redirect = pred_candidate_redirect
 
     metrics = pd.DataFrame(metric_rows).sort_values(
         ["balanced_accuracy", "accuracy"],
@@ -366,8 +485,11 @@ def analyze_iia_gate(
     )
     assert best_gated_metrics is not None
     assert best_gate_ok is not None
+    assert best_iib_redirect_ok is not None
     assert best_pipeline_pred is not None
     assert best_candidate_pred is not None
+    assert best_pipeline_pred_redirect is not None
+    assert best_candidate_pred_redirect is not None
 
     report_lines = [
         "IIa gate thresholds derived from confirmed true_iia_hunt positives:",
@@ -406,8 +528,11 @@ def analyze_iia_gate(
     ].copy()
     predictions["best_gate_quantile"] = best_quantile
     predictions["gate_iia_ok"] = best_gate_ok
+    predictions["gate_iib_redirect_ok"] = best_iib_redirect_ok
     predictions["pred_pipeline_gated_iia"] = best_pipeline_pred
     predictions[f"pred_{candidate_name}_gated_iia"] = best_candidate_pred
+    predictions["pred_pipeline_gated_iia_iib_redirect"] = best_pipeline_pred_redirect
+    predictions[f"pred_{candidate_name}_gated_iia_iib_redirect"] = best_candidate_pred_redirect
     return metrics, predictions, "\n".join(report_lines) + "\n"
 
 

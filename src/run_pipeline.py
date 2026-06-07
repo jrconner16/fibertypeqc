@@ -45,6 +45,38 @@ def stage(index: int, total: int, name: str):
         print(f"[{index}/{total}] done: {name} ({time.perf_counter() - t0:.1f}s)", flush=True)
 
 
+def _cleanup_outputs_for_retain_mode(
+    *,
+    retain_mode: str,
+    labels_path: Path,
+    fibers_path: Path,
+    diagnostics_path: Path | None,
+    summary_path: Path,
+) -> list[Path]:
+    if retain_mode not in {"full", "tables", "summary"}:
+        raise ValueError(f"Unsupported retain mode: {retain_mode}")
+
+    keep_paths = {summary_path}
+    if retain_mode in {"full", "tables"}:
+        keep_paths.add(fibers_path)
+    if retain_mode == "full":
+        keep_paths.add(labels_path)
+        if diagnostics_path is not None:
+            keep_paths.add(diagnostics_path)
+    elif retain_mode == "tables":
+        if diagnostics_path is not None:
+            keep_paths.add(diagnostics_path)
+
+    removed: list[Path] = []
+    for path in (labels_path, fibers_path, diagnostics_path):
+        if path is None or path in keep_paths:
+            continue
+        if path.exists():
+            path.unlink()
+            removed.append(path)
+    return removed
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Membrane preprocess -> Cellpose -> quantify/classify")
     p.add_argument("--input", type=Path, required=True, help="Input CZI/TIFF")
@@ -210,6 +242,18 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Write an optional *_feature_diagnostics.csv file for model/feature debugging. "
             "Does not change the stable fibers CSV."
+        ),
+    )
+    p.add_argument(
+        "--retain-mode",
+        type=str,
+        default="full",
+        choices=["full", "tables", "summary"],
+        help=(
+            "Control which per-image outputs are retained after a successful run. "
+            "'full' keeps labels, fibers, diagnostics, and summary; "
+            "'tables' removes heavy label TIFFs but keeps CSV tables; "
+            "'summary' keeps only the summary CSV."
         ),
     )
 
@@ -445,11 +489,26 @@ def main() -> None:
         summary_path = output_dir / f"{stem}_summary.csv"
         save_dataframe(summary_path, summary_df)
 
-    print("saved labels:", labels_path)
-    print("saved fibers:", fibers_path)
-    if diagnostics_path is not None:
+    removed_outputs = _cleanup_outputs_for_retain_mode(
+        retain_mode=args.retain_mode,
+        labels_path=labels_path,
+        fibers_path=fibers_path,
+        diagnostics_path=diagnostics_path,
+        summary_path=summary_path,
+    )
+
+    if labels_path.exists():
+        print("saved labels:", labels_path)
+    if fibers_path.exists():
+        print("saved fibers:", fibers_path)
+    if diagnostics_path is not None and diagnostics_path.exists():
         print("saved diagnostics:", diagnostics_path)
     print("saved summary:", summary_path)
+    if removed_outputs:
+        print(
+            "removed retained-mode outputs:",
+            ", ".join(str(path.name) for path in removed_outputs),
+        )
     print(f"total runtime: {time.perf_counter() - t_all:.1f}s")
     print("summary:", summary)
 

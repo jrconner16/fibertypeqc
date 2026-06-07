@@ -81,3 +81,49 @@ def test_run_pipeline_export_diagnostics_flag_controls_output(tmp_path, monkeypa
     assert {"label", "fiber_type", "type1_mean", "type1_snr_mean", "type_cov_sum"}.issubset(
         diagnostics.columns
     )
+
+
+def test_cleanup_outputs_for_retain_mode_tables_removes_labels_only(tmp_path):
+    labels_path = tmp_path / "image_cellpose_labels.tif"
+    fibers_path = tmp_path / "image_fibers.csv"
+    diagnostics_path = tmp_path / "image_feature_diagnostics.csv"
+    summary_path = tmp_path / "image_summary.csv"
+    for path in (labels_path, fibers_path, diagnostics_path, summary_path):
+        path.write_text("x")
+
+    removed = run_pipeline._cleanup_outputs_for_retain_mode(
+        retain_mode="tables",
+        labels_path=labels_path,
+        fibers_path=fibers_path,
+        diagnostics_path=diagnostics_path,
+        summary_path=summary_path,
+    )
+
+    assert removed == [labels_path]
+    assert not labels_path.exists()
+    assert fibers_path.exists()
+    assert diagnostics_path.exists()
+    assert summary_path.exists()
+
+
+def test_cleanup_outputs_for_retain_mode_summary_keeps_only_summary(tmp_path):
+    labels_path = tmp_path / "image_cellpose_labels.tif"
+    fibers_path = tmp_path / "image_fibers.csv"
+    diagnostics_path = tmp_path / "image_feature_diagnostics.csv"
+    summary_path = tmp_path / "image_summary.csv"
+    for path in (labels_path, fibers_path, diagnostics_path, summary_path):
+        path.write_text("x")
+
+    removed = run_pipeline._cleanup_outputs_for_retain_mode(
+        retain_mode="summary",
+        labels_path=labels_path,
+        fibers_path=fibers_path,
+        diagnostics_path=diagnostics_path,
+        summary_path=summary_path,
+    )
+
+    assert removed == [labels_path, fibers_path, diagnostics_path]
+    assert not labels_path.exists()
+    assert not fibers_path.exists()
+    assert not diagnostics_path.exists()
+    assert summary_path.exists()

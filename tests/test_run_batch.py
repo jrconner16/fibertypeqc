@@ -64,3 +64,18 @@ def test_build_batch_command_can_export_diagnostics(tmp_path):
     )
 
     assert "--export-diagnostics" in cmd
+
+
+def test_build_batch_command_can_set_retain_mode(tmp_path):
+    input_file = tmp_path / "image.czi"
+    output_dir = tmp_path / "out"
+
+    cmd = build_batch_command(
+        input_file,
+        output_dir,
+        channel_overrides=BatchChannelOverrides(),
+        retain_mode="tables",
+    )
+
+    assert "--retain-mode" in cmd
+    assert cmd[cmd.index("--retain-mode") + 1] == "tables"
