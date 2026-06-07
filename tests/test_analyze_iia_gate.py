@@ -42,6 +42,23 @@ def test_analyze_iia_gate_adds_gated_strategies():
                 "type2_cov_x_snr": 4.0,
                 "type2_snr_mean": 4.5,
             },
+            {
+                "image_id": "img1",
+                "label": 3,
+                "split": "dev",
+                "fiber_type": "iib",
+                "needs_review": False,
+                "model_confidence": 0.9,
+                "model_margin": 0.8,
+                "type1_mean": 8.0,
+                "type2_mean": 0.5,
+                "type1_coverage": 0.9,
+                "type2_coverage": 0.1,
+                "type1_cov_x_snr": 5.0,
+                "type1_snr_mean": 6.0,
+                "type2_cov_x_snr": 0.1,
+                "type2_snr_mean": 0.4,
+            },
         ]
     )
     benchmark_split = pd.DataFrame(
@@ -56,6 +73,12 @@ def test_analyze_iia_gate_adds_gated_strategies():
                 "image_id": "img1",
                 "label": 2,
                 "audit_final_label": "iix",
+                "manual_supervision_split": "manual_eval_holdout",
+            },
+            {
+                "image_id": "img1",
+                "label": 3,
+                "audit_final_label": "iib",
                 "manual_supervision_split": "manual_eval_holdout",
             },
         ]
@@ -73,6 +96,12 @@ def test_analyze_iia_gate_adds_gated_strategies():
                 "label": 2,
                 "candidate_name": "baseline_gb",
                 "predicted_fiber_type": "iia",
+            },
+            {
+                "image_id": "img1",
+                "label": 3,
+                "candidate_name": "baseline_gb",
+                "predicted_fiber_type": "iib",
             },
         ]
     )
@@ -122,5 +151,8 @@ def test_analyze_iia_gate_adds_gated_strategies():
     }.issubset(set(metrics["strategy"]))
     assert "pipeline_gated_iia_q0.05" in set(metrics["strategy"])
     assert "baseline_gb_gated_iia_q0.10" in set(metrics["strategy"])
+    assert "baseline_gb_gated_iia_iib_redirect_q0.10" in set(metrics["strategy"])
     assert "gate_iia_ok" in predictions.columns
+    assert "gate_iib_redirect_ok" in predictions.columns
+    assert "pred_baseline_gb_gated_iia_iib_redirect" in predictions.columns
     assert "Best gated baseline_gb quantile" in report

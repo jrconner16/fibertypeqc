@@ -69,15 +69,40 @@ def _image_id_from_path(path: Path) -> str:
     return path.stem
 
 
+def _normalize_image_id(value: str) -> str:
+    return str(value).strip().lower()
+
+
 def _load_manifest(path: Path | None) -> pd.DataFrame | None:
     if path is None:
         return None
     manifest = pd.read_csv(path)
     if "image_id" not in manifest.columns:
         raise ValueError("Manifest must include an 'image_id' column.")
-    if manifest["image_id"].duplicated().any():
+    manifest = manifest.copy()
+    manifest["_merge_image_id"] = manifest["image_id"].map(_normalize_image_id)
+    if manifest["_merge_image_id"].duplicated().any():
         dupes = sorted(
-            manifest.loc[manifest["image_id"].duplicated(), "image_id"]
+            manifest.loc[manifest["_merge_image_id"].duplicated(), "image_id"]
+            .astype(str)
+            .unique()
+        )
+        raise ValueError(f"Manifest contains duplicate image_id values: {', '.join(dupes[:5])}")
+    return manifest
+
+
+def _prepare_manifest(manifest: pd.DataFrame | None) -> pd.DataFrame | None:
+    if manifest is None:
+        return None
+    if "_merge_image_id" in manifest.columns:
+        return manifest
+    if "image_id" not in manifest.columns:
+        raise ValueError("Manifest must include an 'image_id' column.")
+    manifest = manifest.copy()
+    manifest["_merge_image_id"] = manifest["image_id"].map(_normalize_image_id)
+    if manifest["_merge_image_id"].duplicated().any():
+        dupes = sorted(
+            manifest.loc[manifest["_merge_image_id"].duplicated(), "image_id"]
             .astype(str)
             .unique()
         )
@@ -100,13 +125,22 @@ def assemble_candidate_feature_table(
     frames: list[pd.DataFrame] = []
     for path in diagnostics_files:
         df = pd.read_csv(path)
+        image_id = _image_id_from_path(path)
+        df.insert(0, "_merge_image_id", _normalize_image_id(image_id))
         df.insert(0, "feature_diagnostics_path", str(path.resolve()))
-        df.insert(0, "image_id", _image_id_from_path(path))
+        df.insert(0, "image_id", image_id)
         frames.append(df)
 
     out = pd.concat(frames, ignore_index=True)
+    manifest = _prepare_manifest(manifest)
     if manifest is not None:
-        out = out.merge(manifest, on="image_id", how="left", validate="many_to_one")
+        out = out.merge(manifest, on="_merge_image_id", how="left", validate="many_to_one")
+        if "image_id_y" in out.columns:
+            out["image_id"] = out["image_id_y"].fillna(out["image_id_x"])
+            out = out.drop(columns=["image_id_x", "image_id_y"])
+        out = out.drop(columns=["_merge_image_id"])
+    else:
+        out = out.drop(columns=["_merge_image_id"])
 
     metadata_cols = [col for col in METADATA_COLUMNS if col in out.columns]
     baseline_cols = [col for col in FROZEN_ALPHA_BASELINE_FEATURES if col in out.columns]

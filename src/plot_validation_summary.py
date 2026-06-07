@@ -30,6 +30,31 @@ def save_fig(path: Path) -> None:
     plt.close()
 
 
+def infer_validation_input_kind(image_id: str) -> str:
+    name = str(image_id).lower()
+    if name.startswith("section001_") or "_sections_" in name:
+        return "section_series_export"
+    return "direct_czi"
+
+
+def _maybe_load_split_map() -> pd.DataFrame | None:
+    path = Path("outputs/validation/candidate_split_manifest.csv")
+    if not path.exists():
+        return None
+    df = pd.read_csv(path, low_memory=False)
+    required = {"image_id", "split"}
+    if not required.issubset(df.columns):
+        return None
+    out = df.loc[:, ["image_id", "split"]].copy()
+    out["image_id"] = out["image_id"].astype(str)
+    out["training_or_heldout"] = np.where(
+        out["split"].astype(str).str.lower().eq("heldout"),
+        "heldout",
+        "training",
+    )
+    return out.loc[:, ["image_id", "training_or_heldout"]]
+
+
 def prep_table(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path)
     if "fiber_count_pct_diff" not in df.columns:
@@ -40,6 +65,35 @@ def prep_table(path: Path) -> pd.DataFrame:
         )
     if "fiber_count_abs_pct_diff" not in df.columns:
         df["fiber_count_abs_pct_diff"] = df["fiber_count_pct_diff"].abs()
+    if "validation_input_kind" not in df.columns:
+        df["validation_input_kind"] = df["image_id"].map(infer_validation_input_kind)
+    if "training_or_heldout" not in df.columns:
+        split_map = _maybe_load_split_map()
+        if split_map is not None:
+            df = df.merge(split_map, on="image_id", how="left", validate="one_to_one")
+        else:
+            df["training_or_heldout"] = "unknown"
+    if "pipeline_needs_review_rate" not in df.columns and {
+        "pipeline_needs_review_n",
+        "pipeline_total_fibers",
+    }.issubset(df.columns):
+        df["pipeline_needs_review_rate"] = (
+            pd.to_numeric(df["pipeline_needs_review_n"], errors="coerce")
+            / pd.to_numeric(df["pipeline_total_fibers"], errors="coerce")
+        )
+    if "pipeline_signal_warning_rate" not in df.columns and {
+        "pipeline_signal_warning_n",
+        "pipeline_total_fibers",
+    }.issubset(df.columns):
+        df["pipeline_signal_warning_rate"] = (
+            pd.to_numeric(df["pipeline_signal_warning_n"], errors="coerce")
+            / pd.to_numeric(df["pipeline_total_fibers"], errors="coerce")
+        )
+    for fiber_type in ("iib", "iia", "iix"):
+        pct_point_col = f"{fiber_type}_pct_diff_percentage_points"
+        diff_col = f"{fiber_type}_pct_diff_pipeline_minus_myosight"
+        if pct_point_col not in df.columns and diff_col in df.columns:
+            df[pct_point_col] = pd.to_numeric(df[diff_col], errors="coerce") * 100.0
     return df
 
 
