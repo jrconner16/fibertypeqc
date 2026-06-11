@@ -54,8 +54,8 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - frozen batch path and candidate batch path both support input manifests
   - reviewed manual benchmark has grown to `1924` rows after the `IIx`/`IIb` boundary round
   - latest protected manual evaluation is based on `457` scored holdout rows
-  - current best benchmark recipe after the `IIx`/`IIb` round is `manual_high_myo_medium_baseline_light`, about `0.799` accuracy / `0.843` balanced accuracy
-  - the current canonical full-cohort descriptive MyoSight summary is still the cleaned hybrid `baseline_gb + soft IIa gate q=0.01` summary, not a rerun of the newest benchmark recipe
+  - current best experimental weight setting is `manual8_myo3_base0p1`, about `0.814` accuracy / `0.847` balanced accuracy on the liberal protected manual holdout
+  - the repaired cohort comparison now suggests the experimental candidate broadly matches the MyoSight biological story, with remaining mismatch concentrated in a few `IIb`/`IIx` boundary groups and hotspot images
 - Next execution focus: keep the public alpha stable, clarify candidate status, and work the remaining `IIb`/`IIx` biology gap without overclaiming review-burden wins.
 
 ## Strict Baseline Policy
@@ -98,18 +98,19 @@ Use this protocol before replacing the frozen alpha default model or changing de
 
 ### Current leading candidate
 
-- Benchmark-leading recipe after the `IIx`/`IIb` boundary round:
-  - `manual_high_myo_medium_baseline_light`
-  - about `0.799` accuracy / `0.843` balanced accuracy on the protected manual holdout
-  - `IIa` precision about `0.868`, recall `1.000`
+- Benchmark-leading experimental candidate after the liberal `IIb`/`IIx` relabel plus weight sweep:
+  - `manual8_myo3_base0p1`
+  - about `0.814` accuracy / `0.847` balanced accuracy on the protected manual holdout
+  - `IIb` precision about `0.833`, recall about `0.816`
+  - `IIx` precision about `0.711`, recall about `0.726`
 - Close alternatives:
-  - `manual_only_high`: about `0.801` / `0.837`
-  - weighted `baseline_gb`: about `0.788` / `0.837`
-  - weighted `baseline_gb + soft IIa gate q=0.01`: about `0.799` / `0.834`
+  - `manual8_myo4_base0p1`: about `0.811` / `0.844`, slightly more MyoSight-like on some cohort `IIb` groups but weaker protected-holdout score
+  - `manual_high_myo_medium_baseline_light`: about `0.807` / `0.842` under the liberal benchmark split
+  - weighted `baseline_gb + soft IIa gate q=0.01`: about `0.781` / `0.823` under the liberal benchmark split
 - Status interpretation:
-  - the soft `IIa` gate still fixed the original frozen-model `IIa` overcall story and remains the current canonical full-cohort descriptive summary artifact
-  - after the `IIx`/`IIb` boundary labels were folded in, the soft gate is no longer the best balanced-accuracy choice on the protected manual holdout
-  - the next model decision is whether to promote `manual_high_myo_medium_baseline_light` as the new experimental candidate and rerun the descriptive cohort, or keep the older soft-gated candidate as the cohort-comparison reference until more evidence is added
+  - after the liberal `IIb`/`IIx` relabel and the small weight sweep, a light baseline weight with moderate matched-MyoSight weight is the best overall compromise
+  - repaired cohort comparisons now indicate this candidate broadly corroborates the MyoSight biological story, especially by reducing the old `IIx` inflation and recovering more `IIb`
+  - the remaining decision is no longer whether to move off the old soft-gated cohort candidate; it is whether to keep tuning around `manual8_myo3_base0p1` or treat it as the standing experimental cohort reference
 - Candidate behavior is **not default-ready** because the full-cohort comparison remains descriptive, the candidate review policy is not calibrated, and the remaining `IIb`/`IIx` discrepancy is unresolved.
 
 ### Minimum promotion gates
@@ -210,6 +211,11 @@ Keep benchmark roles explicit. Do not collapse all reviewed fibers into one undi
   - `*_cellpose_labels.tif`
   - full diagnostic image trees
   - repeated batch rerun directories
+- If the question is only "how does a different classifier behave on the same segmented cohort?",
+  prefer reclassification from an existing manifest-aligned batch root that already contains
+  `*_feature_diagnostics.csv` and `*_fibers.csv`.
+- Only rerun the full image pipeline when segmentation, quantification, source-path provenance,
+  or feature extraction has changed. Do not rerun Cellpose just to swap classifier weights.
 - Prefer `--retain-mode tables` for routine validation/modeling runs and reserve `--retain-mode full` for reviewable/debug runs that need label TIFFs in Napari.
 - Avoid copying whole batch directories for postprocessing experiments.
 - Prefer in-memory or summary-only postprocessing when evaluating gates, thresholds, or label remaps.
