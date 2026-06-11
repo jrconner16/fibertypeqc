@@ -176,17 +176,24 @@ def _choose_recommended_threshold(metrics: pd.DataFrame) -> pd.Series:
     ].copy()
     if within_budget.empty:
         within_budget = candidate.copy()
+
+    meets_frozen_capture = within_budget.loc[
+        within_budget["error_capture_rate"].ge(float(frozen_row["error_capture_rate"]))
+    ].copy()
+    if not meets_frozen_capture.empty:
+        within_budget = meets_frozen_capture
+
     within_budget = within_budget.sort_values(
         [
-            "error_capture_rate",
             "review_rate",
             "unflagged_error_rate",
+            "error_capture_rate",
             "balanced_accuracy",
             "accuracy",
             "confidence_threshold",
             "margin_threshold",
         ],
-        ascending=[False, True, True, False, False, True, True],
+        ascending=[True, True, False, False, False, True, True],
         kind="stable",
     )
     return within_budget.iloc[0]
