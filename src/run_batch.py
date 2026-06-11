@@ -171,10 +171,39 @@ def output_stem(input_file: Path) -> str:
     return input_file.resolve().stem.replace(" ", "_")
 
 
+def _load_input_manifest(path: Path) -> list[tuple[str, Path]]:
+    df = pd.read_csv(path)
+    required = {"image_id", "input_path"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(f"{path} missing columns: {', '.join(missing)}")
+
+    rows: list[tuple[str, Path]] = []
+    for row in df.itertuples(index=False):
+        image_id = str(row.image_id).strip()
+        input_path = Path(str(row.input_path)).expanduser()
+        if not image_id:
+            raise ValueError(f"{path} contains blank image_id")
+        rows.append((image_id, input_path))
+    return rows
+
+
+def _canonicalize_output_names(image_output_dir: Path, stem: str, canonical_image_id: str) -> None:
+    if stem == canonical_image_id:
+        return
+    for path in sorted(image_output_dir.glob(f"{stem}*")):
+        suffix = path.name[len(stem) :]
+        target = image_output_dir / f"{canonical_image_id}{suffix}"
+        if target.exists():
+            target.unlink()
+        path.rename(target)
+
+
 def run_single_image(
     input_file: Path,
     output_dir: Path,
     channel_overrides: BatchChannelOverrides,
+    image_name: str | None = None,
     downsample_factor: int | None = None,
     export_diagnostics: bool = False,
     retain_mode: str = "full",
@@ -190,7 +219,7 @@ def run_single_image(
         Dictionary with status, image name, error message (if any), fiber count, etc.
     """
     result = {
-        "image_name": input_file.stem,
+        "image_name": image_name or input_file.stem,
         "status": "success",
         "error": None,
         "fiber_count": None,
@@ -199,7 +228,7 @@ def run_single_image(
     }
 
     # Create per-image output directory
-    image_output_dir = output_dir / input_file.stem
+    image_output_dir = output_dir / result["image_name"]
     image_output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"Processing: {input_file.name}")
@@ -227,6 +256,8 @@ def run_single_image(
 
         # Try to read fiber count from output CSV
         stem = output_stem(input_file)
+        _canonicalize_output_names(image_output_dir, stem, str(result["image_name"]))
+        stem = str(result["image_name"])
         fibers_csv = image_output_dir / f"{stem}_fibers.csv"
         if fibers_csv.exists():
             df = pd.read_csv(fibers_csv)
@@ -282,6 +313,13 @@ def main() -> None:
         required=False,
         default=None,
         help="Directory containing .czi/.tif/.tiff files",
+    )
+    parser.add_argument(
+        "--input-manifest",
+        type=Path,
+        required=False,
+        default=None,
+        help="CSV with columns image_id,input_path for explicit per-image inputs.",
     )
     parser.add_argument(
         "--output-dir",
@@ -345,14 +383,25 @@ def main() -> None:
         return
 
     # Validate input
-    if args.input_dir is None:
-        print("Error: --input-dir is required (unless using --show-v0-params)")
+    if bool(args.input_dir) == bool(args.input_manifest):
+        print("Error: provide exactly one of --input-dir or --input-manifest")
         sys.exit(1)
-    
+
+    manifest_rows: list[tuple[str, Path]] | None = None
     input_dir = args.input_dir
-    if not input_dir.is_dir():
-        print(f"Error: Input directory does not exist: {input_dir}")
-        sys.exit(1)
+    if args.input_manifest is not None:
+        if not args.input_manifest.is_file():
+            print(f"Error: Input manifest does not exist: {args.input_manifest}")
+            sys.exit(1)
+        try:
+            manifest_rows = _load_input_manifest(args.input_manifest)
+        except ValueError as exc:
+            print(f"Error: {exc}")
+            sys.exit(1)
+    else:
+        if input_dir is None or not input_dir.is_dir():
+            print(f"Error: Input directory does not exist: {input_dir}")
+            sys.exit(1)
 
     # Set output directory
     if args.output_dir is None:
@@ -375,16 +424,23 @@ def main() -> None:
         type2_channel=args.type2_channel,
     )
 
-    logger.info(f"Input directory: {input_dir}")
+    if manifest_rows is not None:
+        logger.info(f"Input manifest: {args.input_manifest}")
+    else:
+        logger.info(f"Input directory: {input_dir}")
     logger.info(f"Output directory: {output_dir}")
 
     # Find images
-    image_files = find_input_files(input_dir)
-    if not image_files:
-        logger.error(f"No .czi/.tif/.tiff files found in {input_dir}")
-        sys.exit(1)
+    if manifest_rows is not None:
+        image_rows = manifest_rows
+    else:
+        image_files = find_input_files(input_dir)
+        if not image_files:
+            logger.error(f"No .czi/.tif/.tiff files found in {input_dir}")
+            sys.exit(1)
+        image_rows = [(path.stem, path) for path in image_files]
 
-    logger.info(f"Found {len(image_files)} image(s) to process")
+    logger.info(f"Found {len(image_rows)} image(s) to process")
     logger.info("V0 Parameters:")
     for k, v in V0_PARAMS.items():
         logger.info(f"  {k}: {v}")
@@ -413,12 +469,13 @@ def main() -> None:
 
     # Process each image
     results = []
-    for i, image_file in enumerate(image_files, 1):
-        logger.info(f"\n[{i}/{len(image_files)}] Processing image...")
+    for i, (image_name, image_file) in enumerate(image_rows, 1):
+        logger.info(f"\n[{i}/{len(image_rows)}] Processing image...")
         result = run_single_image(
             image_file,
             output_dir,
             channel_overrides=channel_overrides,
+            image_name=image_name,
             downsample_factor=args.downsample_factor,
             export_diagnostics=args.export_diagnostics,
             retain_mode=args.retain_mode,
