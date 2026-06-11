@@ -29,6 +29,7 @@ METHOD_COLORS = {
 }
 TYPE_ORDER = ["iib", "iia", "iix"]
 TYPE_LABELS = {"iib": "IIb", "iia": "IIa", "iix": "IIx"}
+UNCALIBRATED_REVIEW_LABEL = "Uncalibrated review gate"
 
 
 def save_fig(path: Path) -> None:
@@ -180,7 +181,11 @@ def build_review_long(summaries: list[pd.DataFrame]) -> pd.DataFrame:
             if pd.isna(total) or total <= 0:
                 continue
             for metric, n_col, rate_col in [
-                ("Needs review", "pipeline_needs_review_n", "pipeline_needs_review_rate"),
+                (
+                    UNCALIBRATED_REVIEW_LABEL,
+                    "pipeline_needs_review_n",
+                    "pipeline_needs_review_rate",
+                ),
                 ("Signal warnings", "pipeline_signal_warning_n", "pipeline_signal_warning_rate"),
             ]:
                 rate = row.get(rate_col)
@@ -338,12 +343,48 @@ def plot_group_bars(
     save_fig(outpath)
 
 
+def plot_iib_iix_focus(long: pd.DataFrame, outpath: Path) -> None:
+    plot_df = long[
+        long["metric"].eq("fiber_pct_by_type") & long["fiber_type"].isin(["iib", "iix"])
+    ].copy()
+    if plot_df.empty:
+        return
+    plot_df["metric_label"] = pd.Categorical(
+        plot_df["metric_label"],
+        categories=[TYPE_LABELS["iib"] + " proportion", TYPE_LABELS["iix"] + " proportion"],
+        ordered=True,
+    )
+    methods = [str(v) for v in plot_df["method"].cat.categories if v in set(plot_df["method"].astype(str))]
+    grid = sns.relplot(
+        data=plot_df,
+        x="age",
+        y="value",
+        hue="method",
+        style="method",
+        row="genotype",
+        col="metric_label",
+        kind="line",
+        marker="o",
+        errorbar="se",
+        palette=method_palette(methods),
+        height=3.6,
+        aspect=1.1,
+        facet_kws={"sharey": True},
+    )
+    grid.set_axis_labels("", "Mean fiber proportion (%)")
+    grid.set_titles("{row_name} | {col_name}")
+    for ax in grid.axes.flat:
+        ax.set_ylim(0, 100)
+        ax.grid(True, color="#e5e5e5", linewidth=0.8)
+    save_fig(outpath)
+
+
 def plot_review_burden_by_image(review: pd.DataFrame, outdir: Path) -> None:
     plot_df = review.copy()
     if plot_df.empty:
         return
     for metric, filename in [
-        ("Needs review", "review_burden_by_image.png"),
+        (UNCALIBRATED_REVIEW_LABEL, "uncalibrated_review_gate_by_image.png"),
         ("Signal warnings", "signal_warning_by_image.png"),
     ]:
         sub = plot_df[plot_df["metric"].eq(metric)].copy()
@@ -462,6 +503,10 @@ def main() -> None:
         metric="fiber_pct_by_type",
         ylabel="Mean fiber proportion (%)",
         outpath=args.output_dir / "fiber_type_proportion_trends.png",
+    )
+    plot_iib_iix_focus(
+        long,
+        outpath=args.output_dir / "iib_iix_focus_proportion_trends.png",
     )
     plot_group_bars(
         group_summary,

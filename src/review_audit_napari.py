@@ -256,6 +256,10 @@ def _load_or_create_review_table(audit: pd.DataFrame, review_output: Path) -> pd
     ):
         if col not in table.columns:
             table[col] = default
+    table["audit_corrected_type"] = table["audit_corrected_type"].fillna("").astype(str)
+    table["audit_is_uncertain"] = table["audit_is_uncertain"].fillna(False).astype(bool)
+    table["audit_is_excluded"] = table["audit_is_excluded"].fillna(False).astype(bool)
+    table["audit_notes"] = table["audit_notes"].fillna("").astype(str)
     if review_output.exists():
         saved = pd.read_csv(review_output, low_memory=False)
         keep = [
@@ -282,10 +286,10 @@ def _load_or_create_review_table(audit: pd.DataFrame, review_output: Path) -> pd
                 ],
                 errors="ignore",
             ).merge(saved, on=["image_id", "label"], how="left")
-            table["audit_corrected_type"] = table["audit_corrected_type"].fillna("")
+            table["audit_corrected_type"] = table["audit_corrected_type"].fillna("").astype(str)
             table["audit_is_uncertain"] = table["audit_is_uncertain"].fillna(False).astype(bool)
             table["audit_is_excluded"] = table["audit_is_excluded"].fillna(False).astype(bool)
-            table["audit_notes"] = table["audit_notes"].fillna("")
+            table["audit_notes"] = table["audit_notes"].fillna("").astype(str)
     return table
 
 
