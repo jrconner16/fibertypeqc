@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.plot_multimethod_myosight_compare import (
+    UNCALIBRATED_REVIEW_LABEL,
     build_method_long,
     build_review_long,
     load_pipeline_summary,
@@ -66,4 +67,5 @@ def test_build_method_long_and_review_long(tmp_path: Path) -> None:
     assert {"MyoSight", "Frozen", "Candidate"} == set(long["method"].astype(str))
     assert set(review["method"].astype(str)) == {"Frozen", "Candidate"}
     assert "fiber_pct_by_type" in set(long["metric"])
+    assert UNCALIBRATED_REVIEW_LABEL in set(review["metric"])
     assert review["rate_pct"].max() > 0
