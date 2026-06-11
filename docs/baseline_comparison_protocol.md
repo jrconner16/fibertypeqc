@@ -87,6 +87,100 @@ Recommended split metadata:
 - source of manual labels, if any
 - whether image was previously used for baseline development
 
+## Canonical Full-Cohort Validation Manifest
+
+For any frozen-vs-candidate full-cohort comparison, use one explicit image manifest as the
+execution contract for both runs.
+
+The purpose of this manifest is narrower than the candidate split manifest:
+
+- the full-cohort validation manifest says which exact image input each run must use
+- the candidate split manifest says how images are assigned to `train` / `dev` / `heldout`
+
+Do not substitute one for the other.
+
+### Required columns
+
+These columns should exist in the canonical full-cohort validation manifest:
+
+- `image_id`
+- `input_path`
+- `input_kind`
+- `source_branch`
+- `source_image`
+- `panel_type`
+- `channel_schema`
+- `training_image`
+- `split`
+- `myosight_summary_path`
+- `notes`
+
+Minimum execution requirement today:
+
+- `image_id`
+- `input_path`
+
+These are the columns currently consumed by `validation.run_candidate_batch_with_iia_gate`
+through `--input-manifest`.
+
+Recommended meanings:
+
+- `image_id`: canonical stable ID used for output folder naming and row joins
+- `input_path`: trusted image path that both frozen and candidate must run from
+- `input_kind`: for example `direct_czi` or `section_tiff_export`
+- `source_branch`: provenance branch for the image path, for example
+  `validation_flat_input` or `section_exports_normalized`
+- `source_image`: original source path before any copied/normalized validation location
+- `panel_type`: biological/technical panel label, for example
+  `baseline_iib_iia_membrane_residual_iix`
+- `channel_schema`: explicit marker/channel interpretation for that image
+- `training_image`: whether the image was used in alpha-era model development
+- `split`: image-level role such as `train`, `dev`, `heldout`, or `full_cohort_only`
+- `myosight_summary_path`: comparator summary path when a MyoSight image-level comparison exists
+- `notes`: free-text provenance or caveat field
+
+### Manifest rules
+
+Apply these rules conservatively:
+
+1. Frozen and candidate descriptive cohort comparisons are only valid if they use the same
+   manifest revision.
+2. For the 7 section-export images, `input_path` must stay pinned to the trusted normalized
+   section-export branch unless a replacement section workflow is explicitly validated.
+3. Do not mix rows from different source branches inside one comparison unless the manifest
+   makes that branch choice explicit row by row.
+4. If an image is rerouted to a trusted replacement path, record the new path in the manifest
+   rather than patching summaries after the fact.
+5. Every derived full-cohort artifact should record which manifest file produced it.
+
+### Current repo mapping
+
+The repo already contains pieces of this workflow:
+
+- `outputs/validation/section_export_trusted_input_manifest.csv`
+  - trusted subset manifest for the 7 section-export images
+- `validation.run_candidate_batch_with_iia_gate --input-manifest`
+  - candidate batch runner that can already execute from an explicit manifest
+- `outputs/validation/myosight_candidate_baseline_gb_soft_iia_q001_hybrid_image_summary.csv`
+  - current cleaned candidate cohort summary that still reflects a hybrid post-hoc repair
+- `validation.build_candidate_split_manifest`
+  - split-curation manifest seeded from comparison outputs, not the execution manifest itself
+
+The next cleanup step is to promote this into one canonical manifest for the full 32-image cohort,
+so the frozen summary and candidate summary are both direct products of the same declared inputs.
+
+### Recommended workflow
+
+Use this sequence for each new full-cohort candidate comparison:
+
+1. Build or refresh the canonical full-cohort validation manifest.
+2. Pin the 7 section-export rows to their trusted normalized paths in that manifest.
+3. Run frozen and candidate batches from that same manifest.
+4. Generate image summaries from those batch roots.
+5. Build comparison plots/tables only from summaries that record that manifest path.
+6. Treat any earlier hybrid or branch-mixed summary as superseded once the manifest-driven rerun
+   exists.
+
 Use the seeded manifest generator to pre-populate filename-derived biology and baseline-derived
 technical columns before manual curation:
 

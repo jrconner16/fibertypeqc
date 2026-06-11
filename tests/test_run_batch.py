@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-from src.run_batch import V0_PARAMS, BatchChannelOverrides, build_batch_command
+import subprocess
+from pathlib import Path
+
+import pandas as pd
+
+from src.run_batch import (
+    V0_PARAMS,
+    BatchChannelOverrides,
+    _load_input_manifest,
+    build_batch_command,
+    run_single_image,
+)
 
 
 def test_build_batch_command_uses_frozen_v0_flags_by_default(tmp_path):
@@ -79,3 +90,46 @@ def test_build_batch_command_can_set_retain_mode(tmp_path):
 
     assert "--retain-mode" in cmd
     assert cmd[cmd.index("--retain-mode") + 1] == "tables"
+
+
+def test_load_input_manifest_requires_image_id_and_input_path(tmp_path):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("image_id,input_path\nimg1,/tmp/image1.czi\n", encoding="utf-8")
+
+    rows = _load_input_manifest(manifest)
+
+    assert rows == [("img1", Path("/tmp/image1.czi"))]
+
+
+def test_run_single_image_uses_manifest_image_name_for_outputs(tmp_path, monkeypatch):
+    input_file = tmp_path / "raw name.czi"
+    input_file.write_text("", encoding="utf-8")
+    output_dir = tmp_path / "batch"
+
+    def fake_run(cmd, capture_output, text, timeout, check, cwd):
+        image_output_dir = output_dir / "manifest_image"
+        source_stem = "raw_name"
+        pd.DataFrame({"label": [1, 2]}).to_csv(
+            image_output_dir / f"{source_stem}_fibers.csv",
+            index=False,
+        )
+        pd.DataFrame({"summary": [1]}).to_csv(
+            image_output_dir / f"{source_stem}_summary.csv",
+            index=False,
+        )
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr("src.run_batch.subprocess.run", fake_run)
+
+    result = run_single_image(
+        input_file,
+        output_dir,
+        channel_overrides=BatchChannelOverrides(),
+        image_name="manifest_image",
+    )
+
+    assert result["image_name"] == "manifest_image"
+    assert result["fiber_count"] == 2
+    assert result["summary_path"].endswith("manifest_image/manifest_image_summary.csv")
+    assert (output_dir / "manifest_image" / "manifest_image_fibers.csv").exists()
+    assert (output_dir / "manifest_image" / "manifest_image_summary.csv").exists()
