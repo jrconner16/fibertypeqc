@@ -555,7 +555,7 @@ The software-note path should not wait for a perfect candidate model. The publis
   - refreshed candidate results after the `IIx`/`IIb` boundary round:
     - weighted `baseline_gb`: about `0.788` accuracy / `0.837` balanced accuracy
     - `baseline_gb + soft IIa gate q=0.01`: about `0.799` / `0.834`
-    - `manual_high_myo_medium_baseline_light`: about `0.799` / `0.843`, current best balanced-accuracy recipe
+    - `manual_high_myo_medium_baseline_light`: about `0.799` / `0.843`, best ungated recipe before the later liberal relabel and weight sweep
     - `manual_only_high`: about `0.801` / `0.837`, close enough to keep watching as manual labels grow
     - interpretation: the soft `IIa` gate remains useful for the original `IIa` false-positive problem, but it is no longer the current balanced-accuracy winner after the boundary-label update
   - multi-method MyoSight comparison plots:
@@ -569,9 +569,9 @@ The software-note path should not wait for a perfect candidate model. The publis
   - the pipeline and evaluation machinery are now ahead of the scientific decision
   - first-pass model-family changes did not solve the problem under legacy labels; manually reviewed supervision is what moved performance
   - the positive `IIa` anchor work solved the original frozen-model `IIa` overcall pattern well enough that `IIa` is no longer the main blocker
-  - after the `IIx`/`IIb` boundary round, the current benchmark leader is `manual_high_myo_medium_baseline_light`, not the older soft-gated `baseline_gb`
-  - the older `baseline_gb + soft IIa gate q=0.01` remains the current canonical full-cohort descriptive summary because that is the cohort artifact that has already been cleaned for section-export provenance
-  - full-cohort MyoSight plots now say the candidate matches the `IIa` story much better than frozen, but still undercalls `IIb` and overcalls `IIx`
+  - after the liberal `IIb`/`IIx` relabel and focused weight sweep, the standing experimental reference is `manual8_myo3_base0p1`
+  - the older `baseline_gb + soft IIa gate q=0.01` hybrid summary is now historical context, not the active experimental reference
+  - repaired full-cohort MyoSight plots now say the standing experimental candidate broadly corroborates the biological story, while still leaving some `IIb`/`IIx` hotspot mismatches
   - total fiber count differences are mostly shared by frozen and candidate, so the main candidate-vs-MyoSight discrepancy is typing biology rather than segmentation count loss
   - candidate `needs_review` should not be presented as lower operational burden because the review gate is not calibrated; signal-warning comparisons are more interpretable
   - manual-only supervision is now credible, but mixed manual/MyoSight/baseline supervision still has the best balanced-accuracy result today
@@ -601,9 +601,7 @@ The software-note path should not wait for a perfect candidate model. The publis
     - treat the low-burden candidate review story as resolved in the negative: the inherited frozen thresholds do not transfer
     - do not claim an operational review-burden win yet
     - revisit review triage only after more benchmark coverage or a better risk signal is available
-  - decide the next experimental candidate before another full-cohort rerun:
-    - option A: `manual_high_myo_medium_baseline_light` as the current benchmark leader
-    - option B: keep `baseline_gb + soft IIa gate q=0.01` as the descriptive-cohort reference until more labels are added
+  - keep `manual8_myo3_base0p1` as the standing experimental reference until a clearly better tuned variant appears
   - validate the selected candidate on additional heldout/external image sets before considering any default-behavior change
   - grow the manual label set further only where it adds signal, especially `IIb`/`IIx` boundary rows and broad random/manual coverage
   - repeat weighted-supervision candidate training after each meaningful expansion of the reviewed manual set
@@ -611,7 +609,7 @@ The software-note path should not wait for a perfect candidate model. The publis
     - baseline/self labels with low weight
     - matched MyoSight weak labels with medium weight
     - manual reviewed labels with high weight
-    - current best recipe uses this mixed-supervision idea through `manual_high_myo_medium_baseline_light`
+    - current best recipe uses this mixed-supervision idea through `manual8_myo3_base0p1`
 
 ### Acceptance Criteria
 
@@ -704,15 +702,12 @@ The software-note path should not wait for a perfect candidate model. The publis
    - keep signal-warning plots
    - remove or clearly relabel `needs_review` plots as uncalibrated gate outputs
    - add one slide-ready `IIb`/`IIx` age/genotype figure if needed for interpretation
-2. Treat `myosight_candidate_baseline_gb_soft_iia_q001_hybrid_image_summary.csv` as the current cleaned descriptive cohort summary.
-3. Treat `manual_high_myo_medium_baseline_light` as the current benchmark-leading recipe after the `IIx`/`IIb` round.
+2. Treat `candidate_models/weight_sweep_liberal_iib_iix_v1_focus/image_summaries/manual8_myo3_base0p1_image_summary.csv` as the current experimental descriptive cohort summary.
+3. Treat `manual8_myo3_base0p1` as the standing experimental reference candidate.
 4. Do not claim candidate review-burden reduction:
    - the candidate `needs_review` gate is not calibrated
    - inherited frozen thresholds do not transfer cleanly
-5. Decide whether the next full-cohort rerun is worth the time:
-   - rerun only after selecting a candidate worth comparing descriptively
-   - use `outputs/validation/myosight_validation_canonical_manifest.csv`
-   - use `--retain-mode tables` unless full Napari-review artifacts are needed
+5. Defer another full-cohort rerun unless a new candidate clearly beats `manual8_myo3_base0p1` on both the protected holdout and the biology-story read.
 6. Keep corrected manual labels separate from stable pipeline outputs.
 7. Work the remaining biology gap:
    - candidate now fixes most of the `IIa` story
@@ -730,8 +725,8 @@ The software-note path should not wait for a perfect candidate model. The publis
 When resuming work, start with this slice:
 
 1. Current public default remains the frozen alpha model. Do not change default behavior.
-2. Current benchmark leader is `manual_high_myo_medium_baseline_light`, about `0.799` / `0.843` on the protected manual holdout after the `IIx`/`IIb` round.
-3. Current descriptive cohort artifact remains the cleaned hybrid `baseline_gb + soft IIa gate q=0.01` summary.
+2. Current standing experimental reference is `manual8_myo3_base0p1`, about `0.814` / `0.847` on the liberal protected manual holdout.
+3. Current descriptive cohort artifact is `candidate_models/weight_sweep_liberal_iib_iix_v1_focus/image_summaries/manual8_myo3_base0p1_image_summary.csv`.
 4. Main biological read:
    - `IIa` agreement is much better than frozen
    - `IIb` remains too low
@@ -740,8 +735,8 @@ When resuming work, start with this slice:
    - candidate `needs_review` is uncalibrated and should not be sold as lower burden
    - signal-warning comparisons are more interpretable
 6. Next concrete work:
-   - clean/relabel the comparison plots
-   - decide whether to rerun full cohort for `manual_high_myo_medium_baseline_light`
+   - keep `manual8_myo3_base0p1` as the experimental comparator
+   - calibrate candidate review policy if review-burden claims matter
    - continue `IIb`/`IIx` boundary or random/manual supervision only if it answers a specific question
 7. Keep the frozen alpha baseline as the explicit comparator for every candidate run.
 
