@@ -113,6 +113,7 @@ Use this protocol before replacing the frozen alpha default model or changing de
   - repaired cohort comparisons now indicate this candidate broadly corroborates the MyoSight biological story, especially by reducing the old `IIx` inflation and recovering more `IIb`
   - the remaining decision is no longer whether to move off the old soft-gated cohort candidate; it is whether to keep tuning around `manual8_myo3_base0p1` or treat it as the standing experimental cohort reference
   - experimental review-policy work now points toward: soft `IIa` gate, relaxed `IIb` review, and top-`N` ranked gated `IIx` review per image rather than one global uncertainty gate
+  - current recommendation is to stop additional manual review here unless a promotion decision or a new hotspot-specific hypothesis requires it
 - Candidate behavior is **not default-ready** because the full-cohort comparison remains descriptive, the remaining `IIb`/`IIx` discrepancy is unresolved, and the new ranked `IIx` review policy is still experimental rather than release-stable.
 
 ### Minimum promotion gates
@@ -714,9 +715,9 @@ The software-note path should not wait for a perfect candidate model. The publis
 7. Work the remaining biology gap:
   - candidate now fixes most of the `IIa` story
   - candidate still undercalls `IIb` and overcalls `IIx`
-  - next supervision should target `IIb`/`IIx` boundary or broaden random/manual coverage, not generic label growth
   - use the learned gated-`IIx` risk ranker as the current review-policy prototype, not the hand-built heuristic
-8. After each meaningful reviewed tranche, rerun:
+  - do not schedule more routine review now; only reopen review if a promotion claim or a specific hotspot analysis needs it
+8. After each future meaningful reviewed tranche, rerun:
   - `validation.consolidate_reviewed_audit`
   - `validation.split_reviewed_benchmark`
   - weighted candidate training
@@ -740,11 +741,11 @@ When resuming work, start with this slice:
 6. Next concrete work:
    - keep `manual8_myo3_base0p1` as the experimental comparator
    - treat the learned gated-`IIx` top-`N` ranker as the current experimental review-policy prototype
-   - continue `IIb`/`IIx` boundary or random/manual supervision only if it answers a specific question
+   - stop additional routine review unless a promotion decision or specific hotspot hypothesis requires stronger validation
    - only return to a single global threshold if a later benchmark shows it is genuinely better
 7. Keep the frozen alpha baseline as the explicit comparator for every candidate run.
 
-Short version: the work is now about one scientific question and two engineering hygiene questions. The scientific question is the `IIb`/`IIx` residual split. The engineering questions are stable ranked `IIx` review policy and manifest-driven full-cohort reruns.
+Short version: the work is now about one scientific question and two engineering hygiene questions. The scientific question is the `IIb`/`IIx` residual split. The engineering questions are stable ranked `IIx` review policy and disciplined promotion/rerun decisions.
 
 ---
 
