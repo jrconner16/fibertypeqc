@@ -1,18 +1,19 @@
 # FiberTypeQC Roadmap (2026 H2)
 
 Time window: July-December 2026  
-Priority order: portfolio/job value first, reproducibility/citability second, optional software-note/JOSS path kept open.
+Priority order: portfolio/job value first, reproducibility/citability second, optional software-note/Journal of Open Source Software (JOSS) path kept open.
 
 ## Context
 
 - Public repo: `jrconner16/fibertypeqc`
-- Current tags: `v0.1.0-alpha`, `v0.1.1-alpha`
+- Current published release: `v0.2.0`
+- Historical tags: `v0.1.0-alpha`, `v0.1.1-alpha`
 - Current public workflow:
   1. `scripts.run_pipeline`
   2. `scripts.run_batch`
   3. `scripts.review_labels_napari`
   4. `scripts.merge_reviewed_labels`
-- Frozen alpha default model: `data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib`
+- Frozen baseline default model: `data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib`
 - Current channel schema:
   - membrane/border for segmentation
   - `type1` = IIb
@@ -27,7 +28,7 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - derived biological calls
   - feature extraction / review metadata
 - Treat `I`, `IIa`, `IIb`, and `IIx` as optional direct marker channels.
-- Treat `membrane` as required for segmentation and `dapi` as optional for nuclear features.
+- Treat `membrane` as required for segmentation and `dapi` (4′,6-diamidino-2-phenylindole) as optional for nuclear features.
 - Treat inferred classes as decision outputs, not as channels.
 - Record whether a final fiber call came from:
   - direct marker evidence
@@ -35,13 +36,14 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - unresolved/other/uncertain logic
 - Support arbitrary 4-channel panel combinations at the measurement layer, but only allow biological class claims justified by the configured panel.
 
-## Status Snapshot (2026-06-11)
+## Status Snapshot (2026-06-12)
 
-- `v0.1.1-alpha` released as pre-release with demo screenshots and documentation polish.
+- `v0.2.0` is published as the current public release.
+- Historical `v0.1.*-alpha` releases remain available as earlier prerelease milestones.
 - Roadmap milestones created on GitHub: `v0.2`, `v0.3`, `v0.4`.
 - Roadmap issue set generated and created from `docs/github_issues_2026H2.csv`.
-- `v0.2` foundation work is effectively complete for the current alpha line:
-  - `docs/modeling.md` and the expanded frozen alpha model card are in place
+- `v0.2.0` foundation work is complete and published:
+  - `docs/modeling.md` and the expanded frozen baseline model card are in place
   - panel-aware YAML config loader added
   - public CLI cleanup shipped for pipeline, review, and batch
   - batch runner remains frozen by default, with explicit opt-in channel overrides
@@ -57,11 +59,11 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - current best experimental weight setting is `manual8_myo3_base0p1`, about `0.814` accuracy / `0.847` balanced accuracy on the liberal protected manual holdout
   - the repaired cohort comparison now suggests the experimental candidate broadly matches the MyoSight biological story, with remaining mismatch concentrated in a few `IIb`/`IIx` boundary groups and hotspot images
   - review-policy calibration now suggests the operational path is not one global `needs_review` threshold but `IIa` gating, broad trust in predicted `IIb`, and ranked high-risk gated `IIx` review
-- Next execution focus: keep the public alpha stable, clarify candidate status, and work the remaining `IIb`/`IIx` biology gap without overclaiming review-burden wins.
+- Next execution focus: keep the public release stable, clarify candidate status, and work the remaining `IIb`/`IIx` boundary gap without overclaiming review-burden wins.
 
 ## Strict Baseline Policy
 
-### Frozen alpha baseline elements
+### Frozen baseline elements
 
 - Default model file
 - Default channel assumptions
@@ -93,9 +95,31 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
 
 ---
 
+## Scientific Interpretation Framework
+
+FiberTypeQC is evaluated against MyoSight as a historical workflow comparator and against manually reviewed subsets where available. Disagreements between methods are review targets for understanding technical, labeling, and biological sources of variation.
+
+Evidence should be interpreted in this order:
+
+1. Manual visual audit
+2. Protected manual holdout labels
+3. MyoSight / historical workflow comparison
+4. Model confidence, probabilities, margins, and entropy
+
+Current interpretation is conservative:
+
+- The standing candidate model broadly improves alignment with the historical MyoSight workflow relative to the frozen baseline.
+- Remaining disagreement is concentrated primarily in `IIb`/`IIx` boundary cases and hotspot images.
+- Inferred `IIx` calls remain the highest-priority class for targeted review.
+- Additional image-heldout validation and review-policy validation are required before promoting the candidate model to the public default.
+
+FiberTypeQC should be presented as a reproducible, auditable, review-assisted workflow. It is not currently claimed to be a final replacement for MyoSight or a validated standalone biological interpretation tool.
+
+---
+
 ## Candidate Promotion Protocol
 
-Use this protocol before replacing the frozen alpha default model or changing default typing behavior.
+Use this protocol before replacing the frozen baseline default model or changing default typing behavior.
 
 ### Current leading candidate
 
@@ -120,7 +144,7 @@ Use this protocol before replacing the frozen alpha default model or changing de
 
 A candidate can be considered for default replacement only if all of the following are true:
 
-- Beats frozen alpha on the protected manual benchmark, including per-class metrics for `IIa`, `IIb`, and `IIx`.
+- Beats the frozen baseline on the protected manual benchmark, including per-class metrics for `IIa`, `IIb`, and `IIx`.
 - Does not regress badly on a smaller random/manual benchmark that is not only enriched for hard cases.
 - Has an apples-to-apples full-cohort comparison against frozen using one explicit validation manifest.
 - Resolves the 7 section-export image provenance issue by pinning trusted source paths for both frozen and candidate.
@@ -268,7 +292,7 @@ The software-note path should not wait for a perfect candidate model. The publis
 
 ### Minimum publishable package
 
-- Stable frozen-alpha workflow remains runnable and documented.
+- Stable baseline workflow remains runnable and documented.
 - Public docs clearly explain:
   - intended use
   - channel assumptions
@@ -282,12 +306,12 @@ The software-note path should not wait for a perfect candidate model. The publis
 ### Scope guardrails
 
 - Do not let ongoing model research block software packaging indefinitely.
-- Do not require CNNs, full multi-panel generalization, or perfect MyoSight agreement for the software-note story.
+- Do not require convolutional neural networks (CNNs), full multi-panel generalization, or perfect MyoSight agreement for the software-note story.
 - Do require reproducible commands, clean artifact provenance, and explicit limitations.
 
 ---
 
-## v0.2 - Panel-Aware Config Foundation + Workflow Hardening
+## v0.2.0 - Published Release: Panel-Aware Config Foundation + Workflow Hardening
 
 ### Objectives
 
@@ -312,7 +336,7 @@ The software-note path should not wait for a perfect candidate model. The publis
 - Command-level smoke tests for pipeline/batch/review/merge.
 - Optional experimental paths disabled by default.
 
-### Progress So Far (2026-06-11)
+### Progress So Far (2026-06-12)
 
 - Completed:
   - `fibertypeqc/config.py` with panel-aware schema parsing
@@ -345,14 +369,14 @@ The software-note path should not wait for a perfect candidate model. The publis
   - diagnostics export documented in user-facing docs as an advanced/model-development option
   - smoke tests for diagnostics export path
   - baseline snapshot tests for frozen defaults:
-    - frozen alpha feature-contract check
+    - frozen baseline feature-contract check
     - legacy rule-path regression snapshot
   - pytest split into:
     - fast synthetic default path
     - optional `integration` path
 
 - Not done yet:
-  - only small release-polish items remain; active scientific work has moved to `v0.3` candidate evaluation
+  - no blocking `v0.2.0` work remains; active scientific work has moved to `v0.3` candidate interpretation and review-policy validation
 
 ### Acceptance Criteria
 
@@ -379,30 +403,26 @@ The software-note path should not wait for a perfect candidate model. The publis
 
 ---
 
-## v0.3 - Generic Marker Features + Panel-Aware Typing
+## v0.3 - Candidate Interpretation, MyoSight Alignment, and Review Routing
 
 ### Objectives
 
-- Generalize typing from a fixed two-marker implementation to a marker-aware feature engine.
-- Support direct-marker and residual-inference typing modes explicitly.
-- Compare candidate behavior explicitly against alpha baseline.
+- Treat `manual8_myo3_base0p1` as the standing experimental reference candidate.
+- Interpret the baseline-vs-candidate-vs-MyoSight evidence already generated.
+- Work the remaining `IIb`/`IIx` boundary gap without treating MyoSight as perfect per-fiber ground truth.
+- Define class-aware review-routing gates, especially for risky gated-`IIx` calls.
+- Keep candidate behavior experimental until promotion gates are met.
 
 ### Deliverables
 
-- Generic per-marker feature extraction for any present subset of `{I, IIa, IIb, IIx}`.
-- Panel-aware typing rules that distinguish:
-  - direct marker calls
-  - residual inferred calls
-  - unresolved/other outputs when the panel does not justify a named residual class
-- Support for at least one additional non-default panel beyond the current lab panel.
-- Baseline-vs-candidate evaluation report.
-- Feature-set comparison (for example p75/p90 vs p75/p90+coverage/SNR).
-- Held-out image evaluation summary.
-- Confusion/per-class metrics where manual labels exist.
-- Error analysis by class/image context.
-- Hard vs soft composition comparison.
+- Candidate state memo linking model path, split, metrics, MyoSight comparison, and review-ranker artifacts.
+- Updated validation summary reflecting current `v0.3` evidence rather than older validation utilities.
+- Promotion-gate checklist for moving from `candidate-pipeline` to `internal-default-candidate`.
+- Hotspot-focused `IIb`/`IIx` disagreement audit, if a promotion or specific biological hypothesis requires it.
+- Review-policy validation for soft `IIa` gating, broad trust in predicted `IIb`, and ranked gated-`IIx` review.
+- Explicit separation of public default behavior, standing experimental candidate behavior, and experimental review-policy prototype behavior.
 
-### Progress So Far (2026-06-11)
+### Progress So Far (2026-06-12)
 
 - Completed:
   - `docs/baseline_comparison_protocol.md`
@@ -426,7 +446,7 @@ The software-note path should not wait for a perfect candidate model. The publis
   - result so far:
     - frozen baseline `baseline_rf` remains best on `dev`
     - expanded features and boosting did not beat the frozen baseline in first-pass evaluation
-  - matched-ROI MyoSight audit tooling:
+  - matched region-of-interest (ROI) MyoSight audit tooling:
     - `src/build_matched_myosight_audit.py`
     - `validation/build_matched_myosight_audit.py`
   - combined audit-set tooling:
@@ -713,12 +733,12 @@ The software-note path should not wait for a perfect candidate model. The publis
 5. Defer another full-cohort rerun unless a new candidate clearly beats `manual8_myo3_base0p1` on both the protected holdout and the biology-story read.
 6. Keep corrected manual labels separate from stable pipeline outputs.
 7. Work the remaining biology gap:
-  - candidate now fixes most of the `IIa` story
+   - candidate now fixes most of the `IIa` story
   - candidate still undercalls `IIb` and overcalls `IIx`
   - use the learned gated-`IIx` risk ranker as the current review-policy prototype, not the hand-built heuristic
   - do not schedule more routine review now; only reopen review if a promotion claim or a specific hotspot analysis needs it
 8. After each future meaningful reviewed tranche, rerun:
-  - `validation.consolidate_reviewed_audit`
+   - `validation.consolidate_reviewed_audit`
   - `validation.split_reviewed_benchmark`
   - weighted candidate training
    - supervision-recipe comparison
@@ -728,7 +748,7 @@ The software-note path should not wait for a perfect candidate model. The publis
 
 When resuming work, start with this slice:
 
-1. Current public default remains the frozen alpha model. Do not change default behavior.
+1. Current public default remains the frozen baseline model. Do not change default behavior.
 2. Current standing experimental reference is `manual8_myo3_base0p1`, about `0.814` / `0.847` on the liberal protected manual holdout.
 3. Current descriptive cohort artifact is `candidate_models/weight_sweep_liberal_iib_iix_v1_focus/image_summaries/manual8_myo3_base0p1_image_summary.csv`.
 4. Main biological read:
@@ -743,7 +763,7 @@ When resuming work, start with this slice:
    - treat the learned gated-`IIx` top-`N` ranker as the current experimental review-policy prototype
    - stop additional routine review unless a promotion decision or specific hotspot hypothesis requires stronger validation
    - only return to a single global threshold if a later benchmark shows it is genuinely better
-7. Keep the frozen alpha baseline as the explicit comparator for every candidate run.
+7. Keep the frozen baseline as the explicit comparator for every candidate run.
 
 Short version: the work is now about one scientific question and two engineering hygiene questions. The scientific question is the `IIb`/`IIx` residual split. The engineering questions are stable ranked `IIx` review policy and disciplined promotion/rerun decisions.
 
@@ -790,7 +810,7 @@ Each issue should contain:
 For any issue labeled `baseline-sensitive`:
 
 1. Add explicit comparison notes in PR description.
-2. Include metric/output diffs against frozen alpha baseline.
+2. Include metric/output diffs against the frozen baseline.
 3. Add release-note entry under “Behavior changes”.
 4. Require a versioned artifact path (model/report) before merge.
 
