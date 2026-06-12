@@ -82,6 +82,27 @@ At a high level:
 This is encouraging, but it is still a descriptive comparison rather than a claim of final
 methodological equivalence.
 
+## Untouched Image Generalization Pilot
+
+An additional untouched upstream image manifest has been defined for cleaner same-project
+generalization checks outside the touched MyoSight descriptive cohort.
+
+The first run from that manifest should be interpreted as a **generalization pilot**, not as final
+promotion-grade evidence:
+
+- it uses upstream images that were not part of the current 32-image MyoSight comparison cohort;
+- it does not rely on MyoSight outputs for those images;
+- it includes one repeated-source image pair, which is useful for robustness checks but weakens any
+  stronger claim of independent biological-source validation.
+
+Even with those limits, the pilot is encouraging. On this untouched same-project set, the standing
+experimental candidate remained directionally consistent with its behavior on the touched cohort:
+it reduced review burden relative to the frozen baseline, shifted substantial mass out of `IIa`,
+and increased `IIb` assignments without showing an obvious collapse on new images.
+
+This pilot is therefore useful as internal robustness evidence. It should not be presented as a
+replacement for a cleaner one-image-per-source promotion holdout.
+
 ## Main Remaining Validation Issue
 
 The main remaining issue is the `IIb`/`IIx` boundary.

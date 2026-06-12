@@ -205,6 +205,8 @@ Keep benchmark roles explicit. Do not collapse all reviewed fibers into one undi
 - Source: images with no manual-train supervision and no tuning contact.
 - Purpose: cleaner generalization check before default promotion.
 - Status: initial untouched upstream manifest is now defined at `outputs/validation/promotion_holdout_generalization_manifest.csv`.
+- Current state: the first 8-image run from that manifest should be treated as a successful `generalization_pilot` rather than promotion-grade proof.
+- Pilot readout: the untouched same-project pilot was directionally stable, showed material candidate-vs-frozen composition differences, and included one repeated-source row that is useful for robustness but not ideal for final promotion claims.
 - Role: this is a promotion/generalization benchmark contract, not a MyoSight-comparable descriptive cohort unless separate MyoSight outputs are created for those images.
 - Priority: high for in-house model confidence.
 
