@@ -56,6 +56,7 @@ Priority order: portfolio/job value first, reproducibility/citability second, op
   - latest protected manual evaluation is based on `457` scored holdout rows
   - current best experimental weight setting is `manual8_myo3_base0p1`, about `0.814` accuracy / `0.847` balanced accuracy on the liberal protected manual holdout
   - the repaired cohort comparison now suggests the experimental candidate broadly matches the MyoSight biological story, with remaining mismatch concentrated in a few `IIb`/`IIx` boundary groups and hotspot images
+  - review-policy calibration now suggests the operational path is not one global `needs_review` threshold but `IIa` gating, broad trust in predicted `IIb`, and ranked high-risk gated `IIx` review
 - Next execution focus: keep the public alpha stable, clarify candidate status, and work the remaining `IIb`/`IIx` biology gap without overclaiming review-burden wins.
 
 ## Strict Baseline Policy
@@ -111,7 +112,8 @@ Use this protocol before replacing the frozen alpha default model or changing de
   - after the liberal `IIb`/`IIx` relabel and the small weight sweep, a light baseline weight with moderate matched-MyoSight weight is the best overall compromise
   - repaired cohort comparisons now indicate this candidate broadly corroborates the MyoSight biological story, especially by reducing the old `IIx` inflation and recovering more `IIb`
   - the remaining decision is no longer whether to move off the old soft-gated cohort candidate; it is whether to keep tuning around `manual8_myo3_base0p1` or treat it as the standing experimental cohort reference
-- Candidate behavior is **not default-ready** because the full-cohort comparison remains descriptive, the candidate review policy is not calibrated, and the remaining `IIb`/`IIx` discrepancy is unresolved.
+  - experimental review-policy work now points toward: soft `IIa` gate, relaxed `IIb` review, and top-`N` ranked gated `IIx` review per image rather than one global uncertainty gate
+- Candidate behavior is **not default-ready** because the full-cohort comparison remains descriptive, the remaining `IIb`/`IIx` discrepancy is unresolved, and the new ranked `IIx` review policy is still experimental rather than release-stable.
 
 ### Minimum promotion gates
 
@@ -704,19 +706,20 @@ The software-note path should not wait for a perfect candidate model. The publis
    - add one slide-ready `IIb`/`IIx` age/genotype figure if needed for interpretation
 2. Treat `candidate_models/weight_sweep_liberal_iib_iix_v1_focus/image_summaries/manual8_myo3_base0p1_image_summary.csv` as the current experimental descriptive cohort summary.
 3. Treat `manual8_myo3_base0p1` as the standing experimental reference candidate.
-4. Do not claim candidate review-burden reduction:
-   - the candidate `needs_review` gate is not calibrated
+4. Treat the old global `needs_review` gate as descriptive only:
    - inherited frozen thresholds do not transfer cleanly
+   - current experimental direction is soft `IIa` gating plus ranked high-risk `IIx` review, not one global uncertainty threshold
 5. Defer another full-cohort rerun unless a new candidate clearly beats `manual8_myo3_base0p1` on both the protected holdout and the biology-story read.
 6. Keep corrected manual labels separate from stable pipeline outputs.
 7. Work the remaining biology gap:
-   - candidate now fixes most of the `IIa` story
-   - candidate still undercalls `IIb` and overcalls `IIx`
-   - next supervision should target `IIb`/`IIx` boundary or broaden random/manual coverage, not generic label growth
+  - candidate now fixes most of the `IIa` story
+  - candidate still undercalls `IIb` and overcalls `IIx`
+  - next supervision should target `IIb`/`IIx` boundary or broaden random/manual coverage, not generic label growth
+  - use the learned gated-`IIx` risk ranker as the current review-policy prototype, not the hand-built heuristic
 8. After each meaningful reviewed tranche, rerun:
-   - `validation.consolidate_reviewed_audit`
-   - `validation.split_reviewed_benchmark`
-   - weighted candidate training
+  - `validation.consolidate_reviewed_audit`
+  - `validation.split_reviewed_benchmark`
+  - weighted candidate training
    - supervision-recipe comparison
    - `validation.analyze_iia_gate`
 
@@ -732,15 +735,16 @@ When resuming work, start with this slice:
    - `IIb` remains too low
    - `IIx` remains too high
 5. Review-burden read:
-   - candidate `needs_review` is uncalibrated and should not be sold as lower burden
-   - signal-warning comparisons are more interpretable
+   - the old global candidate `needs_review` gate should not be sold as the operational review policy
+   - current experimental direction is: soft `IIa` gate, trust most predicted `IIb`, rank gated `IIx` by learned correction risk, and review top `N` per image
 6. Next concrete work:
    - keep `manual8_myo3_base0p1` as the experimental comparator
-   - calibrate candidate review policy if review-burden claims matter
+   - treat the learned gated-`IIx` top-`N` ranker as the current experimental review-policy prototype
    - continue `IIb`/`IIx` boundary or random/manual supervision only if it answers a specific question
+   - only return to a single global threshold if a later benchmark shows it is genuinely better
 7. Keep the frozen alpha baseline as the explicit comparator for every candidate run.
 
-Short version: the work is now about one scientific question and two engineering hygiene questions. The scientific question is the `IIb`/`IIx` residual split. The engineering questions are calibrated review policy and manifest-driven full-cohort reruns.
+Short version: the work is now about one scientific question and two engineering hygiene questions. The scientific question is the `IIb`/`IIx` residual split. The engineering questions are stable ranked `IIx` review policy and manifest-driven full-cohort reruns.
 
 ---
 
