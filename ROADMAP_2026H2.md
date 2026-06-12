@@ -204,7 +204,8 @@ Keep benchmark roles explicit. Do not collapse all reviewed fibers into one undi
 
 - Source: images with no manual-train supervision and no tuning contact.
 - Purpose: cleaner generalization check before default promotion.
-- Status: not fully established yet.
+- Status: initial untouched upstream manifest is now defined at `outputs/validation/promotion_holdout_generalization_manifest.csv`.
+- Role: this is a promotion/generalization benchmark contract, not a MyoSight-comparable descriptive cohort unless separate MyoSight outputs are created for those images.
 - Priority: high for in-house model confidence.
 
 ---
@@ -222,6 +223,9 @@ Keep benchmark roles explicit. Do not collapse all reviewed fibers into one undi
   - training/holdout role
   - MyoSight result path when applicable
 - Frozen and candidate comparisons must use the same source manifest.
+- Keep benchmark manifests role-specific:
+  - `outputs/validation/myosight_validation_canonical_manifest.csv` is the touched 32-image MyoSight descriptive cohort contract.
+  - `outputs/validation/promotion_holdout_generalization_manifest.csv` is the untouched upstream generalization holdout contract.
 - Section-export images must remain pinned to the trusted normalized section-export source branch unless a better section workflow is validated.
 - Never compare candidate and frozen count/typing summaries if they came from different section-image path branches.
 
