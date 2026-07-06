@@ -26,8 +26,15 @@ _CACHED_MODELS: dict[tuple[str, str], models.CellposeModel] = {}
 
 
 def _device_name(use_mps: bool) -> str:
-    if use_mps and torch.backends.mps.is_available():
+    if not use_mps:
+        return "cpu"
+
+    if torch.cuda.is_available():
+        return "cuda"
+
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         return "mps"
+
     return "cpu"
 
 
