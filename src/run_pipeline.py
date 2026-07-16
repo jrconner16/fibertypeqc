@@ -496,6 +496,7 @@ def main() -> None:
             pixel_size_x_um=pixel_size_x_um,
             pixel_size_y_um=pixel_size_y_um,
             classifier_path=args.classifier_path,
+            collect_spatial_marker_features=bool(args.export_diagnostics),
         )
         quant_cfg = apply_auto_profile(
             quant_cfg,

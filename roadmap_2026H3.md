@@ -6,6 +6,17 @@ the clean-baseline gate is complete.
 Priority order: reproducible public workflow, scientifically defensible outputs, reusable analysis
 stages, then external usability and broader model adaptation.
 
+## Progress
+
+- [x] Phase 0 — clean repository baseline
+- [x] Phase 1 — architecture and contract specification
+- [x] Phase 2 — panel and restartable artifact foundation
+- [ ] Phase 3 — Type I and semantic myosin features (in progress)
+- [ ] Phase 4 — independent eMHC regeneration domain
+- [ ] Phase 5 — DAPI and nuclear association
+- [ ] Phase 6 — project-specific adaptation
+- [ ] Phase 7 — external usability pilot
+
 ## Objective
 
 Establish a clean and reproducible repository baseline, then expand FiberTypeQC into a standardized
@@ -215,6 +226,14 @@ Names may be refined during specification, but the following invalidation rules 
 
 The first slice remains diagnostics-only: semantic observed-marker features may be added without
 changing legacy fiber calls, residual inference, or the stable `*_fibers.csv` schema.
+
+### Slice checklist
+
+- [x] Versioned semantic mean/percentile/coverage/SNR diagnostics for observed markers.
+- [x] Center/edge semantic diagnostics, emitted only with optional diagnostics export.
+- [ ] Type I-compatible curated-label inventory and panel audit.
+- [ ] Type I candidate model and manifest; no automatic model selection.
+- [ ] Held-out TA false-positive and quadriceps pilot evaluation.
 
 ### Data roles
 

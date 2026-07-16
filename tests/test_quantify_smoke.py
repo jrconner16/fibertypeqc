@@ -131,6 +131,8 @@ def test_quantify_labels_collects_optional_marker_stats_without_changing_typing(
                 typing_preprocess="raw",
                 typing_smooth_sigma=0.0,
                 typing_erode_px=0,
+                collect_spatial_marker_features=True,
+                spatial_feature_erode_px=1,
                 min_coverage=0.1,
                 use_percentile_gate=False,
                 classifier_path=None,
@@ -158,6 +160,8 @@ def test_quantify_labels_collects_optional_marker_stats_without_changing_typing(
         "type_i.p90",
         "type_i.coverage_high",
         "type_i.snr_mean",
+        "type_i.center_mean",
+        "type_i.edge_mean",
         "type_iia.mean",
         "type_iib.mean",
     }.issubset(diagnostics.columns)

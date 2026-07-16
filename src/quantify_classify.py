@@ -48,6 +48,8 @@ class QuantifyConfig:
     pixel_size_x_um: float | None = None
     pixel_size_y_um: float | None = None
     csa_erode_px: tuple[int, ...] = (1, 2, 3, 4, 5)
+    collect_spatial_marker_features: bool = False
+    spatial_feature_erode_px: int = 2
 
     # Optional classifier hook (off by default).
     classifier_path: str | None = None
@@ -71,6 +73,8 @@ class MarkerStats:
     coverage: np.ndarray
     tissue_median: float
     tissue_mad: float
+    center_mean: np.ndarray | None = None
+    edge_mean: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -412,6 +416,13 @@ def _semantic_diagnostic_features(
         out[f"{semantic_name}.coverage_high"] = coverage
         out[f"{semantic_name}.snr_mean"] = _marker_snr(mean, tissue_median, tissue_mad)
         out[f"{semantic_name}.snr_p90"] = _marker_snr(p90, tissue_median, tissue_mad)
+        if "center_mean" in stats and "edge_mean" in stats:
+            out[f"{semantic_name}.center_mean"] = pd.Series(
+                np.asarray(stats["center_mean"], dtype=np.float32), index=index
+            )
+            out[f"{semantic_name}.edge_mean"] = pd.Series(
+                np.asarray(stats["edge_mean"], dtype=np.float32), index=index
+            )
     return out
 
 
@@ -572,6 +583,8 @@ def _marker_signal_stats(
     tissue_mask: np.ndarray,
     cfg: QuantifyConfig,
     spec: MarkerSpec,
+    center_labels: np.ndarray | None = None,
+    edge_labels: np.ndarray | None = None,
 ) -> MarkerStats:
     channel = _preprocess_typing_channel(
         image_chw[spec.channel_index],
@@ -601,6 +614,17 @@ def _marker_signal_stats(
     else:
         tissue_median = 0.0
         tissue_mad = 1.0
+    center_mean = None
+    edge_mean = None
+    if center_labels is not None and edge_labels is not None:
+        center_mean = np.asarray(
+            ndi_mean(channel, labels=center_labels, index=label_ids),
+            dtype=np.float32,
+        )
+        edge_mean = np.asarray(
+            ndi_mean(channel, labels=edge_labels, index=label_ids),
+            dtype=np.float32,
+        )
     return MarkerStats(
         mean=mean,
         p75=p75,
@@ -609,6 +633,8 @@ def _marker_signal_stats(
         coverage=coverage,
         tissue_median=tissue_median,
         tissue_mad=tissue_mad,
+        center_mean=center_mean,
+        edge_mean=edge_mean,
     )
 
 
@@ -620,6 +646,8 @@ def _collect_marker_stats(
     tissue_mask: np.ndarray,
     cfg: QuantifyConfig,
     specs: tuple[MarkerSpec, ...],
+    center_labels: np.ndarray | None = None,
+    edge_labels: np.ndarray | None = None,
 ) -> dict[str, MarkerStats]:
     return {
         spec.marker_name: _marker_signal_stats(
@@ -629,6 +657,8 @@ def _collect_marker_stats(
             tissue_mask=tissue_mask,
             cfg=cfg,
             spec=spec,
+            center_labels=center_labels,
+            edge_labels=edge_labels,
         )
         for spec in specs
     }
@@ -652,9 +682,10 @@ def _legacy_typing_feature_columns(
 
 def _marker_stats_metadata(
     marker_stats: dict[str, MarkerStats],
-) -> dict[str, dict[str, np.ndarray]]:
-    return {
-        marker_name: {
+) -> dict[str, dict[str, np.ndarray | float]]:
+    metadata: dict[str, dict[str, np.ndarray | float]] = {}
+    for marker_name, stats in marker_stats.items():
+        values: dict[str, np.ndarray | float] = {
             "mean": stats.mean.copy(),
             "p75": stats.p75.copy(),
             "p90": stats.p90.copy(),
@@ -663,8 +694,11 @@ def _marker_stats_metadata(
             "tissue_median": float(stats.tissue_median),
             "tissue_mad": float(stats.tissue_mad),
         }
-        for marker_name, stats in marker_stats.items()
-    }
+        if stats.center_mean is not None and stats.edge_mean is not None:
+            values["center_mean"] = stats.center_mean.copy()
+            values["edge_mean"] = stats.edge_mean.copy()
+        metadata[marker_name] = values
+    return metadata
 
 
 def _legacy_signal_thresholds(
@@ -1016,6 +1050,12 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
     active_marker_specs = _active_marker_specs(cfg)
 
     measure_labels = erode_labels(labels, int(cfg.typing_erode_px))
+    spatial_center_labels = None
+    spatial_edge_labels = None
+    if cfg.collect_spatial_marker_features:
+        spatial_center_labels = erode_labels(labels, int(cfg.spatial_feature_erode_px))
+        spatial_edge_labels = labels.copy()
+        spatial_edge_labels[spatial_center_labels > 0] = 0
     interior_areas = np.bincount(
         measure_labels.ravel(),
         minlength=int(label_ids.max()) + 1,
@@ -1028,6 +1068,8 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
         tissue_mask=tissue,
         cfg=cfg,
         specs=active_marker_specs,
+        center_labels=spatial_center_labels,
+        edge_labels=spatial_edge_labels,
     )
     legacy_feature_columns = _legacy_typing_feature_columns(marker_stats, marker_specs)
 
