@@ -8,7 +8,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from fibertypeqc.artifacts import build_run_manifest, write_run_manifest
 from fibertypeqc.config import resolve_channel_config
+from fibertypeqc.model_manifest import load_model_manifest, validate_model_compatibility
+from fibertypeqc.panels import Panel
 from src.io_utils import (
     ensure_dir,
     extract_pixel_size_um,
@@ -237,6 +240,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional sklearn model (.joblib/.pkl)",
     )
     p.add_argument(
+        "--model-manifest",
+        type=Path,
+        default=None,
+        help=(
+            "Optional JSON/YAML sidecar for --classifier-path. Validated before Cellpose; "
+            "new model manifests must declare their required observed markers."
+        ),
+    )
+    p.add_argument(
         "--export-diagnostics",
         action="store_true",
         help=(
@@ -283,6 +295,11 @@ def main() -> None:
     )
     for warning in channel_warnings:
         print(f"Warning: {warning}", file=sys.stderr, flush=True)
+    if args.model_manifest is not None and args.classifier_path is None:
+        raise ValueError("--model-manifest requires --classifier-path.")
+    model_manifest = (
+        load_model_manifest(args.model_manifest) if args.model_manifest is not None else None
+    )
 
     total_stages = 7
     t_all = time.perf_counter()
@@ -293,26 +310,9 @@ def main() -> None:
         pixel_size_x_um, pixel_size_y_um = extract_pixel_size_um(args.input)
         n_channels = image.shape[0]
 
-        channel_values = {
-            "membrane": channel_cfg.membrane_channel,
-            "dapi": channel_cfg.dapi_channel,
-            "i": channel_cfg.i_channel,
-            "iia": channel_cfg.iia_channel,
-            "iib": channel_cfg.iib_channel,
-            "iix": channel_cfg.iix_channel,
-        }
-        for name, index in channel_values.items():
-            if index is None:
-                continue
-            if index < 0 or index >= n_channels:
-                raise ValueError(
-                    f"Invalid {name} channel {index} for image with {n_channels} channels"
-                )
-        if channel_cfg.iib_channel is None or channel_cfg.iia_channel is None:
-            raise ValueError(
-                "The current alpha typing path still requires both IIb and IIa marker channels. "
-                "Panel-aware config is accepted, but non-IIa/IIb typing modes are not active yet."
-            )
+        panel = Panel.from_channel_config(channel_cfg)
+        panel.validate(image_channel_count=n_channels)
+        validate_model_compatibility(panel, model_manifest)
 
     with stage(2, total_stages, "preprocess membrane channel"):
         membrane = image[channel_cfg.membrane_channel]
@@ -329,6 +329,41 @@ def main() -> None:
             noise_floor=args.noise_floor,
         )
         prep = preprocess_membrane_channel(membrane, prep_cfg)
+
+        stem = args.input.stem.replace(" ", "_")
+        run_manifest_path = output_dir / f"{stem}_run.json"
+        seg_manifest = {
+            "model": args.cellpose_model,
+            "diameter": None if args.diameter <= 0 else args.diameter,
+            "bsize": args.bsize,
+            "resample": bool(args.resample),
+            "requested_device": "cpu" if args.cpu else "mps_or_cpu",
+            "normalize": bool(args.cellpose_normalize),
+        }
+        preprocessing_manifest = {
+            "crop_auto": bool(args.crop_auto),
+            "crop_ds": args.crop_ds,
+            "crop_pad": args.crop_pad,
+            "crop_min_size": args.crop_min_size,
+            "downsample_factor": args.downsample_factor,
+            "bg_sigma": args.bg_sigma,
+            "smooth_sigma": args.smooth_sigma,
+            "p_low": args.p_low,
+            "p_high": args.p_high,
+            "noise_floor": args.noise_floor,
+        }
+        run_manifest = build_run_manifest(
+            input_path=args.input,
+            image_shape=tuple(image.shape),
+            pixel_size_um=(pixel_size_x_um, pixel_size_y_um),
+            panel_fingerprint=panel.fingerprint,
+            panel_channels=panel.channels,
+            segmentation=seg_manifest,
+            preprocessing=preprocessing_manifest,
+            classifier_path=args.classifier_path,
+            model_manifest_path=args.model_manifest,
+        )
+        write_run_manifest(run_manifest_path, run_manifest)
 
     with stage(3, total_stages, "segment fibers with Cellpose"):
         seg_cfg = CellposeConfig(
@@ -349,7 +384,6 @@ def main() -> None:
         )
         labels = paste_crop_labels(labels_crop, prep.membrane_full.shape, prep.crop_slices)
 
-        stem = args.input.stem.replace(" ", "_")
         labels_path = output_dir / f"{stem}_cellpose_labels.tif"
         save_labels(labels_path, labels)
 
@@ -437,6 +471,7 @@ def main() -> None:
             "feature_diagnostics_path": (
                 str(diagnostics_path) if diagnostics_path is not None else ""
             ),
+            "run_manifest_path": str(run_manifest_path),
             "runtime_s": round(float(runtime_s), 2),
             "membrane_channel": int(channel_cfg.membrane_channel),
             "dapi_channel": channel_cfg.dapi_channel,

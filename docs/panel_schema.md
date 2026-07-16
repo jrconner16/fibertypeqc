@@ -48,6 +48,19 @@ classification:
   - `iix`
 
 Each configured channel index must be unique across all configured channels.
+At pipeline startup, the active panel is also checked against the image: it may use no more than
+four observed channels, and every configured index must be within the image channel count.
+
+## Run provenance and model sidecars
+
+Each successful preprocessing start writes `<image-stem>_run.json` beside the legacy outputs. It
+records the resolved semantic panel, input shape and pixel scale, Cellpose/preprocessing settings,
+software versions, Git commit, and stage fingerprints. It is ignored as generated output.
+
+`--model-manifest PATH` is an optional JSON or YAML sidecar for `--classifier-path`. A manifest
+must declare its version, identifier, task, feature-schema version, required observed markers, and
+outputs. The pipeline rejects a model whose required markers are absent before Cellpose runs.
+The no-sidecar path remains the frozen IIa/IIb/laminin compatibility adapter.
 
 ## `classification.residual_inference`
 
