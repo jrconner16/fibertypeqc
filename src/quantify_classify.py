@@ -469,9 +469,8 @@ def _signal_evidence(
     p90_threshold: float,
     min_coverage: float,
 ) -> np.ndarray:
-    coherent = (
-        ((mean >= mean_threshold) | (p75 >= p75_threshold))
-        & (coverage >= float(min_coverage))
+    coherent = ((mean >= mean_threshold) | (p75 >= p75_threshold)) & (
+        coverage >= float(min_coverage)
     )
     p90_only = (p90 >= p90_threshold) & ~coherent
     out = np.full(len(mean), "low", dtype=object)
@@ -753,12 +752,10 @@ def _legacy_rule_classification(
         _norm_gain(secondary_pctl.to_numpy(), t2p),
     )
     score1 = score1 + (
-        (primary_coverage.to_numpy(dtype=np.float32) / max(cfg.min_coverage, 1e-6))
-        - 1.0
+        (primary_coverage.to_numpy(dtype=np.float32) / max(cfg.min_coverage, 1e-6)) - 1.0
     )
     score2 = score2 + (
-        (secondary_coverage.to_numpy(dtype=np.float32) / max(cfg.min_coverage, 1e-6))
-        - 1.0
+        (secondary_coverage.to_numpy(dtype=np.float32) / max(cfg.min_coverage, 1e-6)) - 1.0
     )
 
     both = has1 & has2
@@ -800,13 +797,10 @@ def _add_model_signal_qc(df: pd.DataFrame, cfg: QuantifyConfig) -> pd.DataFrame:
 
     type1_evidence = out["type1_signal_evidence"].astype(str)
     type2_evidence = out["type2_signal_evidence"].astype(str)
-    weak_positive = (
-        (type1_pred & type1_evidence.ne("clear"))
-        | (type2_pred & type2_evidence.ne("clear"))
+    weak_positive = (type1_pred & type1_evidence.ne("clear")) | (
+        type2_pred & type2_evidence.ne("clear")
     )
-    possible_missed_positive = iix_pred & (
-        type1_evidence.eq("clear") | type2_evidence.eq("clear")
-    )
+    possible_missed_positive = iix_pred & (type1_evidence.eq("clear") | type2_evidence.eq("clear"))
     if "model_confidence" in out.columns:
         low_confidence = out["model_confidence"] < float(cfg.model_confidence_threshold)
     else:
@@ -972,7 +966,7 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
                 "typing_signal_qc_flags",
                 "classifier_path",
             ]
-    )
+        )
 
     areas = np.bincount(labels.ravel())[label_ids]
     feret_max_px, feret_min_px = _feret_diameters_by_label(labels, label_ids)
@@ -1017,16 +1011,24 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
     df["available_markers"] = available_markers_value
 
     if cfg.pixel_size_x_um is not None and cfg.pixel_size_y_um is not None:
-        pixel_area_um2 = float(cfg.pixel_size_x_um) * float(cfg.pixel_size_y_um)
-        df["pixel_size_x_um"] = float(cfg.pixel_size_x_um)
-        df["pixel_size_y_um"] = float(cfg.pixel_size_y_um)
+        pixel_size_x_um = float(cfg.pixel_size_x_um)
+        pixel_size_y_um = float(cfg.pixel_size_y_um)
+        pixel_area_um2 = pixel_size_x_um * pixel_size_y_um
+        df["pixel_size_x_um"] = pixel_size_x_um
+        df["pixel_size_y_um"] = pixel_size_y_um
         df["area_um2"] = df["area"].astype(np.float32) * pixel_area_um2
-        feret_max_um, feret_min_um = _feret_diameters_by_label(
-            labels,
-            label_ids,
-            pixel_size_x=float(cfg.pixel_size_x_um),
-            pixel_size_y=float(cfg.pixel_size_y_um),
-        )
+        if pixel_size_x_um == pixel_size_y_um:
+            # Uniform scaling preserves the Feret geometry exactly, so avoid a
+            # second contour/hull pass for every fiber.
+            feret_max_um = feret_max_px * pixel_size_x_um
+            feret_min_um = feret_min_px * pixel_size_x_um
+        else:
+            feret_max_um, feret_min_um = _feret_diameters_by_label(
+                labels,
+                label_ids,
+                pixel_size_x=pixel_size_x_um,
+                pixel_size_y=pixel_size_y_um,
+            )
         df["feret_max_um"] = feret_max_um
         df["feret_min_um"] = feret_min_um
         for erode_px in cfg.csa_erode_px:
@@ -1039,9 +1041,7 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
                 minlength=int(label_ids.max()) + 1,
             )[label_ids]
             df[f"area_erode_{erode_px}px"] = csa_areas.astype(np.int32)
-            df[f"area_erode_{erode_px}px_um2"] = (
-                csa_areas.astype(np.float32) * pixel_area_um2
-            )
+            df[f"area_erode_{erode_px}px_um2"] = csa_areas.astype(np.float32) * pixel_area_um2
 
     legacy_thresholds = _legacy_signal_thresholds(df, cfg, marker_specs)
     _add_legacy_signal_evidence(df, cfg, legacy_thresholds, marker_specs)
