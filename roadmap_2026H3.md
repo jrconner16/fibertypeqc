@@ -231,7 +231,8 @@ changing legacy fiber calls, residual inference, or the stable `*_fibers.csv` sc
 
 - [x] Versioned semantic mean/percentile/coverage/SNR diagnostics for observed markers.
 - [x] Center/edge semantic diagnostics, emitted only with optional diagnostics export.
-- [ ] Type I-compatible curated-label inventory and panel audit.
+- [x] Type I-compatible curated-label inventory and panel audit (see
+  `docs/type_i_panel_audit.md`).
 - [ ] Type I candidate model and manifest; no automatic model selection.
 - [ ] Held-out TA false-positive and quadriceps pilot evaluation.
 
@@ -240,6 +241,15 @@ changing legacy fiber calls, residual inference, or the stable `*_fibers.csv` sc
 - Current TA/Jag1 cohort: Type I-negative distribution, false-positive testing, backward compatibility.
 - Quadriceps pilot: Type I-positive fibers and large-image processing.
 - External-laboratory images: cross-laboratory panel behavior after manual labels exist.
+
+### Channel-verification record
+
+- Jag1 quadriceps images: manually verified panel mapping is Type I = channel 0,
+  IIa = channel 1, laminin = channel 2, and IIb = channel 3. The prior Jag
+  regeneration analysis configured only IIa/laminin/IIb, so it did not quantify
+  the available Type I channel.
+- Vivienne images: require separate manual channel verification before they are
+  included in any panel inventory, training set, or validation cohort.
 
 ### Scope
 
