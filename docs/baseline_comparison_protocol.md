@@ -104,7 +104,7 @@ Do not substitute one for the other.
 These columns should exist in the canonical full-cohort validation manifest:
 
 - `image_id`
-- `input_path`
+- `input_path` or portable `input_relpath`
 - `input_kind`
 - `source_branch`
 - `source_image`
@@ -118,7 +118,7 @@ These columns should exist in the canonical full-cohort validation manifest:
 Minimum execution requirement today:
 
 - `image_id`
-- `input_path`
+- `input_path` or `input_relpath` with an explicit `--input-root`
 
 These are the columns currently consumed by `validation.run_candidate_batch_with_iia_gate`
 through `--input-manifest`.
@@ -126,7 +126,9 @@ through `--input-manifest`.
 Recommended meanings:
 
 - `image_id`: canonical stable ID used for output folder naming and row joins
-- `input_path`: trusted image path that both frozen and candidate must run from
+- `input_path`: trusted absolute image path when the manifest is intentionally local
+- `input_relpath`: trusted path relative to the explicit `--input-root`; prefer this form for
+  tracked manifests so local storage locations are not committed
 - `input_kind`: for example `direct_czi` or `section_tiff_export`
 - `source_branch`: provenance branch for the image path, for example
   `validation_flat_input` or `section_exports_normalized`
@@ -145,7 +147,7 @@ Apply these rules conservatively:
 
 1. Frozen and candidate descriptive cohort comparisons are only valid if they use the same
    manifest revision.
-2. For the 7 section-export images, `input_path` must stay pinned to the trusted normalized
+2. For the 7 section-export images, the configured input path must stay pinned to the trusted normalized
    section-export branch unless a replacement section workflow is explicitly validated.
 3. Do not mix rows from different source branches inside one comparison unless the manifest
    makes that branch choice explicit row by row.

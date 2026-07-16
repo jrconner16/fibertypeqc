@@ -89,6 +89,7 @@ def build_batch_command(
     input_file: Path,
     output_dir: Path,
     channel_overrides: BatchChannelOverrides,
+    classifier_path: Path | None = None,
     downsample_factor: int | None = None,
     export_diagnostics: bool = False,
     retain_mode: str = "full",
@@ -120,7 +121,7 @@ def build_batch_command(
         "--typing-erode-px",
         str(V0_PARAMS["typing_erode_px"]),
         "--classifier-path",
-        str(PROJECT_ROOT / V0_PARAMS["classifier_path"]),
+        str((classifier_path or (PROJECT_ROOT / V0_PARAMS["classifier_path"])).resolve()),
         "--model-confidence-threshold",
         str(V0_PARAMS["model_confidence_threshold"]),
         "--model-margin-threshold",
@@ -171,19 +172,35 @@ def output_stem(input_file: Path) -> str:
     return input_file.resolve().stem.replace(" ", "_")
 
 
-def _load_input_manifest(path: Path) -> list[tuple[str, Path]]:
+def _load_input_manifest(
+    path: Path,
+    *,
+    input_root: Path | None = None,
+) -> list[tuple[str, Path]]:
     df = pd.read_csv(path)
-    required = {"image_id", "input_path"}
-    missing = sorted(required - set(df.columns))
-    if missing:
-        raise ValueError(f"{path} missing columns: {', '.join(missing)}")
+    if "image_id" not in df.columns:
+        raise ValueError(f"{path} missing column: image_id")
+    path_columns = {"input_path", "input_relpath"} & set(df.columns)
+    if len(path_columns) != 1:
+        raise ValueError(
+            f"{path} must contain exactly one of input_path or input_relpath"
+        )
+    path_column = next(iter(path_columns))
+    if path_column == "input_relpath" and input_root is None:
+        raise ValueError(f"{path} uses input_relpath; provide --input-root")
 
     rows: list[tuple[str, Path]] = []
     for row in df.itertuples(index=False):
         image_id = str(row.image_id).strip()
-        input_path = Path(str(row.input_path)).expanduser()
         if not image_id:
             raise ValueError(f"{path} contains blank image_id")
+        raw_path = Path(str(getattr(row, path_column))).expanduser()
+        if path_column == "input_relpath":
+            if raw_path.is_absolute() or ".." in raw_path.parts:
+                raise ValueError(f"{path} contains unsafe input_relpath: {raw_path}")
+            input_path = input_root / raw_path
+        else:
+            input_path = raw_path
         rows.append((image_id, input_path))
     return rows
 
@@ -204,6 +221,7 @@ def run_single_image(
     output_dir: Path,
     channel_overrides: BatchChannelOverrides,
     image_name: str | None = None,
+    classifier_path: Path | None = None,
     downsample_factor: int | None = None,
     export_diagnostics: bool = False,
     retain_mode: str = "full",
@@ -238,6 +256,7 @@ def run_single_image(
         input_file,
         image_output_dir,
         channel_overrides=channel_overrides,
+        classifier_path=classifier_path,
         downsample_factor=downsample_factor,
         export_diagnostics=export_diagnostics,
         retain_mode=retain_mode,
@@ -319,7 +338,16 @@ def main() -> None:
         type=Path,
         required=False,
         default=None,
-        help="CSV with columns image_id,input_path for explicit per-image inputs.",
+        help=(
+            "CSV with image_id,input_path or portable image_id,input_relpath rows "
+            "for explicit per-image inputs."
+        ),
+    )
+    parser.add_argument(
+        "--input-root",
+        type=Path,
+        default=None,
+        help="Root directory used to resolve input_relpath values in --input-manifest.",
     )
     parser.add_argument(
         "--output-dir",
@@ -331,6 +359,15 @@ def main() -> None:
         "--show-v0-params",
         action="store_true",
         help="Print v0 parameters and exit",
+    )
+    parser.add_argument(
+        "--classifier-path",
+        type=Path,
+        default=None,
+        help=(
+            "Optional classifier override. When omitted, the frozen v0 alpha "
+            "classifier is used."
+        ),
     )
     parser.add_argument(
         "--downsample-factor",
@@ -386,6 +423,9 @@ def main() -> None:
     if bool(args.input_dir) == bool(args.input_manifest):
         print("Error: provide exactly one of --input-dir or --input-manifest")
         sys.exit(1)
+    if args.input_root is not None and args.input_manifest is None:
+        print("Error: --input-root requires --input-manifest")
+        sys.exit(1)
 
     manifest_rows: list[tuple[str, Path]] | None = None
     input_dir = args.input_dir
@@ -394,7 +434,7 @@ def main() -> None:
             print(f"Error: Input manifest does not exist: {args.input_manifest}")
             sys.exit(1)
         try:
-            manifest_rows = _load_input_manifest(args.input_manifest)
+            manifest_rows = _load_input_manifest(args.input_manifest, input_root=args.input_root)
         except ValueError as exc:
             print(f"Error: {exc}")
             sys.exit(1)
@@ -444,6 +484,8 @@ def main() -> None:
     logger.info("V0 Parameters:")
     for k, v in V0_PARAMS.items():
         logger.info(f"  {k}: {v}")
+    if args.classifier_path is not None:
+        logger.info(f"Override: classifier_path={args.classifier_path}")
     if args.downsample_factor is not None:
         logger.info(f"Override: downsample_factor={args.downsample_factor}")
     if channel_overrides.uses_nonbaseline_channel_config():
@@ -476,6 +518,7 @@ def main() -> None:
             output_dir,
             channel_overrides=channel_overrides,
             image_name=image_name,
+            classifier_path=args.classifier_path,
             downsample_factor=args.downsample_factor,
             export_diagnostics=args.export_diagnostics,
             retain_mode=args.retain_mode,

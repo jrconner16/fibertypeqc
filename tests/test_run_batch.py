@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from src.run_batch import (
     V0_PARAMS,
@@ -77,6 +78,22 @@ def test_build_batch_command_can_export_diagnostics(tmp_path):
     assert "--export-diagnostics" in cmd
 
 
+def test_build_batch_command_can_override_classifier_path(tmp_path):
+    input_file = tmp_path / "image.czi"
+    output_dir = tmp_path / "out"
+    classifier_path = tmp_path / "candidate.joblib"
+
+    cmd = build_batch_command(
+        input_file,
+        output_dir,
+        channel_overrides=BatchChannelOverrides(),
+        classifier_path=classifier_path,
+    )
+
+    assert "--classifier-path" in cmd
+    assert cmd[cmd.index("--classifier-path") + 1] == str(classifier_path.resolve())
+
+
 def test_build_batch_command_can_set_retain_mode(tmp_path):
     input_file = tmp_path / "image.czi"
     output_dir = tmp_path / "out"
@@ -99,6 +116,23 @@ def test_load_input_manifest_requires_image_id_and_input_path(tmp_path):
     rows = _load_input_manifest(manifest)
 
     assert rows == [("img1", Path("/tmp/image1.czi"))]
+
+
+def test_load_input_manifest_resolves_portable_relative_paths(tmp_path):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("image_id,input_relpath\nimg1,cohort/image1.czi\n", encoding="utf-8")
+
+    rows = _load_input_manifest(manifest, input_root=Path("/data"))
+
+    assert rows == [("img1", Path("/data/cohort/image1.czi"))]
+
+
+def test_load_input_manifest_requires_root_for_relative_paths(tmp_path):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("image_id,input_relpath\nimg1,cohort/image1.czi\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="--input-root"):
+        _load_input_manifest(manifest)
 
 
 def test_run_single_image_uses_manifest_image_name_for_outputs(tmp_path, monkeypatch):
