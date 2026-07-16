@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -65,6 +66,9 @@ def test_run_pipeline_export_diagnostics_flag_controls_output(tmp_path, monkeypa
     run_pipeline.main()
 
     stem = input_path.stem
+    run_manifest = json.loads((tmp_path / "out" / f"{stem}_run.json").read_text())
+    assert run_manifest["panel"]["channels"]["laminin"] == 2
+    assert run_manifest["output_schema_version"] == "legacy_fibers.v1"
     diagnostics_path = tmp_path / "out" / f"{stem}_feature_diagnostics.csv"
     assert not diagnostics_path.exists()
 
