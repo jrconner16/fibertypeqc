@@ -119,3 +119,18 @@ def build_run_manifest(
 
 def write_run_manifest(path: Path, manifest: Mapping[str, Any]) -> None:
     path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+
+def can_reuse_fiber_labels(previous: Mapping[str, Any], current: Mapping[str, Any]) -> bool:
+    """Whether the current fiber segmentation fingerprint matches a prior run."""
+    return previous.get("schema_version") == RUN_MANIFEST_SCHEMA_VERSION and previous.get(
+        "stage_fingerprints", {}
+    ).get("fiber_segmentation") == current.get("stage_fingerprints", {}).get("fiber_segmentation")
+
+
+def load_run_manifest(path: Path) -> dict[str, Any] | None:
+    try:
+        raw = json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    return raw if isinstance(raw, dict) else None

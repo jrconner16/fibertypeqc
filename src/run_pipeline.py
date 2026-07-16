@@ -7,11 +7,17 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
+import tifffile
 
-from fibertypeqc.artifacts import build_run_manifest, write_run_manifest
+from fibertypeqc.artifacts import (
+    build_run_manifest,
+    can_reuse_fiber_labels,
+    load_run_manifest,
+    write_run_manifest,
+)
 from fibertypeqc.config import resolve_channel_config
 from fibertypeqc.model_manifest import load_model_manifest, validate_model_compatibility
-from fibertypeqc.panels import Panel
+from fibertypeqc.panels import Panel, validate_requested_domains
 from src.io_utils import (
     ensure_dir,
     extract_pixel_size_um,
@@ -95,6 +101,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
+        "--panel-config",
+        type=Path,
+        default=None,
+        help="Preferred alias for --channel-config; accepts the canonical semantic panel schema.",
+    )
+    p.add_argument(
         "--membrane-channel",
         type=int,
         default=None,
@@ -129,6 +141,21 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Optional IIx marker channel index.",
+    )
+    p.add_argument(
+        "--emhc-channel",
+        type=int,
+        default=None,
+        help="Optional eMHC marker channel index; no regeneration call is activated yet.",
+    )
+    p.add_argument(
+        "--requested-domain",
+        action="append",
+        choices=["fiber_geometry", "fiber_identity", "regeneration", "nuclear_pathology"],
+        default=[],
+        help=(
+            "Explicit output domain to validate before processing; may be supplied more than once."
+        ),
     )
     p.add_argument(
         "--type1-channel",
@@ -268,6 +295,12 @@ def build_parser() -> argparse.ArgumentParser:
             "'summary' keeps only the summary CSV."
         ),
     )
+    p.add_argument(
+        "--reuse-artifacts",
+        choices=["auto", "never", "required"],
+        default="never",
+        help="Reuse compatible cached fiber labels from the same output directory.",
+    )
 
     p.add_argument("--bootstrap-reps", type=int, default=500)
     p.add_argument("--bootstrap-seed", type=int, default=0)
@@ -282,12 +315,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.channel_config is not None and args.panel_config is not None:
+        raise ValueError("Use only one of --panel-config and --channel-config.")
+    config_path = args.panel_config or args.channel_config
     channel_cfg, channel_warnings = resolve_channel_config(
-        channel_config_path=args.channel_config,
+        channel_config_path=config_path,
         i_channel=args.i_channel,
         iia_channel=args.iia_channel,
         iib_channel=args.iib_channel,
         iix_channel=args.iix_channel,
+        emhc_channel=args.emhc_channel,
         dapi_channel=args.dapi_channel,
         type1_channel=args.type1_channel,
         type2_channel=args.type2_channel,
@@ -312,6 +349,7 @@ def main() -> None:
 
         panel = Panel.from_channel_config(channel_cfg)
         panel.validate(image_channel_count=n_channels)
+        validate_requested_domains(panel, tuple(args.requested_domain))
         validate_model_compatibility(panel, model_manifest)
 
     with stage(2, total_stages, "preprocess membrane channel"):
@@ -332,6 +370,7 @@ def main() -> None:
 
         stem = args.input.stem.replace(" ", "_")
         run_manifest_path = output_dir / f"{stem}_run.json"
+        labels_path = output_dir / f"{stem}_cellpose_labels.tif"
         seg_manifest = {
             "model": args.cellpose_model,
             "diameter": None if args.diameter <= 0 else args.diameter,
@@ -363,6 +402,26 @@ def main() -> None:
             classifier_path=args.classifier_path,
             model_manifest_path=args.model_manifest,
         )
+        reused_labels = False
+        labels = None
+        if args.reuse_artifacts != "never":
+            previous_manifest = load_run_manifest(run_manifest_path)
+            if (
+                previous_manifest
+                and labels_path.exists()
+                and can_reuse_fiber_labels(previous_manifest, run_manifest)
+            ):
+                labels = tifffile.imread(labels_path)
+                if labels.shape != image.shape[1:]:
+                    raise ValueError(
+                        f"Cached labels have shape {labels.shape}, expected {image.shape[1:]}."
+                    )
+                reused_labels = True
+            elif args.reuse_artifacts == "required":
+                raise ValueError(
+                    "Compatible cached fiber labels are required but were not found "
+                    "in the output directory."
+                )
         write_run_manifest(run_manifest_path, run_manifest)
 
     with stage(3, total_stages, "segment fibers with Cellpose"):
@@ -374,18 +433,21 @@ def main() -> None:
             use_mps=(not args.cpu),
             normalize=bool(args.cellpose_normalize),
         )
-        labels_model, runtime_s = run_cellpose(prep.membrane_model_input, seg_cfg)
+        if reused_labels:
+            labels_model, runtime_s = None, 0.0
+            print("reused compatible cached fiber labels")
+        else:
+            labels_model, runtime_s = run_cellpose(prep.membrane_model_input, seg_cfg)
 
     with stage(4, total_stages, "restore full-resolution labels"):
-        labels_crop = upsample_labels_nearest(
-            labels_model,
-            target_shape=prep.membrane_crop.shape,
-            factor=prep_cfg.downsample_factor,
-        )
-        labels = paste_crop_labels(labels_crop, prep.membrane_full.shape, prep.crop_slices)
-
-        labels_path = output_dir / f"{stem}_cellpose_labels.tif"
-        save_labels(labels_path, labels)
+        if not reused_labels:
+            labels_crop = upsample_labels_nearest(
+                labels_model,
+                target_shape=prep.membrane_crop.shape,
+                factor=prep_cfg.downsample_factor,
+            )
+            labels = paste_crop_labels(labels_crop, prep.membrane_full.shape, prep.crop_slices)
+            save_labels(labels_path, labels)
 
     with stage(5, total_stages, "extract fiber features + classify types"):
         iib_threshold = args.iib_threshold

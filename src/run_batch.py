@@ -43,6 +43,7 @@ class BatchChannelOverrides:
     iia_channel: int | None = None
     iib_channel: int | None = None
     iix_channel: int | None = None
+    emhc_channel: int | None = None
     type1_channel: int | None = None
     type2_channel: int | None = None
 
@@ -57,6 +58,7 @@ class BatchChannelOverrides:
                 self.iia_channel,
                 self.iib_channel,
                 self.iix_channel,
+                self.emhc_channel,
                 self.type1_channel,
                 self.type2_channel,
             )
@@ -93,6 +95,7 @@ def build_batch_command(
     downsample_factor: int | None = None,
     export_diagnostics: bool = False,
     retain_mode: str = "full",
+    reuse_artifacts: str = "never",
 ) -> list[str]:
     """
     Build the frozen v0 pipeline command for a single image.
@@ -130,6 +133,8 @@ def build_batch_command(
         str(downsample_factor or V0_PARAMS["downsample_factor"]),
         "--retain-mode",
         retain_mode,
+        "--reuse-artifacts",
+        reuse_artifacts,
     ]
     if export_diagnostics:
         cmd.append("--export-diagnostics")
@@ -157,6 +162,7 @@ def build_batch_command(
         ("--iia-channel", channel_overrides.iia_channel),
         ("--iib-channel", channel_overrides.iib_channel),
         ("--iix-channel", channel_overrides.iix_channel),
+        ("--emhc-channel", channel_overrides.emhc_channel),
         ("--type1-channel", channel_overrides.type1_channel),
         ("--type2-channel", channel_overrides.type2_channel),
     ]
@@ -182,9 +188,7 @@ def _load_input_manifest(
         raise ValueError(f"{path} missing column: image_id")
     path_columns = {"input_path", "input_relpath"} & set(df.columns)
     if len(path_columns) != 1:
-        raise ValueError(
-            f"{path} must contain exactly one of input_path or input_relpath"
-        )
+        raise ValueError(f"{path} must contain exactly one of input_path or input_relpath")
     path_column = next(iter(path_columns))
     if path_column == "input_relpath" and input_root is None:
         raise ValueError(f"{path} uses input_relpath; provide --input-root")
@@ -225,6 +229,7 @@ def run_single_image(
     downsample_factor: int | None = None,
     export_diagnostics: bool = False,
     retain_mode: str = "full",
+    reuse_artifacts: str = "never",
 ) -> dict:
     """
     Process a single image through the v0 pipeline.
@@ -260,6 +265,7 @@ def run_single_image(
         downsample_factor=downsample_factor,
         export_diagnostics=export_diagnostics,
         retain_mode=retain_mode,
+        reuse_artifacts=reuse_artifacts,
     )
 
     try:
@@ -365,8 +371,7 @@ def main() -> None:
         type=Path,
         default=None,
         help=(
-            "Optional classifier override. When omitted, the frozen v0 alpha "
-            "classifier is used."
+            "Optional classifier override. When omitted, the frozen v0 alpha classifier is used."
         ),
     )
     parser.add_argument(
@@ -384,12 +389,19 @@ def main() -> None:
             "channel defaults are used."
         ),
     )
+    parser.add_argument(
+        "--panel-config",
+        type=Path,
+        default=None,
+        help="Preferred alias for --channel-config, including canonical semantic panel YAML.",
+    )
     parser.add_argument("--membrane-channel", type=int, default=None)
     parser.add_argument("--dapi-channel", type=int, default=None)
     parser.add_argument("--i-channel", type=int, default=None)
     parser.add_argument("--iia-channel", type=int, default=None)
     parser.add_argument("--iib-channel", type=int, default=None)
     parser.add_argument("--iix-channel", type=int, default=None)
+    parser.add_argument("--emhc-channel", type=int, default=None)
     parser.add_argument("--type1-channel", type=int, default=None)
     parser.add_argument("--type2-channel", type=int, default=None)
     parser.add_argument(
@@ -409,8 +421,16 @@ def main() -> None:
             "'tables' removes label TIFFs; 'summary' keeps only summary CSVs."
         ),
     )
+    parser.add_argument(
+        "--reuse-artifacts",
+        choices=["auto", "never", "required"],
+        default="never",
+        help="Reuse compatible cached fiber labels within each per-image output directory.",
+    )
 
     args = parser.parse_args()
+    if args.channel_config is not None and args.panel_config is not None:
+        parser.error("use only one of --panel-config and --channel-config")
 
     # Show v0 params if requested
     if args.show_v0_params:
@@ -453,13 +473,14 @@ def main() -> None:
     setup_logging(output_dir)
 
     channel_overrides = BatchChannelOverrides(
-        channel_config=args.channel_config,
+        channel_config=args.panel_config or args.channel_config,
         membrane_channel=args.membrane_channel,
         dapi_channel=args.dapi_channel,
         i_channel=args.i_channel,
         iia_channel=args.iia_channel,
         iib_channel=args.iib_channel,
         iix_channel=args.iix_channel,
+        emhc_channel=args.emhc_channel,
         type1_channel=args.type1_channel,
         type2_channel=args.type2_channel,
     )
@@ -493,8 +514,8 @@ def main() -> None:
             "This batch run is using channel/config overrides and is not "
             "the strict frozen v0 baseline."
         )
-        if args.channel_config is not None:
-            logger.warning(f"  channel_config: {args.channel_config}")
+        if channel_overrides.channel_config is not None:
+            logger.warning(f"  channel_config: {channel_overrides.channel_config}")
         for key in (
             "membrane_channel",
             "dapi_channel",
@@ -502,6 +523,7 @@ def main() -> None:
             "iia_channel",
             "iib_channel",
             "iix_channel",
+            "emhc_channel",
             "type1_channel",
             "type2_channel",
         ):
@@ -522,6 +544,7 @@ def main() -> None:
             downsample_factor=args.downsample_factor,
             export_diagnostics=args.export_diagnostics,
             retain_mode=args.retain_mode,
+            reuse_artifacts=args.reuse_artifacts,
         )
         results.append(result)
 

@@ -32,6 +32,29 @@ classification:
     requires_negative_markers: [iia, iib]
 ```
 
+## Canonical semantic schema
+
+New configs may use the public semantic channel names directly. `--panel-config` is the preferred
+flag; `--channel-config` remains a compatibility alias. At most four non-null observed channels may
+be configured for one run.
+
+```yaml
+channels:
+  laminin: 3
+  dapi: 0
+  type_i: null
+  type_iia: 2
+  type_iib: 1
+  type_iix: null
+  emhc: null
+```
+
+The legacy `membrane`/`markers` format remains accepted. eMHC can be mapped and recorded now, but
+requesting regeneration fails clearly until Phase 4 implements that output. Likewise,
+`--requested-domain nuclear_pathology` requires DAPI and then stops before processing until the
+Phase 5 DAPI workflow exists. These preflight failures prevent a missing marker from being silently
+treated as a negative finding.
+
 ## `channels`
 
 ### Required
@@ -68,8 +91,13 @@ The no-sidecar path remains the frozen IIa/IIb/laminin compatibility adapter.
 The artifact module also exposes the documented cache-invalidation decision matrix. Classifier or
 threshold changes reuse fiber/nuclear labels and recompute downstream features; changing fiber
 Cellpose settings invalidates fiber labels, while a future nuclear Cellpose change invalidates only
-nuclear labels. The current CLI does not yet perform automatic reuse—this is the tested contract
-that a later `--reuse-artifacts` mode will use.
+nuclear labels. The CLI implements the fiber-label portion of this contract now; nuclear reuse will
+be added with the future DAPI stage.
+
+`--reuse-artifacts auto|never|required` is now available in both single-image and batch commands.
+It reuses only a same-output-directory `*_cellpose_labels.tif` whose prior `run.json` has an
+identical fiber-segmentation fingerprint. `required` stops before Cellpose if no compatible labels
+exist; `auto` recomputes safely. Cached label shape is also checked against the current image.
 
 ## `classification.residual_inference`
 
