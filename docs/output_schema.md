@@ -20,6 +20,8 @@ Core columns:
 - `label`: segmentation label ID.
 - `area`: raw label area in pixels.
 - `area_um2`: raw label area in square microns when image pixel-size metadata is available.
+- `feret_max_px`, `feret_min_px`: maximum and minimum Feret diameters in pixel units.
+- `feret_max_um`, `feret_min_um`: Feret diameters in microns when pixel-size metadata is available.
 - `area_erode_<N>px`: area after inward label erosion by `N` pixels, when requested.
 - `area_erode_<N>px_um2`: eroded area in square microns when pixel-size metadata is available.
 

@@ -8,7 +8,9 @@ import pandas as pd
 from scipy.ndimage import find_objects, gaussian_filter
 from scipy.ndimage import mean as ndi_mean
 from scipy.ndimage import zoom as ndi_zoom
+from scipy.spatial import ConvexHull
 from skimage.filters import threshold_otsu, threshold_yen
+from skimage.measure import find_contours
 
 from src.label_masks import erode_labels
 
@@ -148,6 +150,81 @@ def _marker_snr(values: pd.Series, tissue_median: float, tissue_mad: float) -> p
     return ((values.astype(np.float32) - float(tissue_median)) / denom).astype(np.float32)
 
 
+def _convex_hull_points(points: np.ndarray) -> np.ndarray:
+    unique = np.unique(np.asarray(points, dtype=np.float32), axis=0)
+    if unique.shape[0] <= 2:
+        return unique
+    hull = ConvexHull(unique)
+    return unique[hull.vertices]
+
+
+def _feret_from_hull_points(points: np.ndarray) -> tuple[float, float]:
+    hull = _convex_hull_points(points)
+    if hull.shape[0] == 0:
+        return 0.0, 0.0
+    if hull.shape[0] == 1:
+        return 0.0, 0.0
+    if hull.shape[0] == 2:
+        diameter = float(np.linalg.norm(hull[1] - hull[0]))
+        return diameter, diameter
+
+    diffs = hull[:, None, :] - hull[None, :, :]
+    max_feret = float(np.sqrt(np.max(np.sum(diffs * diffs, axis=2))))
+
+    min_feret = np.inf
+    for i in range(hull.shape[0]):
+        p0 = hull[i]
+        p1 = hull[(i + 1) % hull.shape[0]]
+        edge = p1 - p0
+        edge_len = float(np.linalg.norm(edge))
+        if edge_len <= 1e-6:
+            continue
+        normal = np.array([-edge[1], edge[0]], dtype=np.float32) / edge_len
+        projections = hull @ normal
+        width = float(projections.max() - projections.min())
+        if width < min_feret:
+            min_feret = width
+
+    if not np.isfinite(min_feret):
+        min_feret = 0.0
+    return max_feret, float(min_feret)
+
+
+def _feret_diameters_by_label(
+    labels: np.ndarray,
+    label_ids: np.ndarray,
+    *,
+    pixel_size_x: float = 1.0,
+    pixel_size_y: float = 1.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    max_feret = np.zeros(len(label_ids), dtype=np.float32)
+    min_feret = np.zeros(len(label_ids), dtype=np.float32)
+    object_slices = find_objects(labels)
+
+    for i, lid in enumerate(label_ids):
+        if lid <= 0 or lid > len(object_slices):
+            continue
+        slc = object_slices[int(lid) - 1]
+        if slc is None:
+            continue
+        local = labels[slc] == lid
+        if not np.any(local):
+            continue
+        contours = find_contours(np.pad(local.astype(np.uint8), 1), 0.5)
+        if not contours:
+            continue
+        points = np.concatenate(contours, axis=0).astype(np.float32, copy=False)
+        # Convert contour coordinates to (x, y) with optional physical spacing.
+        xy = np.empty_like(points)
+        xy[:, 0] = (points[:, 1] - 1.0) * float(pixel_size_x)
+        xy[:, 1] = (points[:, 0] - 1.0) * float(pixel_size_y)
+        max_value, min_value = _feret_from_hull_points(xy)
+        max_feret[i] = max_value
+        min_feret[i] = min_value
+
+    return max_feret, min_feret
+
+
 def build_feature_table(
     df: pd.DataFrame,
     marker_specs: tuple[MarkerSpec, MarkerSpec],
@@ -183,6 +260,9 @@ def build_feature_table(
 
     out = pd.DataFrame(index=df.index)
     out["area"] = df["area"].astype(np.float32)
+    for col in ("feret_max_px", "feret_min_px", "feret_max_um", "feret_min_um"):
+        if col in df.columns:
+            out[col] = df[col].astype(np.float32)
     out[f"{primary_prefix}_mean"] = primary_mean
     out[f"{secondary_prefix}_mean"] = secondary_mean
     out[f"{primary_prefix}_p75"] = primary_p75
@@ -856,6 +936,8 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
             columns=[
                 "label",
                 "area",
+                "feret_max_px",
+                "feret_min_px",
                 "type1_mean",
                 "type2_mean",
                 "type1_pctl",
@@ -890,9 +972,10 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
                 "typing_signal_qc_flags",
                 "classifier_path",
             ]
-        )
+    )
 
     areas = np.bincount(labels.ravel())[label_ids]
+    feret_max_px, feret_min_px = _feret_diameters_by_label(labels, label_ids)
     marker_specs = _default_marker_specs(cfg)
     active_marker_specs = _active_marker_specs(cfg)
 
@@ -916,6 +999,8 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
         {
             "label": label_ids.astype(np.int32),
             "area": areas.astype(np.int32),
+            "feret_max_px": feret_max_px,
+            "feret_min_px": feret_min_px,
             "typing_interior_area": interior_areas.astype(np.int32),
             "typing_erode_px": int(cfg.typing_erode_px),
             "typing_preprocess": str(cfg.typing_preprocess),
@@ -936,6 +1021,14 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
         df["pixel_size_x_um"] = float(cfg.pixel_size_x_um)
         df["pixel_size_y_um"] = float(cfg.pixel_size_y_um)
         df["area_um2"] = df["area"].astype(np.float32) * pixel_area_um2
+        feret_max_um, feret_min_um = _feret_diameters_by_label(
+            labels,
+            label_ids,
+            pixel_size_x=float(cfg.pixel_size_x_um),
+            pixel_size_y=float(cfg.pixel_size_y_um),
+        )
+        df["feret_max_um"] = feret_max_um
+        df["feret_min_um"] = feret_min_um
         for erode_px in cfg.csa_erode_px:
             erode_px = int(erode_px)
             if erode_px <= 0:

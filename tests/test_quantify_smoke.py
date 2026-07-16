@@ -49,6 +49,10 @@ def test_quantify_labels_smoke_with_synthetic_channels():
     assert fibers["available_markers"].tolist() == ["iib|iia", "iib|iia"]
     assert fibers["area"].tolist() == [20, 20]
     assert fibers["area_um2"].tolist() == pytest.approx([2.5, 2.5])
+    assert fibers["feret_max_px"].tolist() == pytest.approx([5.830952, 5.830952], rel=1e-5)
+    assert fibers["feret_min_px"].tolist() == pytest.approx([4.0, 4.0], rel=1e-5)
+    assert fibers["feret_max_um"].tolist() == pytest.approx([2.236068, 2.236068], rel=1e-5)
+    assert fibers["feret_min_um"].tolist() == pytest.approx([1.25, 1.25], rel=1e-5)
     assert "area_erode_1px_um2" in fibers.columns
     assert fibers["typing_erode_px"].tolist() == [0, 0]
 
@@ -67,6 +71,8 @@ def test_quantify_labels_returns_expected_columns_for_empty_labels():
         "available_markers",
         "needs_review",
         "classifier_path",
+        "feret_max_px",
+        "feret_min_px",
     }.issubset(fibers.columns)
 
 
@@ -195,6 +201,10 @@ def test_build_feature_table_preserves_frozen_baseline_and_adds_experimental_col
     df = pd.DataFrame(
         {
             "area": [10, 20],
+            "feret_max_px": [4.0, 5.0],
+            "feret_min_px": [3.0, 4.0],
+            "feret_max_um": [2.0, 2.5],
+            "feret_min_um": [1.5, 2.0],
             "type1_mean": [1.0, 2.0],
             "type2_mean": [3.0, 4.0],
             "type1_p75": [1.5, 2.5],
@@ -243,6 +253,7 @@ def test_build_feature_table_preserves_frozen_baseline_and_adds_experimental_col
             },
         },
     )
+    assert {"feret_max_px", "feret_min_px", "feret_max_um", "feret_min_um"}.issubset(feats.columns)
 
     assert set(FROZEN_ALPHA_BASELINE_FEATURES).issubset(feats.columns)
     assert {"type_cov_sum", "type1_snr_mean", "marker_i_mean", "marker_i_snr_mean"}.issubset(
