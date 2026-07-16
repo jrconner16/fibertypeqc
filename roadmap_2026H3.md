@@ -153,6 +153,12 @@ The specifications must answer these questions before implementation begins:
 
 ## Phase 2 — Panel and Restartable Artifact Foundation
 
+### Status: complete (2026-07-16)
+
+Implementation is recorded in `b8b5417`, `c888ad4`, and `8138209`. The frozen baseline was
+validated on two local one-month images: labels and every shared numeric fiber-table value matched
+the trusted outputs exactly. The only added fiber columns were the planned Feret measurements.
+
 ### Scope
 
 - Implement the fixed marker vocabulary and semantic channel mapping.
@@ -197,6 +203,11 @@ Names may be refined during specification, but the following invalidation rules 
 - One representative full image completes with restartable artifacts.
 
 ## Phase 3 — Type I and Semantic Myosin Features
+
+### Status: in progress
+
+The first slice remains diagnostics-only: semantic observed-marker features may be added without
+changing legacy fiber calls, residual inference, or the stable `*_fibers.csv` schema.
 
 ### Data roles
 
