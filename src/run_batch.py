@@ -178,6 +178,12 @@ def output_stem(input_file: Path) -> str:
     return input_file.resolve().stem.replace(" ", "_")
 
 
+def _pipeline_timing_lines(stdout: str) -> list[str]:
+    """Keep useful child-stage telemetry without logging its full summary dictionary."""
+    prefixes = ("[", "Cellpose device:", "reused compatible", "total runtime:")
+    return [line for line in stdout.splitlines() if line.startswith(prefixes)]
+
+
 def _load_input_manifest(
     path: Path,
     *,
@@ -269,7 +275,7 @@ def run_single_image(
     )
 
     try:
-        subprocess.run(
+        completed = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
@@ -278,6 +284,8 @@ def run_single_image(
             cwd=PROJECT_ROOT,
         )
         logger.info(f"✓ Completed: {input_file.name}")
+        for line in _pipeline_timing_lines(completed.stdout):
+            logger.info(f"  pipeline: {line}")
 
         # Try to read fiber count from output CSV
         stem = output_stem(input_file)
