@@ -8,7 +8,15 @@ from pathlib import Path
 import pandas as pd
 
 from src.analyze_iia_gate import _apply_iia_gate, _gate_mask, derive_iia_gate_thresholds
-from src.run_batch import PROJECT_ROOT, V0_PARAMS, find_input_files, output_stem, setup_logging
+from src.run_batch import (
+    PROJECT_ROOT,
+    V0_PARAMS,
+    BatchChannelOverrides,
+    _load_input_manifest,
+    find_input_files,
+    output_stem,
+    setup_logging,
+)
 
 logger = logging.getLogger("src.run_batch")
 
@@ -24,13 +32,31 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--input-manifest",
         type=Path,
-        help="CSV with columns image_id,input_path for explicit per-image inputs.",
+        help=(
+            "CSV with image_id,input_path or portable image_id,input_relpath rows "
+            "for explicit per-image inputs."
+        ),
+    )
+    parser.add_argument(
+        "--input-root",
+        type=Path,
+        default=None,
+        help="Root directory used to resolve input_relpath values in --input-manifest.",
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--classifier-path", type=Path, required=True)
     parser.add_argument("--true-iia-reviewed-glob", type=str, required=True)
     parser.add_argument("--gate-quantile", type=float, default=0.01)
     parser.add_argument("--downsample-factor", type=int, default=None)
+    parser.add_argument("--channel-config", type=Path, default=None)
+    parser.add_argument("--membrane-channel", type=int, default=None)
+    parser.add_argument("--dapi-channel", type=int, default=None)
+    parser.add_argument("--i-channel", type=int, default=None)
+    parser.add_argument("--iia-channel", type=int, default=None)
+    parser.add_argument("--iib-channel", type=int, default=None)
+    parser.add_argument("--iix-channel", type=int, default=None)
+    parser.add_argument("--type1-channel", type=int, default=None)
+    parser.add_argument("--type2-channel", type=int, default=None)
     parser.add_argument("--export-diagnostics", action="store_true")
     parser.add_argument(
         "--retain-mode",
@@ -68,6 +94,7 @@ def _build_pipeline_command(
     input_file: Path,
     output_dir: Path,
     classifier_path: Path,
+    channel_overrides: BatchChannelOverrides,
     downsample_factor: int | None,
     export_diagnostics: bool,
     retain_mode: str,
@@ -98,32 +125,37 @@ def _build_pipeline_command(
         str(downsample_factor or V0_PARAMS["downsample_factor"]),
         "--retain-mode",
         retain_mode,
-        "--type1-channel",
-        str(V0_PARAMS["type1_channel"]),
-        "--type2-channel",
-        str(V0_PARAMS["type2_channel"]),
-        "--membrane-channel",
-        str(V0_PARAMS["membrane_channel"]),
     ]
+    if not channel_overrides.uses_nonbaseline_channel_config():
+        cmd.extend(
+            [
+                "--type1-channel",
+                str(V0_PARAMS["type1_channel"]),
+                "--type2-channel",
+                str(V0_PARAMS["type2_channel"]),
+                "--membrane-channel",
+                str(V0_PARAMS["membrane_channel"]),
+            ]
+        )
+    else:
+        if channel_overrides.channel_config is not None:
+            cmd.extend(["--channel-config", str(channel_overrides.channel_config.resolve())])
+        explicit_flags: list[tuple[str, int | Path | None]] = [
+            ("--membrane-channel", channel_overrides.membrane_channel),
+            ("--dapi-channel", channel_overrides.dapi_channel),
+            ("--i-channel", channel_overrides.i_channel),
+            ("--iia-channel", channel_overrides.iia_channel),
+            ("--iib-channel", channel_overrides.iib_channel),
+            ("--iix-channel", channel_overrides.iix_channel),
+            ("--type1-channel", channel_overrides.type1_channel),
+            ("--type2-channel", channel_overrides.type2_channel),
+        ]
+        for flag, value in explicit_flags:
+            if value is not None:
+                cmd.extend([flag, str(value)])
     if export_diagnostics:
         cmd.append("--export-diagnostics")
     return cmd
-
-
-def _load_manifest(path: Path) -> list[tuple[str, Path]]:
-    df = pd.read_csv(path)
-    required = {"image_id", "input_path"}
-    missing = sorted(required - set(df.columns))
-    if missing:
-        raise ValueError(f"{path} missing columns: {', '.join(missing)}")
-    rows: list[tuple[str, Path]] = []
-    for row in df.itertuples(index=False):
-        image_id = str(row.image_id).strip()
-        input_path = Path(str(row.input_path)).expanduser()
-        if not image_id:
-            raise ValueError(f"{path} contains blank image_id")
-        rows.append((image_id, input_path))
-    return rows
 
 
 def _canonicalize_output_names(image_output_dir: Path, stem: str, canonical_image_id: str) -> None:
@@ -199,16 +231,29 @@ def main() -> None:
     args = build_parser().parse_args()
     if bool(args.input_dir) == bool(args.input_manifest):
         raise SystemExit("Provide exactly one of --input-dir or --input-manifest.")
+    if args.input_root is not None and args.input_manifest is None:
+        raise SystemExit("--input-root requires --input-manifest.")
     manifest_rows: list[tuple[str, Path]] | None = None
     if args.input_manifest is not None:
         if not args.input_manifest.is_file():
             raise SystemExit(f"Input manifest does not exist: {args.input_manifest}")
-        manifest_rows = _load_manifest(args.input_manifest)
+        manifest_rows = _load_input_manifest(args.input_manifest, input_root=args.input_root)
     else:
         if not args.input_dir.is_dir():
             raise SystemExit(f"Input directory does not exist: {args.input_dir}")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     setup_logging(args.output_dir)
+    channel_overrides = BatchChannelOverrides(
+        channel_config=args.channel_config,
+        membrane_channel=args.membrane_channel,
+        dapi_channel=args.dapi_channel,
+        i_channel=args.i_channel,
+        iia_channel=args.iia_channel,
+        iib_channel=args.iib_channel,
+        iix_channel=args.iix_channel,
+        type1_channel=args.type1_channel,
+        type2_channel=args.type2_channel,
+    )
 
     true_iia_reviewed = _load_true_iia_reviewed(args.true_iia_reviewed_glob)
     thresholds = derive_iia_gate_thresholds(true_iia_reviewed, gate_quantile=args.gate_quantile)
@@ -224,6 +269,26 @@ def main() -> None:
             raise SystemExit(f"No .czi/.tif/.tiff files found in {args.input_dir}")
         image_rows = [(path.stem, path) for path in image_files]
     logger.info("Found %d image(s) to process", len(image_rows))
+    if channel_overrides.uses_nonbaseline_channel_config():
+        logger.warning(
+            "This candidate batch run is using channel/config overrides and is not "
+            "the strict frozen v0 baseline channel mapping."
+        )
+        if args.channel_config is not None:
+            logger.warning("  channel_config: %s", args.channel_config)
+        for key in (
+            "membrane_channel",
+            "dapi_channel",
+            "i_channel",
+            "iia_channel",
+            "iib_channel",
+            "iix_channel",
+            "type1_channel",
+            "type2_channel",
+        ):
+            value = getattr(args, key)
+            if value is not None:
+                logger.warning("  override %s: %s", key, value)
 
     results: list[dict[str, object]] = []
     for index, (image_id, input_file) in enumerate(image_rows, start=1):
@@ -234,6 +299,7 @@ def main() -> None:
             input_file=input_file,
             output_dir=image_output_dir,
             classifier_path=args.classifier_path,
+            channel_overrides=channel_overrides,
             downsample_factor=args.downsample_factor,
             export_diagnostics=args.export_diagnostics,
             retain_mode=args.retain_mode,

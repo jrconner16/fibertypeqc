@@ -205,8 +205,8 @@ Keep benchmark roles explicit. Do not collapse all reviewed fibers into one undi
 - Source: images with no manual-train supervision and no tuning contact.
 - Purpose: cleaner generalization check before default promotion.
 - Status: untouched upstream images are now split into:
-  - `outputs/validation/promotion_holdout_generalization_manifest.csv` for development-time generalization and robustness checks.
-  - `outputs/validation/promotion_holdout_generalization_reserve_manifest.csv` for a small protected backup promotion/generalization reserve.
+  - `manifests/promotion_holdout_generalization_manifest.csv` for development-time generalization and robustness checks.
+  - `manifests/promotion_holdout_generalization_reserve_manifest.csv` for a small protected backup promotion/generalization reserve.
 - Current state: the first 8-image run from the development manifest should be treated as a successful `generalization_pilot` rather than promotion-grade proof.
 - Pilot readout: the untouched same-project pilot was directionally stable, showed material candidate-vs-frozen composition differences, and included one repeated-source row that is useful for robustness but not ideal for final promotion claims.
 - Reserve policy: keep the protected reserve out of routine candidate iteration unless a cleaner external independently labeled holdout does not materialize.
@@ -230,8 +230,8 @@ Keep benchmark roles explicit. Do not collapse all reviewed fibers into one undi
 - Frozen and candidate comparisons must use the same source manifest.
 - Keep benchmark manifests role-specific:
   - `outputs/validation/myosight_validation_canonical_manifest.csv` is the touched 32-image MyoSight descriptive cohort contract.
-  - `outputs/validation/promotion_holdout_generalization_manifest.csv` is the development-time untouched upstream generalization/robustness contract.
-  - `outputs/validation/promotion_holdout_generalization_reserve_manifest.csv` is the small protected untouched upstream reserve for backup promotion/generalization use.
+  - `manifests/promotion_holdout_generalization_manifest.csv` is the development-time untouched upstream generalization/robustness contract.
+  - `manifests/promotion_holdout_generalization_reserve_manifest.csv` is the small protected untouched upstream reserve for backup promotion/generalization use.
 - Section-export images must remain pinned to the trusted normalized section-export source branch unless a better section workflow is validated.
 - Never compare candidate and frozen count/typing summaries if they came from different section-image path branches.
 
