@@ -33,7 +33,7 @@ class Panel:
                 "type_iia": config.iia_channel,
                 "type_iib": config.iib_channel,
                 "type_iix": config.iix_channel,
-                "emhc": None,
+                "emhc": config.emhc_channel,
             }
         )
 
@@ -66,3 +66,26 @@ class Panel:
                 raise ValueError(
                     f"Invalid {name} channel {index} for image with {image_channel_count} channels."
                 )
+
+
+def validate_requested_domains(panel: Panel, domains: tuple[str, ...]) -> None:
+    """Validate explicit output requests without enabling those domains prematurely."""
+    for domain in domains:
+        if domain in {"fiber_geometry", "fiber_identity"}:
+            continue
+        if domain == "regeneration":
+            if panel.channels.get("emhc") is None:
+                raise ValueError("Requested regeneration output requires an observed eMHC channel.")
+            raise ValueError(
+                "Regeneration output is not implemented yet; eMHC is planned for Phase 4."
+            )
+        if domain == "nuclear_pathology":
+            if panel.channels.get("dapi") is None:
+                raise ValueError(
+                    "Requested nuclear pathology output requires an observed DAPI channel."
+                )
+            raise ValueError(
+                "Nuclear pathology output is not implemented yet; "
+                "DAPI processing is planned for Phase 5."
+            )
+        raise ValueError(f"Unsupported requested domain: {domain}.")

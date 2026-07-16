@@ -1,6 +1,6 @@
 import pytest
 
-from fibertypeqc.panels import Panel
+from fibertypeqc.panels import Panel, validate_requested_domains
 
 
 def test_panel_validates_image_bounds_and_fingerprint():
@@ -29,3 +29,8 @@ def test_panel_rejects_duplicate_indices_after_cli_resolution():
     panel = Panel({"laminin": 0, "type_iia": 1, "type_iib": 1})
     with pytest.raises(ValueError, match="unique"):
         panel.validate(image_channel_count=2)
+
+
+def test_requested_nuclear_domain_requires_dapi():
+    with pytest.raises(ValueError, match="DAPI"):
+        validate_requested_domains(Panel({"laminin": 0}), ("nuclear_pathology",))

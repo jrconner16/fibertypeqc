@@ -27,6 +27,27 @@ def test_load_channel_config_reads_required_channels(tmp_path):
     assert cfg.type2_channel == 1
 
 
+def test_load_channel_config_reads_canonical_semantic_panel(tmp_path):
+    path = write_yaml(
+        tmp_path / "panel.yml",
+        "channels:\n"
+        "  laminin: 3\n"
+        "  dapi: 0\n"
+        "  type_i: null\n"
+        "  type_iia: 2\n"
+        "  type_iib: 1\n"
+        "  type_iix: null\n"
+        "  emhc: null\n",
+    )
+    cfg = load_channel_config(path)
+    assert (cfg.membrane_channel, cfg.dapi_channel, cfg.iia_channel, cfg.iib_channel) == (
+        3,
+        0,
+        2,
+        1,
+    )
+
+
 def test_load_channel_config_rejects_missing_channels_block(tmp_path):
     path = write_yaml(tmp_path / "channels.yml", "type1: 0\n")
 

@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 MARKER_NAMES = ("i", "iia", "iib", "iix")
+PANEL_MARKER_NAMES = (*MARKER_NAMES, "emhc")
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,7 @@ class ChannelConfig:
     iia_channel: int = 1
     iib_channel: int = 0
     iix_channel: int | None = None
+    emhc_channel: int | None = None
     residual_inference_enabled: bool = True
     residual_target_class: str | None = "iix"
     residual_requires_negative_markers: tuple[str, ...] = ("iia", "iib")
@@ -60,6 +62,18 @@ _LEGACY_CHANNEL_KEY_ALIASES = {
     "iib_channel": "iib_channel",
     "iix": "iix_channel",
     "iix_channel": "iix_channel",
+    "emhc": "emhc_channel",
+    "emhc_channel": "emhc_channel",
+}
+
+_CANONICAL_PANEL_CHANNEL_ALIASES = {
+    "laminin": "membrane_channel",
+    "dapi": "dapi_channel",
+    "type_i": "i_channel",
+    "type_iia": "iia_channel",
+    "type_iib": "iib_channel",
+    "type_iix": "iix_channel",
+    "emhc": "emhc_channel",
 }
 
 
@@ -142,9 +156,7 @@ def _parse_flat_channels(path: Path, channels: dict[str, object]) -> dict[str, o
         )
 
     missing = [
-        key
-        for key in ("iib_channel", "iia_channel", "membrane_channel")
-        if key not in normalized
+        key for key in ("iib_channel", "iia_channel", "membrane_channel") if key not in normalized
     ]
     if missing:
         pretty = ", ".join(
@@ -170,9 +182,7 @@ def _parse_nested_channels(path: Path, channels: dict[str, object]) -> dict[str,
     normalized: dict[str, object] = {}
     membrane_key = "membrane_channel" if "membrane_channel" in channels else "membrane"
     if membrane_key not in channels:
-        raise ValueError(
-            f"Channel config {path} is missing required channel entry: membrane."
-        )
+        raise ValueError(f"Channel config {path} is missing required channel entry: membrane.")
     normalized["membrane_channel"] = _validate_channel_value(
         "membrane",
         channels[membrane_key],
@@ -192,9 +202,9 @@ def _parse_nested_channels(path: Path, channels: dict[str, object]) -> dict[str,
         raise ValueError(
             f"Channel config {path} has invalid 'channels.markers' value. Expected a mapping."
         )
-    unknown_markers = sorted(set(markers) - set(MARKER_NAMES))
+    unknown_markers = sorted(set(markers) - set(PANEL_MARKER_NAMES))
     if unknown_markers:
-        allowed = ", ".join(MARKER_NAMES)
+        allowed = ", ".join(PANEL_MARKER_NAMES)
         raise ValueError(
             f"Channel config {path} has unknown marker keys: {', '.join(unknown_markers)}. "
             f"Allowed marker keys: {allowed}."
@@ -209,6 +219,23 @@ def _parse_nested_channels(path: Path, channels: dict[str, object]) -> dict[str,
     return normalized
 
 
+def _parse_canonical_panel_channels(path: Path, channels: dict[str, object]) -> dict[str, object]:
+    unknown_keys = sorted(set(channels) - set(_CANONICAL_PANEL_CHANNEL_ALIASES))
+    if unknown_keys:
+        allowed = ", ".join(_CANONICAL_PANEL_CHANNEL_ALIASES)
+        raise ValueError(
+            f"Panel config {path} has unknown channel keys: {', '.join(unknown_keys)}. "
+            f"Allowed keys: {allowed}."
+        )
+    if "laminin" not in channels:
+        raise ValueError(f"Panel config {path} is missing required channel entry: laminin.")
+    return {
+        target: _validate_channel_value(name, value, allow_none=(name != "laminin"))
+        for name, value in channels.items()
+        for target in (_CANONICAL_PANEL_CHANNEL_ALIASES[name],)
+    }
+
+
 def load_channel_config(path: Path) -> ChannelConfig:
     """Load panel-aware channel mapping from a YAML config file."""
     try:
@@ -219,33 +246,25 @@ def load_channel_config(path: Path) -> ChannelConfig:
         raise ValueError(f"Invalid YAML in channel config {path}: {exc}") from exc
 
     if raw is None:
-        raise ValueError(
-            f"Channel config {path} is empty. Expected a 'channels' mapping."
-        )
+        raise ValueError(f"Channel config {path} is empty. Expected a 'channels' mapping.")
     if not isinstance(raw, dict):
-        raise ValueError(
-            f"Channel config {path} must be a YAML mapping at the top level."
-        )
+        raise ValueError(f"Channel config {path} must be a YAML mapping at the top level.")
 
     channels = raw.get("channels")
     if channels is None:
-        raise ValueError(
-            f"Channel config {path} is missing required top-level key 'channels'."
-        )
+        raise ValueError(f"Channel config {path} is missing required top-level key 'channels'.")
     if not isinstance(channels, dict):
-        raise ValueError(
-            f"Channel config {path} has invalid 'channels' value. Expected a mapping."
-        )
+        raise ValueError(f"Channel config {path} has invalid 'channels' value. Expected a mapping.")
 
-    if "markers" in channels:
+    if "laminin" in channels:
+        normalized = _parse_canonical_panel_channels(path, channels)
+    elif "markers" in channels:
         normalized = _parse_nested_channels(path, channels)
     else:
         normalized = _parse_flat_channels(path, channels)
 
     if "membrane_channel" not in normalized:
-        raise ValueError(
-            f"Channel config {path} is missing required channel entry: membrane."
-        )
+        raise ValueError(f"Channel config {path} is missing required channel entry: membrane.")
 
     classification = raw.get("classification", {})
     if "classification" in raw and not isinstance(classification, dict):
@@ -259,9 +278,7 @@ def load_channel_config(path: Path) -> ChannelConfig:
     normalized["residual_requires_negative_markers"] = requires
 
     used_values = [
-        value
-        for key, value in normalized.items()
-        if key.endswith("_channel") and value is not None
+        value for key, value in normalized.items() if key.endswith("_channel") and value is not None
     ]
     if len(set(used_values)) != len(used_values):
         raise ValueError(
@@ -275,6 +292,7 @@ def load_channel_config(path: Path) -> ChannelConfig:
         iia_channel=normalized.get("iia_channel", DEFAULT_CHANNEL_CONFIG.iia_channel),
         iib_channel=normalized.get("iib_channel", DEFAULT_CHANNEL_CONFIG.iib_channel),
         iix_channel=normalized.get("iix_channel"),
+        emhc_channel=normalized.get("emhc_channel"),
         residual_inference_enabled=bool(normalized["residual_inference_enabled"]),
         residual_target_class=normalized["residual_target_class"],
         residual_requires_negative_markers=tuple(normalized["residual_requires_negative_markers"]),
@@ -288,6 +306,7 @@ def resolve_channel_config(
     iia_channel: int | None = None,
     iib_channel: int | None = None,
     iix_channel: int | None = None,
+    emhc_channel: int | None = None,
     dapi_channel: int | None = None,
     type1_channel: int | None,
     type2_channel: int | None,
@@ -305,6 +324,7 @@ def resolve_channel_config(
         "iia_channel": iia_channel,
         "iib_channel": iib_channel,
         "iix_channel": iix_channel,
+        "emhc_channel": emhc_channel,
         "dapi_channel": dapi_channel,
         "membrane_channel": membrane_channel,
     }
@@ -319,6 +339,7 @@ def resolve_channel_config(
         "iia_channel": resolved.iia_channel,
         "iib_channel": resolved.iib_channel,
         "iix_channel": resolved.iix_channel,
+        "emhc_channel": resolved.emhc_channel,
         "residual_inference_enabled": resolved.residual_inference_enabled,
         "residual_target_class": resolved.residual_target_class,
         "residual_requires_negative_markers": resolved.residual_requires_negative_markers,
@@ -329,6 +350,7 @@ def resolve_channel_config(
         "iia_channel": "iia-channel",
         "iib_channel": "iib-channel",
         "iix_channel": "iix-channel",
+        "emhc_channel": "emhc-channel",
         "dapi_channel": "dapi-channel",
         "membrane_channel": "membrane-channel",
     }
@@ -365,8 +387,7 @@ def resolve_channel_config(
                 f"{channel_config_path}:{key}={resolved_values[key]}"
             )
         warnings.append(
-            f"--{legacy_flag_names[key]} is a legacy alias for "
-            f"--{replacement_flag_names[key]}"
+            f"--{legacy_flag_names[key]} is a legacy alias for --{replacement_flag_names[key]}"
         )
         resolved_values[key] = cli_value
 
