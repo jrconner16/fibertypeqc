@@ -20,6 +20,8 @@ SEMANTIC_DIAGNOSTIC_SUFFIXES = (
     "coverage_high",
     "snr_mean",
     "snr_p90",
+    "center_mean",
+    "edge_mean",
 )
 
 # The legacy classifier's input contract is intentionally frozen.  New semantic
