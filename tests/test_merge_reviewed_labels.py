@@ -35,3 +35,22 @@ def test_merge_reviewed_labels_smoke_workflow():
         "iia",
     ]
     assert merged["final_type"].tolist() == ["iib", "iib", "iix", "uncertain", "hybrid"]
+
+
+def test_merge_reviewed_labels_preserves_manual_type_i_label():
+    fibers = pd.DataFrame({"label": [1], "fiber_type": ["unknown"]})
+    review = pd.DataFrame(
+        {
+            "fiber_id": [1],
+            "corrected_type": ["i"],
+            "is_uncertain": [False],
+            "is_hybrid": [False],
+            "is_excluded": [False],
+            "label_source": ["manual_gold"],
+        }
+    )
+
+    merged = merge_reviewed_labels(fibers, review)
+
+    assert merged.loc[0, "corrected_type"] == "i"
+    assert merged.loc[0, "final_type"] == "i"

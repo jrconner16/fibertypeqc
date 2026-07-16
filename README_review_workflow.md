@@ -66,6 +66,7 @@ For unusually noisy images, use stricter display settings:
 
 Hotkeys:
 
+- `i` = `Type I` (when a manually verified `--i-channel` is supplied)
 - `b` = `IIb`
 - `a` = `IIa`
 - `x` = `IIx` blank
@@ -97,6 +98,8 @@ Important columns:
 - `label_source`: `auto_rule`, `unreviewed`, or `manual_gold`
 - `final_type`: best current label for downstream analysis
 - `is_uncertain`, `is_hybrid`, `is_excluded`: manual flags
+
+`i` records a manual Type I review label only; it does not enable automatic Type I classification.
 
 ## 4. Debug one fiber
 

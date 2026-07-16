@@ -231,6 +231,7 @@ changing legacy fiber calls, residual inference, or the stable `*_fibers.csv` sc
 
 - [x] Versioned semantic mean/percentile/coverage/SNR diagnostics for observed markers.
 - [x] Center/edge semantic diagnostics, emitted only with optional diagnostics export.
+- [x] Type I manual-review support (display and labels only; no automatic Type I calls).
 - [x] Type I-compatible curated-label inventory and panel audit (see
   `docs/type_i_panel_audit.md`).
 - [ ] Type I candidate model and manifest; no automatic model selection.
