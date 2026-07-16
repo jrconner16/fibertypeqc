@@ -159,6 +159,13 @@ Implementation is recorded in `b8b5417`, `c888ad4`, and `8138209`. The frozen ba
 validated on two local one-month images: labels and every shared numeric fiber-table value matched
 the trusted outputs exactly. The only added fiber columns were the planned Feret measurements.
 
+### Compute posture
+
+Use CUDA-enabled Cellpose for HPC segmentation and MPS-enabled Cellpose for local macOS runs.
+Keep feature extraction and scikit-learn inference CPU-based, optimize and profile their algorithms,
+and parallelize independent images through the scheduler. A GPU feature-extraction backend is
+deferred unless a post-optimization profile demonstrates a material throughput need.
+
 ### Scope
 
 - Implement the fixed marker vocabulary and semantic channel mapping.

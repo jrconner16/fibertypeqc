@@ -11,6 +11,7 @@ from src.quantify_classify import (
     MarkerSpec,
     QCConfig,
     QuantifyConfig,
+    build_feature_diagnostics_table,
     build_feature_table,
     class_stats_with_ci,
     qc_flags_from_fibers,
@@ -146,6 +147,20 @@ def test_quantify_labels_collects_optional_marker_stats_without_changing_typing(
     assert {"i", "iia", "iib", "iix"} == set(fibers.attrs["marker_stats"])
     assert fibers.attrs["marker_stats"]["i"]["mean"][0] == pytest.approx(3.0)
     assert fibers.attrs["marker_stats"]["iix"]["mean"][1] == pytest.approx(4.0)
+
+    diagnostics = build_feature_diagnostics_table(fibers, QuantifyConfig())
+    assert diagnostics["feature_schema_version"].tolist() == [
+        "multiplanel_features.v1",
+        "multiplanel_features.v1",
+    ]
+    assert {
+        "type_i.mean",
+        "type_i.p90",
+        "type_i.coverage_high",
+        "type_i.snr_mean",
+        "type_iia.mean",
+        "type_iib.mean",
+    }.issubset(diagnostics.columns)
 
 
 def test_class_stats_can_canonicalize_legacy_labels():

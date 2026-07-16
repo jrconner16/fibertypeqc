@@ -12,6 +12,10 @@ from scipy.spatial import ConvexHull
 from skimage.filters import threshold_otsu, threshold_yen
 from skimage.measure import find_contours
 
+from fibertypeqc.feature_schema import (
+    MULTIPANEL_FEATURE_SCHEMA,
+    SEMANTIC_MARKER_NAMES,
+)
 from src.label_masks import erode_labels
 
 
@@ -370,7 +374,45 @@ def build_feature_diagnostics_table(
         if col in fibers.columns
     ]
     metadata = fibers.loc[:, metadata_cols].copy()
-    return pd.concat([metadata, feature_table], axis=1)
+    semantic_features = _semantic_diagnostic_features(
+        fibers.attrs.get("marker_stats"),
+        index=fibers.index,
+    )
+    semantic_features.insert(0, "feature_schema_version", MULTIPANEL_FEATURE_SCHEMA)
+    return pd.concat([metadata, feature_table, semantic_features], axis=1)
+
+
+def _semantic_diagnostic_features(
+    marker_stats_metadata: dict[str, dict[str, np.ndarray | float]] | None,
+    *,
+    index: pd.Index,
+) -> pd.DataFrame:
+    """Expose observed-marker features under the versioned semantic schema.
+
+    These diagnostics do not participate in frozen-alpha classification.
+    """
+    out = pd.DataFrame(index=index)
+    if marker_stats_metadata is None:
+        return out
+    for marker_name, stats in marker_stats_metadata.items():
+        semantic_name = SEMANTIC_MARKER_NAMES.get(marker_name)
+        if semantic_name is None:
+            continue
+        mean = pd.Series(np.asarray(stats["mean"], dtype=np.float32), index=index)
+        p75 = pd.Series(np.asarray(stats["p75"], dtype=np.float32), index=index)
+        p90 = pd.Series(np.asarray(stats["p90"], dtype=np.float32), index=index)
+        pctl = pd.Series(np.asarray(stats["pctl"], dtype=np.float32), index=index)
+        coverage = pd.Series(np.asarray(stats["coverage"], dtype=np.float32), index=index)
+        tissue_median = float(stats.get("tissue_median", 0.0))
+        tissue_mad = float(stats.get("tissue_mad", 1.0))
+        out[f"{semantic_name}.mean"] = mean
+        out[f"{semantic_name}.p75"] = p75
+        out[f"{semantic_name}.p90"] = p90
+        out[f"{semantic_name}.pctl"] = pctl
+        out[f"{semantic_name}.coverage_high"] = coverage
+        out[f"{semantic_name}.snr_mean"] = _marker_snr(mean, tissue_median, tissue_mad)
+        out[f"{semantic_name}.snr_p90"] = _marker_snr(p90, tissue_median, tissue_mad)
+    return out
 
 
 def _label_percentiles(
