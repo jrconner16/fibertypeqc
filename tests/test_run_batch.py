@@ -10,9 +10,28 @@ from src.run_batch import (
     V0_PARAMS,
     BatchChannelOverrides,
     _load_input_manifest,
+    _pipeline_timing_lines,
     build_batch_command,
     run_single_image,
 )
+
+
+def test_pipeline_timing_lines_excludes_summary_payload():
+    stdout = "\n".join(
+        [
+            "[1/7] prepare output + load image ...",
+            "Cellpose device: mps",
+            "summary: {'many': 'fields'}",
+            "[3/7] done: segment fibers with Cellpose (12.3s)",
+            "total runtime: 20.0s",
+        ]
+    )
+    assert _pipeline_timing_lines(stdout) == [
+        "[1/7] prepare output + load image ...",
+        "Cellpose device: mps",
+        "[3/7] done: segment fibers with Cellpose (12.3s)",
+        "total runtime: 20.0s",
+    ]
 
 
 def test_build_batch_command_uses_frozen_v0_flags_by_default(tmp_path):

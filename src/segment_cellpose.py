@@ -49,6 +49,7 @@ def run_cellpose(membrane_image: np.ndarray, cfg: CellposeConfig) -> tuple[np.nd
     if cfg.bsize != 256:
         raise ValueError("For Cellpose v4 cpsam, use bsize=256 to avoid shape mismatch errors")
 
+    print(f"Cellpose device: {_device_name(cfg.use_mps)}", flush=True)
     t0 = perf_counter()
     result = model.eval(
         membrane_image,
