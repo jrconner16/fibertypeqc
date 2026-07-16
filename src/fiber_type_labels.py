@@ -10,6 +10,7 @@ INTERNAL_TO_BIOLOGICAL = {
     "hybrid": "hybrid",
     "uncertain": "uncertain",
     "exclude": "exclude",
+    "i": "i",
     "iib": "iib",
     "iia": "iia",
     "iix": "iix",
@@ -23,7 +24,7 @@ BIOLOGICAL_TO_INTERNAL_MARKER = {
     "iia": "type2",
 }
 
-REVIEW_TYPES = ["iib", "iia", "iix", "hybrid", "uncertain", "exclude"]
+REVIEW_TYPES = ["i", "iib", "iia", "iix", "hybrid", "uncertain", "exclude"]
 
 
 def to_biological_label(value: object) -> str:

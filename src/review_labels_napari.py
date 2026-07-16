@@ -32,6 +32,7 @@ TYPE_TO_CODE = {
     "hybrid": 5,
     "uncertain": 6,
     "exclude": 7,
+    "i": 8,
 }
 CODE_COLORS = {
     1: "gray",
@@ -41,6 +42,7 @@ CODE_COLORS = {
     5: "cyan",
     6: "orange",
     7: "red",
+    8: "blue",
 }
 CODE_RGBA = {
     1: (0.55, 0.55, 0.55, 0.35),
@@ -50,7 +52,9 @@ CODE_RGBA = {
     5: (0.00, 1.00, 1.00, 0.45),
     6: (1.00, 0.55, 0.00, 0.45),
     7: (1.00, 0.00, 0.00, 0.55),
+    8: (0.10, 0.35, 1.00, 0.45),
 }
+
 
 class ReviewState:
     def __init__(
@@ -286,6 +290,7 @@ def launch_review(
     fibers_path: Path,
     output_path: Path | None = None,
     display_channel: int | None = None,
+    i_channel: int | None = None,
     iib_channel: int | None = 0,
     iia_channel: int | None = 1,
     membrane_channel: int | None = 2,
@@ -344,6 +349,7 @@ def launch_review(
     pickable_layers.append(composite_layer)
     if not minimal_layers:
         raw_layers = (
+            ("raw_i", i_channel, "blue"),
             ("raw_iib", iib_channel, "magenta"),
             ("raw_iia", iia_channel, "green"),
             ("raw_membrane", membrane_channel, "gray"),
@@ -361,6 +367,29 @@ def launch_review(
                 visible=False,
             )
             pickable_layers.append(raw_layer)
+    if (not minimal_layers) and i_channel is not None:
+        type_i = optional_channel(display_image, i_channel)
+        if type_i is not None:
+            type_i_layer = viewer.add_image(
+                typing_signal_for_display(
+                    type_i,
+                    threshold=None,
+                    preprocess=typing_preprocess,
+                    bg_quantile=typing_bg_quantile,
+                    tile_size=typing_tile_size,
+                    bg_sigma=typing_bg_sigma,
+                    smooth_sigma=typing_smooth_sigma,
+                    signal_scale=signal_scale,
+                    threshold_floor=threshold_floor,
+                    mask=signal_mask,
+                ),
+                name=f"i_signal_ch{i_channel}",
+                colormap="blue",
+                blending="additive",
+                opacity=0.7,
+                visible=True,
+            )
+            pickable_layers.append(type_i_layer)
     if (not minimal_layers) and iib_channel is not None:
         type1 = optional_channel(display_image, iib_channel)
         if type1 is not None:
@@ -493,7 +522,7 @@ def launch_review(
     status = QLabel("")
     status.setWordWrap(True)
     hotkey_label = QLabel(
-        "Hotkeys: b IIb | a IIa | x IIx(blank) | h hybrid | u uncertain | e exclude"
+        "Hotkeys: i Type I | b IIb | a IIa | x IIx(blank) | h hybrid | u uncertain | e exclude"
     )
     hotkey_label.setWordWrap(True)
 
@@ -508,9 +537,7 @@ def launch_review(
         if row is None:
             return f"Selected fiber_id={state.selected_fiber_id}, not found in fiber table."
         corrected = (
-            row.corrected_type
-            if isinstance(row.corrected_type, str) and row.corrected_type
-            else ""
+            row.corrected_type if isinstance(row.corrected_type, str) and row.corrected_type else ""
         )
         corrected_txt = corrected if corrected else "(not corrected)"
         bits = [
@@ -627,6 +654,9 @@ def launch_review(
     def _iib_key(layer_or_viewer) -> None:
         assign_type("iib")
 
+    def _i_key(layer_or_viewer) -> None:
+        assign_type("i")
+
     def _iia_key(layer_or_viewer) -> None:
         assign_type("iia")
 
@@ -643,6 +673,7 @@ def launch_review(
         assign_type("exclude")
 
     for target in (viewer, *pickable_layers):
+        target.bind_key("i", _i_key, overwrite=True)
         target.bind_key("b", _iib_key, overwrite=True)
         target.bind_key("a", _iia_key, overwrite=True)
         target.bind_key("x", _iix_key, overwrite=True)
@@ -662,10 +693,12 @@ def launch_review(
     viewer.window.add_dock_widget(panel, area="right", name="Manual Fiber Type Review")
 
     set_status(
-        "Ready. Composite is threshold-scaled: IIb=magenta, IIa=green, membrane=gray.\n"
+        "Ready. Composite is threshold-scaled: IIb=magenta, IIa=green, membrane=gray; "
+        "Type I=blue.\n"
         f"Type signal below {threshold_floor:.1f}x threshold is hidden.\n"
         f"display_downsample={display_downsample}; minimal_layers={minimal_layers}.\n"
-        "Click a fiber, then press b=IIb, a=IIa, x=IIx(blank), h=hybrid, u=uncertain, e=exclude."
+        "Click a fiber, then press i=Type I, b=IIb, a=IIa, x=IIx(blank), h=hybrid, "
+        "u=uncertain, e=exclude."
     )
     napari.run()
 
@@ -842,6 +875,7 @@ def main() -> None:
         fibers_path=args.fibers,
         output_path=args.output,
         display_channel=args.display_channel,
+        i_channel=channel_cfg.i_channel,
         iib_channel=channel_cfg.iib_channel,
         iia_channel=channel_cfg.iia_channel,
         membrane_channel=channel_cfg.membrane_channel,
