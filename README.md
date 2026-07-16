@@ -1,4 +1,4 @@
-# FiberTypeQC v0.1.1-alpha
+# FiberTypeQC v0.3.0.dev0
 
 **Muscle fiber segmentation, type classification, and interactive review for immunofluorescence histology images.**
 
@@ -11,9 +11,9 @@ This pipeline processes multi-channel immunofluorescence (IF) microscopy images 
 
 ## Demo
 
-This repository includes alpha-stage demo artifacts for workflow communication and documentation.
-FiberTypeQC v0.1.x is a review-assisted pipeline release and is not positioned as a final validated
-MyoSight replacement.
+The latest published release is v0.2.0. This development branch is v0.3.0.dev0 and retains the
+review-assisted frozen baseline workflow while candidate-model evaluation remains experimental.
+FiberTypeQC is not positioned as a final validated MyoSight replacement.
 
 Demo assets:
 
@@ -102,8 +102,9 @@ uv run python -m scripts.run_pipeline \
 - `--classifier-path`: Path to sklearn classifier (.joblib)
 - All other parameters use frozen v0 defaults (see `src/run_batch.py` for the full set)
 
-The v0.1-alpha channel schema is intentionally narrow: IIx is inferred as the unstained class
-relative to the IIb and IIa channels. General marker-panel configuration is not yet implemented.
+The frozen baseline channel schema is intentionally narrow: IIx is inferred as the unstained class
+relative to the IIb and IIa channels. Panel-aware configuration is available as an explicit opt-in,
+but does not expand the biological claims made by the frozen default model.
 Legacy aliases `--type1-channel` and `--type2-channel` are still accepted for backward
 compatibility. See [docs/quickstart.md](docs/quickstart.md), [docs/panel_schema.md](docs/panel_schema.md),
 and [data/models/model_card.md](data/models/model_card.md).
@@ -199,7 +200,7 @@ The v0 pipeline uses `rebaseline_tile_v2_p75p90_iib_iia_iix.joblib`, trained on:
 - Global percentile normalization (p75, p90)
 - Three-class output: IIB, IIA, IIX
 
-For v0.1-alpha, only this default model is part of the public workflow. See
+For the v0.3.0.dev0 workflow, only this default model is part of the stable public path. See
 [data/models/model_card.md](data/models/model_card.md) for intended use and limitations.
 
 ---
@@ -226,7 +227,7 @@ validation/                      # Optional MyoSight/validation utilities
 
 analysis/                        # Private-data-dependent case studies/placeholders
 
-data/models/                     # v0.1-alpha default classifier
+data/models/                     # Frozen baseline classifier
 
 src/                             # Internal implementation modules during alpha
 

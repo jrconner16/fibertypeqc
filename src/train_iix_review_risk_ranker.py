@@ -20,7 +20,6 @@ from src.analyze_iia_gate import (
 from src.sweep_candidate_weights_on_cohort import _discover_cohort_ids, _discover_section_ids
 from src.train_candidate_from_feature_table import _load_feature_table
 
-
 NUMERIC_FEATURES = [
     "candidate_model_confidence",
     "candidate_model_margin",

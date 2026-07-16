@@ -22,7 +22,11 @@ from src.compare_supervision_recipes import (
     _load_matched_myosight,
     _prepare_base_table,
 )
-from src.quantify_classify import QuantifyConfig, _add_model_signal_qc, FROZEN_ALPHA_BASELINE_FEATURES
+from src.quantify_classify import (
+    FROZEN_ALPHA_BASELINE_FEATURES,
+    QuantifyConfig,
+    _add_model_signal_qc,
+)
 from src.run_batch import V0_PARAMS
 from src.train_candidate_from_feature_table import _boosting_model, _load_feature_table
 from src.train_weighted_candidate_from_audit import _load_manual_split

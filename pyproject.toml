@@ -1,6 +1,6 @@
 [project]
 name = "fibertypeqc"
-version = "0.1.0a0"
+version = "0.3.0.dev0"
 description = "Alpha workflow for muscle fiber segmentation, fiber typing, QC review, and CSV export."
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
@@ -45,6 +45,7 @@ package = false
 line-length = 100
 target-version = "py311"
 extend-exclude = [
+  ".venv",
   "src/check_mergeability.py",
   "src/pseudo_label_merge.py",
   "src/train_classifier.py",
@@ -54,6 +55,17 @@ extend-exclude = [
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Experimental validation scripts are retained in place during cleanup. Their long
+# analysis expressions are scheduled for incremental reformatting with later work.
+"src/analyze_iix_iib_boundary.py" = ["E501"]
+"src/apply_iib_iix_label_policy_review.py" = ["E501"]
+"src/build_review_threshold_calibration_audit.py" = ["E501"]
+"src/plot_multimethod_myosight_compare.py" = ["E501"]
+"src/prepare_iib_iix_label_policy_review.py" = ["E501"]
+"src/sweep_candidate_weights_on_cohort.py" = ["E501"]
+"src/train_iix_review_risk_ranker.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
