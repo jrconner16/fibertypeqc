@@ -18,6 +18,35 @@ RUN_MANIFEST_SCHEMA_VERSION = 1
 LEGACY_OUTPUT_SCHEMA_VERSION = "legacy_fibers.v1"
 
 
+def decide_artifact_reuse(
+    *,
+    panel_changed: bool = False,
+    fiber_segmentation_changed: bool = False,
+    nuclear_segmentation_changed: bool = False,
+    marker_features_changed: bool = False,
+    classifier_changed: bool = False,
+    nucleus_association_changed: bool = False,
+) -> dict[str, bool]:
+    """Return which cached stages can be reused under the documented matrix."""
+    reuse_fiber_labels = not (panel_changed or fiber_segmentation_changed)
+    reuse_nuclei_labels = not (panel_changed or nuclear_segmentation_changed)
+    recompute_features_or_links = any(
+        (
+            panel_changed,
+            fiber_segmentation_changed,
+            nuclear_segmentation_changed,
+            marker_features_changed,
+            classifier_changed,
+            nucleus_association_changed,
+        )
+    )
+    return {
+        "reuse_fiber_labels": reuse_fiber_labels,
+        "reuse_nuclei_labels": reuse_nuclei_labels,
+        "recompute_features_or_links": recompute_features_or_links,
+    }
+
+
 def fingerprint(value: Mapping[str, Any]) -> str:
     encoded = json.dumps(value, sort_keys=True, default=str, separators=(",", ":")).encode()
     return sha256(encoded).hexdigest()

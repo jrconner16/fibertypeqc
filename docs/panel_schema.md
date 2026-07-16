@@ -60,7 +60,16 @@ software versions, Git commit, and stage fingerprints. It is ignored as generate
 `--model-manifest PATH` is an optional JSON or YAML sidecar for `--classifier-path`. A manifest
 must declare its version, identifier, task, feature-schema version, required observed markers, and
 outputs. The pipeline rejects a model whose required markers are absent before Cellpose runs.
+It also rejects a model whose declared feature schema is not available in the running pipeline.
+Until Phase 3 adds semantic features, only the frozen `legacy_type1_type2.v1` schema can run;
+`multiplanel_features.v1` sidecars therefore fail safely rather than receiving mismatched features.
 The no-sidecar path remains the frozen IIa/IIb/laminin compatibility adapter.
+
+The artifact module also exposes the documented cache-invalidation decision matrix. Classifier or
+threshold changes reuse fiber/nuclear labels and recompute downstream features; changing fiber
+Cellpose settings invalidates fiber labels, while a future nuclear Cellpose change invalidates only
+nuclear labels. The current CLI does not yet perform automatic reuse—this is the tested contract
+that a later `--reuse-artifacts` mode will use.
 
 ## `classification.residual_inference`
 

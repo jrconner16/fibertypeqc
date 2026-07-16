@@ -8,6 +8,7 @@ from typing import Any
 
 import yaml
 
+from fibertypeqc.feature_schema import LEGACY_FROZEN_ALPHA_FEATURE_SCHEMA
 from fibertypeqc.panels import OBSERVED_CHANNELS, Panel
 
 MODEL_MANIFEST_VERSION = 1
@@ -61,10 +62,21 @@ def load_model_manifest(path: Path) -> ModelManifest:
     )
 
 
-def validate_model_compatibility(panel: Panel, manifest: ModelManifest | None) -> None:
+def validate_model_compatibility(
+    panel: Panel,
+    manifest: ModelManifest | None,
+    *,
+    available_feature_schema: str = LEGACY_FROZEN_ALPHA_FEATURE_SCHEMA,
+) -> None:
     """Fail before inference when a selected model lacks required observations."""
     required = manifest.required_markers if manifest else LEGACY_FROZEN_ALPHA_REQUIRED_MARKERS
     missing = sorted(name for name in required if panel.channels.get(name) is None)
     if missing:
         model_name = manifest.model_id if manifest else "legacy_frozen_alpha"
         raise ValueError(f"Model '{model_name}' requires observed channels: {', '.join(missing)}.")
+    if manifest is not None and manifest.feature_schema_version != available_feature_schema:
+        raise ValueError(
+            f"Model '{manifest.model_id}' requires feature schema "
+            f"'{manifest.feature_schema_version}', but this pipeline provides "
+            f"'{available_feature_schema}'."
+        )
