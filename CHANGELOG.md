@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased: v0.3.0.dev0
+
+### Development status
+
+- Current development version after the published v0.2.0 release.
+- The frozen default classifier and review-assisted public workflow remain unchanged.
+- Candidate-model evaluation, review-policy research, and cohort-specific tools remain experimental.
+
 ## v0.2.0
 
 ### Release Title

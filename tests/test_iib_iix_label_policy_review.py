@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
 
 from src.apply_iib_iix_label_policy_review import apply_policy_overrides
