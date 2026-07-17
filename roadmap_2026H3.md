@@ -234,6 +234,8 @@ changing legacy fiber calls, residual inference, or the stable `*_fibers.csv` sc
 - [x] Type I manual-review support (display and labels only; no automatic Type I calls).
 - [x] Type I-compatible curated-label inventory and panel audit (see
   `docs/type_i_panel_audit.md`).
+- [x] Development-only QUAD smoke experiment with a manual-IIa evidence gate;
+  one-image fiber-level cross-validation only, not a generalization result.
 - [ ] Type I candidate model and manifest; no automatic model selection.
 - [ ] Held-out TA false-positive and quadriceps pilot evaluation.
 
