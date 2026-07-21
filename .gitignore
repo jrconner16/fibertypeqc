@@ -1,5 +1,7 @@
 # Python environments & tools
 .venv/
+.venv-cellpose3/
+.venv-cellpose42/
 .env
 .envrc
 __pycache__/

@@ -14,6 +14,13 @@ except Exception:  # pragma: no cover
     czifile = None
 
 
+def _has_tiff_signature(path: Path) -> bool:
+    """Return whether a file is TIFF-formatted, regardless of its suffix."""
+    with path.open("rb") as handle:
+        signature = handle.read(4)
+    return signature in {b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+"}
+
+
 def ensure_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -22,7 +29,9 @@ def ensure_dir(path: Path) -> Path:
 def load_multichannel_image(path: Path) -> np.ndarray:
     """Load CZI/TIFF into CHW array."""
     suffix = path.suffix.lower()
-    if suffix in {".tif", ".tiff"}:
+    # Some ImageJ exports retain a source-image `.czi` suffix even though their
+    # bytes are TIFF. Detect their actual container without renaming raw data.
+    if suffix in {".tif", ".tiff"} or _has_tiff_signature(path):
         arr = np.asarray(tifffile.imread(path))
     elif suffix == ".czi":
         if czifile is None:
@@ -57,23 +66,7 @@ def load_multichannel_image(path: Path) -> np.ndarray:
 def extract_pixel_size_um(path: Path) -> tuple[float | None, float | None]:
     """Return physical pixel size as (x_um, y_um) when available."""
     suffix = path.suffix.lower()
-    if suffix == ".czi":
-        if czifile is None:
-            return None, None
-        with czifile.CziFile(str(path)) as czi:
-            metadata = czi.metadata()
-        root = ET.fromstring(metadata)
-        values: dict[str, float] = {}
-        for distance in root.findall(".//Scaling/Items/Distance"):
-            axis = str(distance.attrib.get("Id", "")).upper()
-            value = distance.findtext("Value")
-            if axis not in {"X", "Y"} or value is None:
-                continue
-            # Zeiss CZI stores these distances in meters even when the display unit is um.
-            values[axis] = float(value) * 1_000_000.0
-        return values.get("X"), values.get("Y")
-
-    if suffix in {".tif", ".tiff"}:
+    if suffix in {".tif", ".tiff"} or _has_tiff_signature(path):
         with tifffile.TiffFile(path) as tif:
             page = tif.pages[0]
             x_res = page.tags.get("XResolution")
@@ -91,6 +84,22 @@ def extract_pixel_size_um(path: Path) -> tuple[float | None, float | None]:
                 return None, None
             unit_um = 10_000.0 if unit_name == "CENTIMETER" else 25_400.0
             return unit_um / x_pixels_per_unit, unit_um / y_pixels_per_unit
+
+    if suffix == ".czi":
+        if czifile is None:
+            return None, None
+        with czifile.CziFile(str(path)) as czi:
+            metadata = czi.metadata()
+        root = ET.fromstring(metadata)
+        values: dict[str, float] = {}
+        for distance in root.findall(".//Scaling/Items/Distance"):
+            axis = str(distance.attrib.get("Id", "")).upper()
+            value = distance.findtext("Value")
+            if axis not in {"X", "Y"} or value is None:
+                continue
+            # Zeiss CZI stores these distances in meters even when the display unit is um.
+            values[axis] = float(value) * 1_000_000.0
+        return values.get("X"), values.get("Y")
 
     return None, None
 

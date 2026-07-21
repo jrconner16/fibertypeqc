@@ -21,10 +21,11 @@ from src.label_masks import erode_labels
 
 @dataclass
 class QuantifyConfig:
-    type1_channel: int = 0
-    type2_channel: int = 1
+    type1_channel: int | None = 0
+    type2_channel: int | None = 1
     i_channel: int | None = None
     iix_channel: int | None = None
+    emhc_channel: int | None = None
     threshold_mode: str = "quantile"  # quantile | otsu | yen | fixed
     quantile: float = 0.6
     percentile_q: float = 0.85
@@ -84,7 +85,9 @@ class MarkerSpec:
     channel_index: int
 
 
-def _default_marker_specs(cfg: QuantifyConfig) -> tuple[MarkerSpec, MarkerSpec]:
+def _default_marker_specs(cfg: QuantifyConfig) -> tuple[MarkerSpec, MarkerSpec] | None:
+    if cfg.type1_channel is None or cfg.type2_channel is None:
+        return None
     return (
         MarkerSpec(marker_name="iib", legacy_prefix="type1", channel_index=int(cfg.type1_channel)),
         MarkerSpec(marker_name="iia", legacy_prefix="type2", channel_index=int(cfg.type2_channel)),
@@ -92,10 +95,23 @@ def _default_marker_specs(cfg: QuantifyConfig) -> tuple[MarkerSpec, MarkerSpec]:
 
 
 def _active_marker_specs(cfg: QuantifyConfig) -> tuple[MarkerSpec, ...]:
-    specs: list[MarkerSpec] = [
-        MarkerSpec(marker_name="iib", legacy_prefix="type1", channel_index=int(cfg.type1_channel)),
-        MarkerSpec(marker_name="iia", legacy_prefix="type2", channel_index=int(cfg.type2_channel)),
-    ]
+    specs: list[MarkerSpec] = []
+    if cfg.type1_channel is not None:
+        specs.append(
+            MarkerSpec(
+                marker_name="iib",
+                legacy_prefix="type1",
+                channel_index=int(cfg.type1_channel),
+            )
+        )
+    if cfg.type2_channel is not None:
+        specs.append(
+            MarkerSpec(
+                marker_name="iia",
+                legacy_prefix="type2",
+                channel_index=int(cfg.type2_channel),
+            )
+        )
     if cfg.i_channel is not None:
         specs.append(
             MarkerSpec(marker_name="i", legacy_prefix=None, channel_index=int(cfg.i_channel))
@@ -103,6 +119,10 @@ def _active_marker_specs(cfg: QuantifyConfig) -> tuple[MarkerSpec, ...]:
     if cfg.iix_channel is not None:
         specs.append(
             MarkerSpec(marker_name="iix", legacy_prefix=None, channel_index=int(cfg.iix_channel))
+        )
+    if cfg.emhc_channel is not None:
+        specs.append(
+            MarkerSpec(marker_name="emhc", legacy_prefix=None, channel_index=int(cfg.emhc_channel))
         )
     return tuple(specs)
 
@@ -355,10 +375,14 @@ def build_feature_diagnostics_table(
     cfg: QuantifyConfig,
 ) -> pd.DataFrame:
     marker_specs = _default_marker_specs(cfg)
-    feature_table = build_feature_table(
-        fibers,
-        marker_specs,
-        marker_stats_metadata=fibers.attrs.get("marker_stats"),
+    feature_table = (
+        build_feature_table(
+            fibers,
+            marker_specs,
+            marker_stats_metadata=fibers.attrs.get("marker_stats"),
+        )
+        if marker_specs is not None
+        else pd.DataFrame(index=fibers.index)
     )
     metadata_cols = [
         col
@@ -1071,7 +1095,11 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
         center_labels=spatial_center_labels,
         edge_labels=spatial_edge_labels,
     )
-    legacy_feature_columns = _legacy_typing_feature_columns(marker_stats, marker_specs)
+    legacy_feature_columns = (
+        _legacy_typing_feature_columns(marker_stats, marker_specs)
+        if marker_specs is not None
+        else {}
+    )
 
     df = pd.DataFrame(
         {
@@ -1126,6 +1154,36 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
             )[label_ids]
             df[f"area_erode_{erode_px}px"] = csa_areas.astype(np.int32)
             df[f"area_erode_{erode_px}px_um2"] = csa_areas.astype(np.float32) * pixel_area_um2
+
+    if marker_specs is None:
+        df["fiber_type"] = "unknown"
+        df["fiber_type_source"] = "unclassified_panel"
+        df["classification_method"] = "diagnostics_only"
+        df["needs_review"] = True
+        df["typing_signal_qc_flags"] = "classification_not_available"
+        df["classifier_path"] = ""
+        for col in (
+            "type1_threshold",
+            "type2_threshold",
+            "type1_p75_threshold",
+            "type2_p75_threshold",
+            "type1_p90_threshold",
+            "type2_p90_threshold",
+            "type1_pctl_threshold",
+            "type2_pctl_threshold",
+            "type1_cov_threshold",
+            "type2_cov_threshold",
+            "score_type1",
+            "score_type2",
+            "confidence",
+            "model_confidence",
+            "model_margin",
+            "prob_iib",
+            "prob_iia",
+            "prob_iix",
+        ):
+            df[col] = np.nan
+        return df
 
     legacy_thresholds = _legacy_signal_thresholds(df, cfg, marker_specs)
     _add_legacy_signal_evidence(df, cfg, legacy_thresholds, marker_specs)
@@ -1267,17 +1325,20 @@ def qc_flags_from_fibers(
             MarkerSpec(marker_name="iia", legacy_prefix="type2", channel_index=1),
         )
     primary_mean_col, secondary_mean_col = _legacy_marker_pair_columns(marker_specs, "mean")
-    t1 = fibers[primary_mean_col].to_numpy(dtype=np.float32)
-    t2 = fibers[secondary_mean_col].to_numpy(dtype=np.float32)
-    if np.std(t1) < 1e-8 or np.std(t2) < 1e-8:
-        type_corr = 1.0
+    if {primary_mean_col, secondary_mean_col}.issubset(fibers.columns):
+        t1 = fibers[primary_mean_col].to_numpy(dtype=np.float32)
+        t2 = fibers[secondary_mean_col].to_numpy(dtype=np.float32)
+        if np.std(t1) < 1e-8 or np.std(t2) < 1e-8:
+            type_corr = 1.0
+        else:
+            type_corr = float(np.corrcoef(t1, t2)[0, 1])
     else:
-        type_corr = float(np.corrcoef(t1, t2)[0, 1])
+        type_corr = np.nan
 
     flag_low_labels = n < cfg.min_labels
     flag_high_unknown = unknown_rate > cfg.max_unknown_rate
     flag_area = not (cfg.median_area_min <= median_area <= cfg.median_area_max)
-    flag_corr = type_corr > cfg.max_type_corr
+    flag_corr = bool(np.isfinite(type_corr) and type_corr > cfg.max_type_corr)
 
     reasons = []
     if flag_low_labels:

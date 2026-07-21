@@ -120,6 +120,10 @@ Example:
 Important: residual inference is panel-gated. The pipeline should not assume that every omitted
 class is safe to infer automatically.
 
+This gate applies to automatic calls. Manual review may assign IIx when expert review establishes
+that the panel's negative-marker logic supports it; review provenance distinguishes that human
+decision from an automatic residual inference.
+
 ## Current v0.2 Activation Scope
 
 The schema is broader than the currently active typing logic.

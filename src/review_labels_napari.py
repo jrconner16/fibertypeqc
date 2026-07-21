@@ -10,6 +10,7 @@ import pandas as pd
 import tifffile
 from magicgui import magicgui
 from qtpy.QtWidgets import QLabel, QVBoxLayout, QWidget
+from skimage.draw import polygon
 
 from fibertypeqc.config import resolve_channel_config
 from src.fiber_type_labels import REVIEW_TYPES, normalize_review_label, to_biological_label
@@ -72,6 +73,7 @@ class ReviewState:
         self.image: np.ndarray | None = None
         self.labels: np.ndarray | None = None
         self.review: pd.DataFrame | None = None
+        self.pending_polygon_label: int | None = None
 
 
 def _fiber_id_column(df: pd.DataFrame) -> str:
@@ -101,6 +103,7 @@ def _load_or_create_review_table(fibers_path: Path, output_path: Path) -> pd.Dat
     else:
         review["predicted_type"] = "iix_candidate"
     review["corrected_type"] = ""
+    review["emhc_manual_label"] = ""
     review["is_uncertain"] = False
     review["is_hybrid"] = False
     review["is_excluded"] = False
@@ -159,7 +162,14 @@ def _load_or_create_review_table(fibers_path: Path, output_path: Path) -> pd.Dat
             raise ValueError(f"Existing review file has no fiber_id column: {output_path}")
         update_cols = [
             c
-            for c in ("corrected_type", "is_uncertain", "is_hybrid", "is_excluded", "label_source")
+            for c in (
+                "corrected_type",
+                "emhc_manual_label",
+                "is_uncertain",
+                "is_hybrid",
+                "is_excluded",
+                "label_source",
+            )
             if c in saved.columns
         ]
         saved_update = saved[["fiber_id", *update_cols]].copy()
@@ -172,6 +182,8 @@ def _load_or_create_review_table(fibers_path: Path, output_path: Path) -> pd.Dat
         for col in update_cols:
             if col == "corrected_type":
                 review[col] = review[col].fillna("").map(normalize_review_label)
+            elif col == "emhc_manual_label":
+                review[col] = review[col].fillna("").astype(str).str.strip().str.lower()
             elif col == "label_source":
                 review[col] = review[col].fillna("unreviewed")
             else:
@@ -289,8 +301,11 @@ def launch_review(
     labels_path: Path,
     fibers_path: Path,
     output_path: Path | None = None,
+    nuclei_labels_path: Path | None = None,
     display_channel: int | None = None,
     i_channel: int | None = None,
+    emhc_channel: int | None = None,
+    dapi_channel: int | None = None,
     iib_channel: int | None = 0,
     iia_channel: int | None = 1,
     membrane_channel: int | None = 2,
@@ -350,9 +365,11 @@ def launch_review(
     if not minimal_layers:
         raw_layers = (
             ("raw_i", i_channel, "blue"),
+            ("raw_emhc", emhc_channel, "yellow"),
             ("raw_iib", iib_channel, "magenta"),
             ("raw_iia", iia_channel, "green"),
             ("raw_membrane", membrane_channel, "gray"),
+            ("raw_dapi", dapi_channel, "cyan"),
         )
         for raw_name, raw_channel, raw_colormap in raw_layers:
             raw = optional_channel(display_image, raw_channel)
@@ -459,6 +476,26 @@ def launch_review(
     pickable_layers.append(labels_layer)
     if hasattr(labels_layer, "contour"):
         labels_layer.contour = 1
+    if nuclei_labels_path is not None:
+        nuclei_full = np.asarray(tifffile.imread(nuclei_labels_path)).astype(np.int32)
+        if nuclei_full.shape != state.labels.shape:
+            raise ValueError(
+                f"Nuclear labels have shape {nuclei_full.shape}, expected {state.labels.shape}."
+            )
+        viewer.add_labels(
+            _downsample_2d(nuclei_full, display_downsample),
+            name="nuclei_labels",
+            opacity=0.45,
+            visible=True,
+        )
+    polygon_layer = viewer.add_shapes(
+        name="new_fiber_polygon",
+        ndim=2,
+        edge_color="cyan",
+        face_color="transparent",
+        edge_width=2,
+        visible=True,
+    )
     needs_review_layer = None
     if show_needs_review_flags:
         needs_review_points = _build_needs_review_points(display_labels, state.review)
@@ -482,12 +519,14 @@ def launch_review(
                 opacity=0.85,
                 visible=True,
             )
+        pickable_layers.append(needs_review_layer)
     selected_fiber_layer = viewer.add_labels(
         np.zeros_like(display_labels, dtype=np.uint8),
         name="selected_fiber",
         opacity=0.8,
         visible=True,
     )
+    pickable_layers.append(selected_fiber_layer)
     if hasattr(selected_fiber_layer, "color"):
         try:
             selected_fiber_layer.color = {1: "white"}
@@ -495,6 +534,8 @@ def launch_review(
             pass
     if hasattr(selected_fiber_layer, "contour"):
         selected_fiber_layer.contour = 2
+
+    corrected_labels_path = labels_path.with_name(f"{labels_path.stem}_corrected.tif")
     overlay_layer = None
     overlay_rgb_layer = None
     if not minimal_layers:
@@ -522,7 +563,8 @@ def launch_review(
     status = QLabel("")
     status.setWordWrap(True)
     hotkey_label = QLabel(
-        "Hotkeys: i Type I | b IIb | a IIa | x IIx(blank) | h hybrid | u uncertain | e exclude"
+        "Fiber type: i Type I | b IIb | a IIa | x IIx | h hybrid | u uncertain | e exclude\n"
+        "eMHC: p positive | n negative"
     )
     hotkey_label.setWordWrap(True)
 
@@ -596,6 +638,15 @@ def launch_review(
         refresh_overlay()
         save_and_report(f"Assigned {type_name}")
 
+    def assign_emhc(label: str) -> None:
+        if state.selected_fiber_id is None:
+            set_status("Click a fiber before assigning eMHC.")
+            return
+        idx = state.review.index[state.review["fiber_id"] == int(state.selected_fiber_id)].tolist()
+        if idx:
+            state.review.loc[idx[0], "emhc_manual_label"] = label
+            save_and_report(f"Assigned eMHC={label}")
+
     def pick_fiber(layer, event) -> None:
         if event.type != "mouse_press":
             return
@@ -627,6 +678,16 @@ def launch_review(
     def assign_widget(corrected_type: str = "iib") -> None:
         assign_type(corrected_type)
 
+    @magicgui(
+        call_button="Assign Selected eMHC",
+        emhc_label={"choices": ["positive", "negative", "uncertain"]},
+    )
+    def assign_emhc_widget(emhc_label: str = "positive") -> None:
+        if emhc_label not in {"positive", "negative", "uncertain"}:
+            set_status("eMHC label must be positive, negative, or uncertain.")
+            return
+        assign_emhc(emhc_label)
+
     @magicgui(call_button="Clear Selected Correction")
     def clear_widget() -> None:
         if state.selected_fiber_id is None:
@@ -651,6 +712,97 @@ def launch_review(
     def save_widget() -> None:
         save_and_report()
 
+    def require_full_resolution() -> bool:
+        if display_downsample == 1:
+            return True
+        set_status(
+            "Segmentation repair requires --display-downsample 1 to preserve label geometry."
+        )
+        return False
+
+    @magicgui(call_button="Add Missing Fiber (polygon)")
+    def add_fiber_polygon_widget() -> None:
+        if not require_full_resolution():
+            return
+        new_label = int(np.max(labels_layer.data)) + 1
+        polygon_layer.data = []
+        state.pending_polygon_label = new_label
+        polygon_layer.mode = "add_polygon"
+        viewer.layers.selection.active = polygon_layer
+        set_status(
+            f"Click around missing fiber {new_label}; double-click the final point, then "
+            "Commit New Fiber Polygon."
+        )
+
+    @magicgui(call_button="Commit New Fiber Polygon")
+    def commit_fiber_polygon_widget() -> None:
+        if not require_full_resolution():
+            return
+        new_label = state.pending_polygon_label
+        if new_label is None:
+            set_status("Click Add Missing Fiber (polygon) before committing a polygon.")
+            return
+        if not polygon_layer.data:
+            set_status("Draw a polygon first; double-click its final point to finish it.")
+            return
+        coords = np.asarray(polygon_layer.data[-1], dtype=np.float64)
+        if coords.ndim != 2 or coords.shape[0] < 3:
+            set_status("A new fiber polygon needs at least three points.")
+            return
+        row_coords, col_coords = polygon(coords[:, 0], coords[:, 1], shape=labels_layer.data.shape)
+        empty = labels_layer.data[row_coords, col_coords] == 0
+        if not np.any(empty):
+            set_status("The polygon overlaps existing labels; redraw it inside the missing fiber.")
+            return
+        labels_layer.data[row_coords[empty], col_coords[empty]] = new_label
+        labels_layer.refresh()
+        state.selected_fiber_id = new_label
+        selected_fiber_layer.data = (labels_layer.data == new_label).astype(np.uint8)
+        polygon_layer.data = []
+        state.pending_polygon_label = None
+        skipped = int((~empty).sum())
+        suffix = f" Kept {skipped} overlapping pixels unchanged." if skipped else ""
+        set_status(
+            f"Added fiber label {new_label} from polygon. "
+            "Save Corrected Segmentation to persist it."
+            f"{suffix}"
+        )
+
+    @magicgui(call_button="Add Missing Fiber (brush)")
+    def add_fiber_brush_widget() -> None:
+        if not require_full_resolution():
+            return
+        new_label = int(np.max(labels_layer.data)) + 1
+        labels_layer.selected_label = new_label
+        labels_layer.mode = "paint"
+        viewer.layers.selection.active = labels_layer
+        set_status(f"Paint new fiber label {new_label}, then Save Corrected Segmentation.")
+
+    @magicgui(call_button="Edit Selected Boundary (paint)")
+    def edit_boundary_widget() -> None:
+        if not require_full_resolution() or state.selected_fiber_id is None:
+            return
+        labels_layer.selected_label = int(state.selected_fiber_id)
+        labels_layer.mode = "paint"
+        set_status("Paint the selected boundary; use Napari erase mode to remove pixels.")
+
+    @magicgui(call_button="Delete Selected Artifact")
+    def delete_fiber_widget() -> None:
+        if not require_full_resolution() or state.selected_fiber_id is None:
+            return
+        labels_layer.data[labels_layer.data == int(state.selected_fiber_id)] = 0
+        labels_layer.refresh()
+        set_status("Deleted selected label. Save Corrected Segmentation to persist it.")
+
+    @magicgui(call_button="Save Corrected Segmentation")
+    def save_corrected_labels_widget() -> None:
+        if not require_full_resolution():
+            return
+        tifffile.imwrite(corrected_labels_path, np.asarray(labels_layer.data, dtype=np.int32))
+        set_status(
+            f"Saved corrected labels: {corrected_labels_path}. Re-quantify this mask before review."
+        )
+
     def _iib_key(layer_or_viewer) -> None:
         assign_type("iib")
 
@@ -672,6 +824,12 @@ def launch_review(
     def _exclude_key(layer_or_viewer) -> None:
         assign_type("exclude")
 
+    def _emhc_positive_key(layer_or_viewer) -> None:
+        assign_emhc("positive")
+
+    def _emhc_negative_key(layer_or_viewer) -> None:
+        assign_emhc("negative")
+
     for target in (viewer, *pickable_layers):
         target.bind_key("i", _i_key, overwrite=True)
         target.bind_key("b", _iib_key, overwrite=True)
@@ -680,6 +838,8 @@ def launch_review(
         target.bind_key("h", _hybrid_key, overwrite=True)
         target.bind_key("u", _uncertain_key, overwrite=True)
         target.bind_key("e", _exclude_key, overwrite=True)
+        target.bind_key("p", _emhc_positive_key, overwrite=True)
+        target.bind_key("n", _emhc_negative_key, overwrite=True)
 
     panel = QWidget()
     panel.setMinimumWidth(320)
@@ -687,8 +847,15 @@ def launch_review(
     layout = QVBoxLayout(panel)
     layout.addWidget(hotkey_label)
     layout.addWidget(assign_widget.native)
+    layout.addWidget(assign_emhc_widget.native)
     layout.addWidget(clear_widget.native)
     layout.addWidget(save_widget.native)
+    layout.addWidget(add_fiber_polygon_widget.native)
+    layout.addWidget(commit_fiber_polygon_widget.native)
+    layout.addWidget(add_fiber_brush_widget.native)
+    layout.addWidget(edit_boundary_widget.native)
+    layout.addWidget(delete_fiber_widget.native)
+    layout.addWidget(save_corrected_labels_widget.native)
     layout.addWidget(status)
     viewer.window.add_dock_widget(panel, area="right", name="Manual Fiber Type Review")
 
@@ -697,8 +864,8 @@ def launch_review(
         "Type I=blue.\n"
         f"Type signal below {threshold_floor:.1f}x threshold is hidden.\n"
         f"display_downsample={display_downsample}; minimal_layers={minimal_layers}.\n"
-        "Click a fiber, then press i=Type I, b=IIb, a=IIa, x=IIx(blank), h=hybrid, "
-        "u=uncertain, e=exclude."
+        "Click a fiber, then press i=Type I, b=IIb, a=IIa, x=IIx, h=hybrid, "
+        "u=uncertain, e=exclude; p=eMHC positive, n=eMHC negative."
     )
     napari.run()
 
@@ -712,6 +879,12 @@ def _parse_args() -> argparse.Namespace:
         help="Multichannel TIFF/CZI image path.",
     )
     parser.add_argument("--labels", required=True, type=Path, help="Cellpose label TIFF path.")
+    parser.add_argument(
+        "--nuclei-labels",
+        type=Path,
+        default=None,
+        help="Optional DAPI/nuclear label TIFF to display as a separate overlay.",
+    )
     parser.add_argument(
         "--fibers",
         required=True,
@@ -756,6 +929,12 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Optional IIx marker channel index.",
+    )
+    parser.add_argument(
+        "--emhc-channel",
+        type=int,
+        default=None,
+        help="Optional eMHC marker channel index for separate regeneration review.",
     )
     parser.add_argument(
         "--dapi-channel",
@@ -857,6 +1036,7 @@ def main() -> None:
         iia_channel=args.iia_channel,
         iib_channel=args.iib_channel,
         iix_channel=args.iix_channel,
+        emhc_channel=args.emhc_channel,
         dapi_channel=args.dapi_channel,
         type1_channel=args.type1_channel,
         type2_channel=args.type2_channel,
@@ -864,18 +1044,16 @@ def main() -> None:
     )
     for warning in channel_warnings:
         print(f"Warning: {warning}", file=sys.stderr, flush=True)
-    if channel_cfg.iib_channel is None or channel_cfg.iia_channel is None:
-        raise ValueError(
-            "The current alpha review workflow still requires both IIb and IIa marker channels. "
-            "Panel-aware config is accepted, but non-IIa/IIb review modes are not active yet."
-        )
     launch_review(
         image_path=args.image,
         labels_path=args.labels,
         fibers_path=args.fibers,
         output_path=args.output,
+        nuclei_labels_path=args.nuclei_labels,
         display_channel=args.display_channel,
         i_channel=channel_cfg.i_channel,
+        emhc_channel=channel_cfg.emhc_channel,
+        dapi_channel=channel_cfg.dapi_channel,
         iib_channel=channel_cfg.iib_channel,
         iia_channel=channel_cfg.iia_channel,
         membrane_channel=channel_cfg.membrane_channel,

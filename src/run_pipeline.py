@@ -6,6 +6,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import tifffile
 
@@ -18,6 +19,7 @@ from fibertypeqc.artifacts import (
 from fibertypeqc.config import resolve_channel_config
 from fibertypeqc.model_manifest import load_model_manifest, validate_model_compatibility
 from fibertypeqc.panels import Panel, validate_requested_domains
+from fibertypeqc.semantic_model import predict_semantic_candidate
 from src.io_utils import (
     ensure_dir,
     extract_pixel_size_um,
@@ -90,6 +92,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Membrane preprocess -> Cellpose -> quantify/classify")
     p.add_argument("--input", type=Path, required=True, help="Input CZI/TIFF")
     p.add_argument("--output-dir", type=Path, required=True, help="Output directory")
+    p.add_argument(
+        "--labels-path",
+        type=Path,
+        default=None,
+        help=(
+            "Explicit corrected fiber-label TIFF to quantify; skips Cellpose and preserves "
+            "source labels."
+        ),
+    )
 
     p.add_argument(
         "--channel-config",
@@ -315,6 +326,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.labels_path is not None and args.reuse_artifacts != "never":
+        raise ValueError("--labels-path cannot be combined with --reuse-artifacts.")
     if args.channel_config is not None and args.panel_config is not None:
         raise ValueError("Use only one of --panel-config and --channel-config.")
     config_path = args.panel_config or args.channel_config
@@ -337,6 +350,10 @@ def main() -> None:
     model_manifest = (
         load_model_manifest(args.model_manifest) if args.model_manifest is not None else None
     )
+    semantic_candidate = (
+        model_manifest is not None
+        and model_manifest.feature_schema_version == "multiplanel_features.v1"
+    )
 
     total_stages = 7
     t_all = time.perf_counter()
@@ -350,7 +367,11 @@ def main() -> None:
         panel = Panel.from_channel_config(channel_cfg)
         panel.validate(image_channel_count=n_channels)
         validate_requested_domains(panel, tuple(args.requested_domain))
-        validate_model_compatibility(panel, model_manifest)
+        validate_model_compatibility(
+            panel,
+            model_manifest,
+            require_legacy_model=bool(args.classifier_path),
+        )
 
     with stage(2, total_stages, "preprocess membrane channel"):
         membrane = image[channel_cfg.membrane_channel]
@@ -399,12 +420,20 @@ def main() -> None:
             panel_channels=panel.channels,
             segmentation=seg_manifest,
             preprocessing=preprocessing_manifest,
-            classifier_path=args.classifier_path,
+            classifier_path=None if semantic_candidate else args.classifier_path,
             model_manifest_path=args.model_manifest,
         )
         reused_labels = False
         labels = None
-        if args.reuse_artifacts != "never":
+        if args.labels_path is not None:
+            labels = np.asarray(tifffile.imread(args.labels_path)).astype(np.int32)
+            if labels.shape != image.shape[1:]:
+                raise ValueError(
+                    f"Provided labels have shape {labels.shape}, expected {image.shape[1:]}."
+                )
+            reused_labels = True
+            print(f"using provided corrected fiber labels: {args.labels_path}")
+        elif args.reuse_artifacts != "never":
             previous_manifest = load_run_manifest(run_manifest_path)
             if (
                 previous_manifest
@@ -435,7 +464,8 @@ def main() -> None:
         )
         if reused_labels:
             labels_model, runtime_s = None, 0.0
-            print("reused compatible cached fiber labels")
+            if args.labels_path is None:
+                print("reused compatible cached fiber labels")
         else:
             labels_model, runtime_s = run_cellpose(prep.membrane_model_input, seg_cfg)
 
@@ -447,6 +477,8 @@ def main() -> None:
                 factor=prep_cfg.downsample_factor,
             )
             labels = paste_crop_labels(labels_crop, prep.membrane_full.shape, prep.crop_slices)
+            save_labels(labels_path, labels)
+        elif args.labels_path is not None:
             save_labels(labels_path, labels)
 
     with stage(5, total_stages, "extract fiber features + classify types"):
@@ -475,6 +507,7 @@ def main() -> None:
             type2_channel=channel_cfg.type2_channel,
             i_channel=channel_cfg.i_channel,
             iix_channel=channel_cfg.iix_channel,
+            emhc_channel=channel_cfg.emhc_channel,
             threshold_mode=args.threshold_mode,
             quantile=args.quantile,
             percentile_q=args.percentile_q,
@@ -495,7 +528,10 @@ def main() -> None:
             model_margin_threshold=args.model_margin_threshold,
             pixel_size_x_um=pixel_size_x_um,
             pixel_size_y_um=pixel_size_y_um,
-            classifier_path=args.classifier_path,
+            # Semantic candidate bundles consume the panel-aware diagnostics below.
+            # They are not legacy classifiers and therefore must not be passed into
+            # quantify_labels' legacy prediction path.
+            classifier_path=None if semantic_candidate else args.classifier_path,
             collect_spatial_marker_features=bool(args.export_diagnostics),
         )
         quant_cfg = apply_auto_profile(
@@ -507,10 +543,18 @@ def main() -> None:
         fibers_path = output_dir / f"{stem}_fibers.csv"
         save_dataframe(fibers_path, fibers)
         diagnostics_path = None
-        if args.export_diagnostics:
+        semantic_predictions_path = None
+        if args.export_diagnostics or semantic_candidate:
             diagnostics = build_feature_diagnostics_table(fibers, quant_cfg)
-            diagnostics_path = output_dir / f"{stem}_feature_diagnostics.csv"
-            save_dataframe(diagnostics_path, diagnostics)
+            if args.export_diagnostics:
+                diagnostics_path = output_dir / f"{stem}_feature_diagnostics.csv"
+                save_dataframe(diagnostics_path, diagnostics)
+            if semantic_candidate:
+                semantic_predictions_path = output_dir / f"{stem}_model_predictions.csv"
+                predictions = predict_semantic_candidate(
+                    diagnostics, args.classifier_path, model_manifest
+                )
+                save_dataframe(semantic_predictions_path, predictions)
 
     with stage(6, total_stages, "compute summary + QC"):
         qc_cfg = QCConfig(
@@ -534,6 +578,9 @@ def main() -> None:
             "feature_diagnostics_path": (
                 str(diagnostics_path) if diagnostics_path is not None else ""
             ),
+            "semantic_predictions_path": (
+                str(semantic_predictions_path) if semantic_predictions_path is not None else ""
+            ),
             "run_manifest_path": str(run_manifest_path),
             "runtime_s": round(float(runtime_s), 2),
             "membrane_channel": int(channel_cfg.membrane_channel),
@@ -542,8 +589,8 @@ def main() -> None:
             "iia_channel": channel_cfg.iia_channel,
             "iib_channel": channel_cfg.iib_channel,
             "iix_channel": channel_cfg.iix_channel,
-            "type1_channel": int(channel_cfg.type1_channel),
-            "type2_channel": int(channel_cfg.type2_channel),
+            "type1_channel": channel_cfg.type1_channel,
+            "type2_channel": channel_cfg.type2_channel,
             "crop_slices": str(prep.crop_slices),
             "downsample_factor": int(args.downsample_factor),
             "cellpose_model": args.cellpose_model,

@@ -1,0 +1,18 @@
+# Vivienne four-channel ImageJ review/export stack.
+# Verified order: AF594 Type I, AF488 Type IIa, AF647 laminin, DAPI/Hoechst.
+channels:
+  laminin: 2
+  dapi: 3
+  type_i: 0
+  type_iia: 1
+  type_iib: null
+  type_iix: null
+  emhc: null
+
+# With only direct Type I and IIa markers, an unstained fiber is not evidence
+# for IIx (or any other unobserved adult type).
+classification:
+  residual_inference:
+    enabled: false
+    target_class: null
+    requires_negative_markers: []

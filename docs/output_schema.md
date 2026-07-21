@@ -38,7 +38,8 @@ Typing features:
 
 Classification columns:
 
-- `fiber_type`: predicted class, usually `iib`, `iia`, or `iix`.
+- `fiber_type`: predicted class when the selected panel supports that call; diagnostics-only
+  panels use `unknown`.
 - `fiber_type_source`: provenance for the current call. In `v0.2` this is one of
   `direct_marker`, `hybrid_marker`, `residual_inference`, or `model_prediction`.
 - `available_markers`: pipe-delimited marker channels available for that run, for

@@ -11,8 +11,8 @@ stages, then external usability and broader model adaptation.
 - [x] Phase 0 — clean repository baseline
 - [x] Phase 1 — architecture and contract specification
 - [x] Phase 2 — panel and restartable artifact foundation
-- [ ] Phase 3 — Type I and semantic myosin features (in progress)
-- [ ] Phase 4 — independent eMHC regeneration domain
+- [x] Phase 3 — Type I and semantic myosin foundation
+- [ ] Phase 4 — independent eMHC regeneration domain (in progress)
 - [ ] Phase 5 — DAPI and nuclear association
 - [ ] Phase 6 — project-specific adaptation
 - [ ] Phase 7 — external usability pilot
@@ -222,7 +222,7 @@ Names may be refined during specification, but the following invalidation rules 
 
 ## Phase 3 — Type I and Semantic Myosin Features
 
-### Status: in progress
+### Status: initial foundation complete (2026-07-18)
 
 The first slice remains diagnostics-only: semantic observed-marker features may be added without
 changing legacy fiber calls, residual inference, or the stable `*_fibers.csv` schema.
@@ -236,8 +236,30 @@ changing legacy fiber calls, residual inference, or the stable `*_fibers.csv` sc
   `docs/type_i_panel_audit.md`).
 - [x] Development-only QUAD smoke experiment with a manual-IIa evidence gate;
   one-image fiber-level cross-validation only, not a generalization result.
-- [ ] Type I candidate model and manifest; no automatic model selection.
-- [ ] Held-out TA false-positive and quadriceps pilot evaluation.
+- [x] Panel-specific Quad and Vivienne reviewed-label inventories, with whole-image holdouts
+  kept separate from development images.
+- [x] Development-only candidate baselines (logistic regression, random forest, and histogram
+  gradient boosting), trained only from `manual_gold` labels; no automatic model selection.
+- [x] Explicit semantic candidate-model sidecar and post-quantification prediction artifact.
+- [x] Quad candidate evaluated on an exact-mask heldout image: logistic regression achieved 79.2%
+  accuracy and 78.4% balanced accuracy across 197 non-excluded manual labels. The principal error
+  mode was IIb called as Type I; this remains a starter-model limitation, not a promotion claim.
+- [x] Exploratory Quad/Vivienne transfer comparison: naïve pooled or cross-panel models do not
+  reliably improve transfer, so models remain panel-specific.
+- [ ] Held-out TA Type I false-positive evaluation, only when a directly observed Type I channel is
+  available and the question is needed for a specific cohort.
+
+### Implementation record
+
+The pipeline now emits semantic observed-marker diagnostics for configured Type I, IIa, IIb, and
+IIx channels. A `multiplanel_features.v1` model sidecar declares its required markers and output
+classes. Candidate predictions are written to a separate `*_model_predictions.csv`; they do not
+silently replace legacy calls in `*_fibers.csv`.
+
+Fiber-label reuse is restricted to compatible masks from the same output directory. This was used
+to verify that semantic inference against the exact reviewed Quad segmentation reproduced the
+frozen heldout result. Comparing numeric label IDs across newly segmented masks is invalid when
+the segmentation differs.
 
 ### Data roles
 
@@ -251,8 +273,10 @@ changing legacy fiber calls, residual inference, or the stable `*_fibers.csv` sc
   IIa = channel 1, laminin = channel 2, and IIb = channel 3. The prior Jag
   regeneration analysis configured only IIa/laminin/IIb, so it did not quantify
   the available Type I channel.
-- Vivienne images: require separate manual channel verification before they are
-  included in any panel inventory, training set, or validation cohort.
+- Vivienne images: marker assignment confirmed as AF594 (red) = Type I,
+  AF488 (green) = IIa, and AF647 = laminin/membrane. A derived review stack
+  uses Type I/IIa/laminin/DAPI channel order 0/1/2/3; it still requires
+  reviewed labels before inclusion in a training set or validation cohort.
 
 ### Scope
 
@@ -274,24 +298,96 @@ changing legacy fiber calls, residual inference, or the stable `*_fibers.csv` sc
 
 ## Phase 4 — Independent eMHC Regeneration Domain
 
+### Status: initiated (2026-07-18)
+
+The first Phase 4 chunk is input and measurement readiness only. It does not activate an eMHC
+positive/negative call, alter adult fiber-type labels, or select a threshold/model. Vivienne's new
+archive includes four-channel ImageJ TIFF hyperstacks that retain a `.czi` filename suffix, so the
+loader must identify TIFF payloads by signature before representative eMHC/DAPI images can enter
+the standard pipeline unchanged.
+
+### First implementation chunks
+
+- [x] Accept TIFF-formatted ImageJ exports even when their suffix is `.czi`, without renaming raw
+  files or changing true-CZI handling.
+- [x] Add raw-CZI scene discovery/export, using Zeiss scene metadata and native tiles to produce
+  deterministic scalar `*_section-01.tif` files without composites.
+- [x] Add an opt-in batch convenience to split multi-scene raw CZIs into scene-specific pipeline
+  work items and provenance-named outputs. Scene export must never happen implicitly from a
+  single-image pipeline command because it can create substantial SSD output.
+- [x] Extend semantic diagnostics to quantify an observed eMHC channel as a separate measurement.
+- [x] Add eMHC review display and manual correction fields, separate from adult fiber identity.
+- [ ] Define and validate a conservative eMHC positive/negative/uncertain policy on reviewed,
+  mouse-grouped images.
+- [x] Add image- and mouse-level regeneration summaries and model/threshold provenance.
+
+Initial grouped policy probe (2026-07-19): 363 reviewed fibers across three mice were available
+(351545_R: 190, 351537_LL: 89, 351544_L: 84). A development-only policy using the two mice
+351545_R and 351537_LL achieved 3.1% negative false positives and 65.8% positive recall, but
+the frozen 351544_L mouse holdout had 12.2% negative false positives and 66.7% positive recall.
+This is a useful diagnostic result, not a promotion claim; the policy remains unselected until
+additional development mice or a more robust normalized score are evaluated.
+
+The additive summary stage now writes `emhc_image_summary.csv`, `emhc_mouse_summary.csv`, and
+`emhc_policy_provenance.json` from the reviewed policy predictions. These outputs keep manual
+review labels, starter-policy calls, group IDs, source review files, score choice, cutoffs, and
+holdout assignment auditable without changing the stable adult fiber table.
+
+### Pilot acquisition record
+
+The 28-day TA regeneration cohort contains a suitable Phase 4 pilot panel. Embedded Zeiss metadata
+from a representative mdx injected acquisition confirms `dapi = 0`, `emhc = 1` (AF568), and
+`laminin = 2` (AF647). Multi-scene raw CZIs must be automatically enumerated and processed one
+scene at a time, with deterministic output identifiers such as `_section-01`; no scene may be
+silently selected or dropped. One image/mouse must remain held out before any eMHC threshold or
+model is chosen. This mapping is specific to that acquisition cohort and is not a global channel
+default.
+
 ### Scope
 
-- Implement semantic eMHC marker features.
-- Model eMHC as an independent binary/probabilistic task:
-  positive, negative, uncertain, score/probability, and coverage.
-- Allow a fiber to have both a fiber-type label and an eMHC status.
-- Add eMHC review context to Napari.
-- Add image- and mouse-aware validation reports.
+Extract per-fiber features from the eMHC channel.
+Classify each fiber as eMHC positive, negative, or uncertain, with an associated score/probability and signal coverage.
+Store eMHC status separately from the adult fiber-type label so both can be reported for the same fiber when applicable.
+Add eMHC channel display and correction tools to the Napari review workflow.
+Add image- and mouse-level validation summaries for eMHC classification.
 
 ### Acceptance criteria
 
-- eMHC is never inserted as an exclusive fiber-type class.
-- Outputs retain both identity and regeneration domains.
-- Model and threshold provenance are recorded.
-- Validation for the DAPI/eMHC cohort is grouped by mouse.
-- Missing eMHC channels suppress the domain cleanly rather than creating inferred values.
+* eMHC is not added as a mutually exclusive adult fiber-type class.
+* Adult fiber-type labels and eMHC results are stored separately when both are available.
+* Model and threshold provenance are recorded.
+* Validation for the DAPI/eMHC cohort is grouped by mouse as well as by image.
+* When no eMHC channel is present, eMHC outputs are omitted or marked as not available rather than inferred.
 
 ## Phase 5 — Core DAPI and Nuclear Association
+
+### Status: initiated (2026-07-19)
+
+The first implementation chunk is a restartable nuclear stage. `src.run_nuclear_stage` consumes
+cached fiber labels, segments the configured DAPI channel independently, and writes nuclear labels,
+nucleus measurements, nucleus-to-fiber links, per-fiber nuclear counts, and a versioned nuclear
+manifest. Association categories are geometric (`central_interior`, `peripheral_associated`,
+`boundary_associated`, `ambiguous`, or `unassigned_or_interstitial`) and do not make automatic
+myonucleus or cell-identity claims.
+
+### First implementation chunks
+
+- [x] Add synthetic geometry tests for central, boundary, assigned, ambiguous, and unassigned cases.
+- [x] Add a separate DAPI Cellpose stage that consumes cached fiber labels and writes restartable
+  nuclear artifacts.
+- [x] Record DAPI segmentation and association parameters in a nuclear manifest.
+- [x] Validate the stage numerically on a representative full DAPI/eMHC section; normalized DAPI
+  produced 2,892 nuclear labels with 2,067 fiber-associated nuclei.
+- [x] Add optional DAPI and nuclear-label overlays to the existing Napari reviewer.
+- [ ] Visually review the full-resolution nuclear overlay and tune association rules if needed.
+
+Vivienne DAPI pilot (2026-07-21): the verified Type I/IIa/laminin/DAPI panel was run with
+the cached 5800B fiber labels and the default nuclear baseline (`cpsam`, diameter 15,
+downsample factor 2, minimum size 30). Visual spot checks found broadly plausible nuclear masks,
+including in a high-density interstitial region. A small number of central nuclei were missed in
+the inspected fields, but no systematic dead zone was observed. This is a promising first baseline
+and requires an independent Vivienne image plus comparison to acquisition-derived measurements
+before the settings are treated as a cohort-level measurement contract.
 
 ### Segmentation sequence
 

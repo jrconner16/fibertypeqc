@@ -42,7 +42,6 @@ class ChannelConfig:
                 markers.append(marker)
         return tuple(markers)
 
-
 DEFAULT_CHANNEL_CONFIG = ChannelConfig()
 
 _LEGACY_CHANNEL_KEY_ALIASES = {

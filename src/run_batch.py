@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from fibertypeqc.czi_scenes import discover_czi_scenes, export_czi_scenes
+
 # V0 frozen parameters (these define the baseline production command)
 V0_PARAMS = {
     "type1_channel": 0,
@@ -435,6 +437,14 @@ def main() -> None:
         default="never",
         help="Reuse compatible cached fiber labels within each per-image output directory.",
     )
+    parser.add_argument(
+        "--split-czi-scenes",
+        action="store_true",
+        help=(
+            "Opt in to exporting every true Zeiss scene from multi-scene CZI inputs and "
+            "processing the resulting scalar section TIFFs sequentially."
+        ),
+    )
 
     args = parser.parse_args()
     if args.channel_config is not None and args.panel_config is not None:
@@ -508,6 +518,32 @@ def main() -> None:
             logger.error(f"No .czi/.tif/.tiff files found in {input_dir}")
             sys.exit(1)
         image_rows = [(path.stem, path) for path in image_files]
+
+    if args.split_czi_scenes:
+        expanded_rows: list[tuple[str, Path]] = []
+        scene_export_root = output_dir / "raw_scene_exports"
+        for image_name, image_path in image_rows:
+            if image_path.suffix.lower() != ".czi":
+                expanded_rows.append((image_name, image_path))
+                continue
+            scene_dir = scene_export_root / image_name
+            expected_scene_count = len(discover_czi_scenes(image_path))
+            if expected_scene_count == 0:
+                expanded_rows.append((image_name, image_path))
+                continue
+            existing_scenes = sorted(scene_dir.glob("*_section-*.tif"))
+            if existing_scenes:
+                if len(existing_scenes) != expected_scene_count:
+                    raise ValueError(
+                        f"Existing scene export is incomplete for {image_path}: expected "
+                        f"{expected_scene_count}, found {len(existing_scenes)}."
+                    )
+                scenes = existing_scenes
+            else:
+                scenes = export_czi_scenes(image_path, scene_dir)
+            for section_number, scene_path in enumerate(scenes, start=1):
+                expanded_rows.append((f"{image_name}_section-{section_number:02d}", scene_path))
+        image_rows = expanded_rows
 
     logger.info(f"Found {len(image_rows)} image(s) to process")
     logger.info("V0 Parameters:")

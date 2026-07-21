@@ -1,0 +1,6 @@
+manifest_version: 1
+model_id: quad_351545_logistic_i_iia_iib_iix_v1
+task: fiber_identity
+feature_schema_version: multiplanel_features.v1
+required_markers: [laminin, type_i, type_iia, type_iib]
+outputs: [i, iia, iib, iix]
