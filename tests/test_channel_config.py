@@ -48,6 +48,24 @@ def test_load_channel_config_reads_canonical_semantic_panel(tmp_path):
     )
 
 
+def test_vivienne_panel_declares_only_observed_direct_markers():
+    panel_path = (
+        Path(__file__).resolve().parents[1]
+        / "manifests"
+        / "vivienne_i_iia_dapi_panel.yaml"
+    )
+
+    cfg = load_channel_config(panel_path)
+
+    assert cfg.membrane_channel == 2
+    assert cfg.dapi_channel == 3
+    assert cfg.i_channel == 0
+    assert cfg.iia_channel == 1
+    assert cfg.iib_channel is None
+    assert cfg.iix_channel is None
+    assert not cfg.residual_inference_enabled
+
+
 def test_load_channel_config_rejects_missing_channels_block(tmp_path):
     path = write_yaml(tmp_path / "channels.yml", "type1: 0\n")
 

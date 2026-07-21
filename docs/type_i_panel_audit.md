@@ -11,7 +11,7 @@ performance.
 | Historical TA baseline | No direct Type I channel | Reviewed labels use the legacy IIa/IIb/residual-IIx policy | Excluded |
 | Jag1 regeneration | Type I channel was present but omitted from the prior analysis configuration | No registered Type I-reviewed labels | Excluded until labels are reviewed |
 | Jag1 quadriceps | Manually verified: Type I=0, IIa=1, laminin=2, IIb=3 | No registered Type I-reviewed labels | Panel-compatible; labels still required |
-| Vivienne | Manual channel verification pending | Not audited | Excluded pending verification and labels |
+| Vivienne | Confirmed marker assignment: AF594 (red)=Type I; AF488 (green)=IIa; AF647=laminin/membrane. The derived review stack orders these as 0, 1, and 2, with DAPI at 3. | Not audited | Excluded pending reviewed labels |
 
 The historical residual/IIx call must never be relabeled as a Type I negative
 solely because it is not IIa or IIb. Likewise, an image with a Type I channel

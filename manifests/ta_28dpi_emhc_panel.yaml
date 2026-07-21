@@ -1,0 +1,14 @@
+channels:
+  laminin: 2
+  dapi: 0
+  type_i: null
+  type_iia: null
+  type_iib: null
+  type_iix: null
+  emhc: 1
+
+classification:
+  residual_inference:
+    enabled: false
+    target_class: null
+    requires_negative_markers: []

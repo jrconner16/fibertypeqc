@@ -11,7 +11,7 @@ import src.run_pipeline as run_pipeline
 
 
 def _mock_pipeline_primitives(monkeypatch):
-    image = np.zeros((3, 2, 2), dtype=np.float32)
+    image = np.zeros((4, 2, 2), dtype=np.float32)
     image[0, 0, 0] = 10.0
     image[1, 1, 1] = 12.0
     image[2, :, :] = 1.0
@@ -85,6 +85,54 @@ def test_run_pipeline_export_diagnostics_flag_controls_output(tmp_path, monkeypa
     assert {"label", "fiber_type", "type1_mean", "type1_snr_mean", "type_cov_sum"}.issubset(
         diagnostics.columns
     )
+
+
+@pytest.mark.integration
+def test_run_pipeline_writes_summary_for_diagnostics_only_panel(tmp_path, monkeypatch):
+    _mock_pipeline_primitives(monkeypatch)
+    input_path = tmp_path / "image.tif"
+    input_path.write_bytes(b"fake")
+    panel_path = tmp_path / "panel.yaml"
+    panel_path.write_text(
+        "channels:\n"
+        "  laminin: 2\n"
+        "  dapi: 3\n"
+        "  type_i: 0\n"
+        "  type_iia: 1\n"
+        "  type_iib: null\n"
+        "  type_iix: null\n"
+        "  emhc: null\n"
+        "classification:\n"
+        "  residual_inference:\n"
+        "    enabled: false\n"
+        "    target_class: iix\n"
+        "    requires_negative_markers: []\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        run_pipeline.sys,
+        "argv",
+        [
+            "run_pipeline",
+            "--input",
+            str(input_path),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--panel-config",
+            str(panel_path),
+            "--export-diagnostics",
+            "--typing-preprocess",
+            "raw",
+            "--typing-smooth-sigma",
+            "0",
+            "--typing-erode-px",
+            "0",
+        ],
+    )
+    run_pipeline.main()
+
+    summary = pd.read_csv(tmp_path / "out" / f"{input_path.stem}_summary.csv")
+    assert pd.isna(summary.loc[0, "type1_channel"])
 
 
 def test_cleanup_outputs_for_retain_mode_tables_removes_labels_only(tmp_path):

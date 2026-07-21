@@ -44,6 +44,18 @@ def test_extract_pixel_size_um_from_imagej_tiff(tmp_path):
     assert y_um == 0.25
 
 
+def test_tiff_payload_with_czi_suffix_uses_tiff_reader(tmp_path):
+    path = tmp_path / "image_exported_as_czi.czi"
+    image = np.zeros((2, 4, 5), dtype=np.uint16)
+    image[1] = 7
+    tifffile.imwrite(path, image, imagej=True, metadata={"axes": "CYX", "unit": "um"})
+
+    loaded = load_multichannel_image(path)
+
+    assert loaded.shape == image.shape
+    assert np.array_equal(loaded, image)
+
+
 def test_save_dataframe_creates_parent_directory(tmp_path):
     path = tmp_path / "nested" / "table.csv"
 

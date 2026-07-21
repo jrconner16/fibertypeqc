@@ -54,3 +54,44 @@ def test_merge_reviewed_labels_preserves_manual_type_i_label():
 
     assert merged.loc[0, "corrected_type"] == "i"
     assert merged.loc[0, "final_type"] == "i"
+
+
+def test_merge_reviewed_labels_preserves_separate_manual_emhc_label():
+    fibers = pd.DataFrame({"label": [1], "fiber_type": ["type2"]})
+    review = pd.DataFrame(
+        {
+            "fiber_id": [1],
+            "corrected_type": [""],
+            "emhc_manual_label": ["positive"],
+            "is_uncertain": [False],
+            "is_hybrid": [False],
+            "is_excluded": [False],
+            "label_source": ["unreviewed"],
+        }
+    )
+
+    merged = merge_reviewed_labels(fibers, review)
+
+    assert merged.loc[0, "emhc_manual_label"] == "positive"
+    assert merged.loc[0, "final_type"] == "iia"
+
+
+def test_merge_reviewed_labels_keeps_unknown_unresolved_for_non_iix_panels():
+    fibers = pd.DataFrame({"label": [1, 2], "fiber_type": ["unknown", "iix"]})
+    review = pd.DataFrame(
+        {
+            "fiber_id": [1, 2],
+            "corrected_type": ["", ""],
+            "is_uncertain": [False, False],
+            "is_hybrid": [False, False],
+            "is_excluded": [False, False],
+            "label_source": ["unreviewed", "unreviewed"],
+        }
+    )
+
+    merged = merge_reviewed_labels(fibers, review, unresolved_label="unresolved")
+
+    assert merged.loc[0, "predicted_biological_type"] == "unresolved"
+    assert merged.loc[0, "final_type"] == "unresolved"
+    assert merged.loc[1, "predicted_biological_type"] == "unresolved"
+    assert merged.loc[1, "final_type"] == "unresolved"

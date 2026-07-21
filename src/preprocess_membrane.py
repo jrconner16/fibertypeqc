@@ -127,10 +127,22 @@ def preprocess_membrane_channel(membrane: np.ndarray, cfg: PreprocessConfig) -> 
 def upsample_labels_nearest(
     labels: np.ndarray, target_shape: tuple[int, int], factor: int
 ) -> np.ndarray:
-    if factor <= 1:
-        return labels.astype(np.int32)
-    up = np.repeat(np.repeat(labels, factor, axis=0), factor, axis=1)
-    return up[: target_shape[0], : target_shape[1]].astype(np.int32)
+    """Restore Cellpose labels to an exact target shape with nearest-neighbor sampling.
+
+    Cellpose can internally rescale masks when an explicit diameter is supplied,
+    including when pipeline downsampling is disabled.  Use the actual returned
+    mask shape rather than assuming it differs only by ``factor``.
+    """
+    del factor  # Retained for the public call signature and run provenance.
+    if labels.shape == target_shape:
+        return labels.astype(np.int32, copy=False)
+    source_h, source_w = labels.shape
+    target_h, target_w = target_shape
+    if source_h <= 0 or source_w <= 0:
+        raise ValueError(f"Cannot resize empty labels with shape {labels.shape}.")
+    rows = np.minimum(np.arange(target_h) * source_h // target_h, source_h - 1)
+    cols = np.minimum(np.arange(target_w) * source_w // target_w, source_w - 1)
+    return labels[rows[:, None], cols[None, :]].astype(np.int32, copy=False)
 
 
 def paste_crop_labels(

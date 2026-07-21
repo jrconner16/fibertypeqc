@@ -16,6 +16,10 @@ class CellposeConfig:
     resample: bool = False
     use_mps: bool = True
     normalize: bool = False
+    min_size: int = 15
+    cellprob_threshold: float = 0.0
+    flow_threshold: float = 0.4
+    channels: list[int] | None = None
 
 
 _CACHED_MODELS: dict[tuple[str, str], models.CellposeModel] = {}
@@ -57,6 +61,10 @@ def run_cellpose(membrane_image: np.ndarray, cfg: CellposeConfig) -> tuple[np.nd
         bsize=cfg.bsize,
         resample=cfg.resample,
         normalize=cfg.normalize,
+        min_size=cfg.min_size,
+        cellprob_threshold=cfg.cellprob_threshold,
+        flow_threshold=cfg.flow_threshold,
+        channels=cfg.channels,
     )
     elapsed_s = perf_counter() - t0
 

@@ -19,7 +19,7 @@ def test_model_manifest_requires_observed_markers(tmp_path):
         validate_model_compatibility(Panel({"laminin": 0, "type_i": None}), manifest)
 
 
-def test_model_manifest_rejects_feature_schema_not_available_in_legacy_pipeline(tmp_path):
+def test_model_manifest_accepts_semantic_feature_schema(tmp_path):
     path = tmp_path / "model.yaml"
     path.write_text(
         "manifest_version: 1\n"
@@ -31,5 +31,15 @@ def test_model_manifest_rejects_feature_schema_not_available_in_legacy_pipeline(
     )
     manifest = load_model_manifest(path)
     panel = Panel({"laminin": 0, "type_iia": 1, "type_iib": 2})
-    with pytest.raises(ValueError, match="feature schema"):
-        validate_model_compatibility(panel, manifest)
+    validate_model_compatibility(panel, manifest)
+
+
+def test_diagnostics_only_panel_does_not_require_legacy_model_markers():
+    validate_model_compatibility(Panel({"laminin": 0, "type_i": 1}), None)
+
+
+def test_legacy_model_still_requires_legacy_markers():
+    with pytest.raises(ValueError, match="type_iib"):
+        validate_model_compatibility(
+            Panel({"laminin": 0, "type_iia": 1}), None, require_legacy_model=True
+        )
