@@ -43,6 +43,7 @@ from src.quantify_classify import (
     qc_flags_from_fibers,
     quantify_labels,
 )
+from src.run_nuclear_stage import run_nuclear_analysis
 from src.segment_cellpose import CellposeConfig, run_cellpose
 
 
@@ -157,7 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--emhc-channel",
         type=int,
         default=None,
-        help="Optional eMHC marker channel index; no regeneration call is activated yet.",
+        help="Optional eMHC marker channel index for separate regeneration diagnostics.",
     )
     p.add_argument(
         "--requested-domain",
@@ -321,6 +322,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--qc-median-area-min", type=float, default=200.0)
     p.add_argument("--qc-median-area-max", type=float, default=15000.0)
     p.add_argument("--qc-max-type-corr", type=float, default=0.92)
+    p.add_argument(
+        "--nuclei-downsample-factor",
+        type=int,
+        default=2,
+        help="Downsample factor for automatic DAPI nuclear segmentation.",
+    )
+    p.add_argument(
+        "--nuclei-diameter",
+        type=float,
+        default=15.0,
+        help="Approximate nucleus diameter in pixels for automatic DAPI segmentation.",
+    )
+    p.add_argument("--nuclei-min-size", type=int, default=30)
+    p.add_argument(
+        "--dapi-preprocess",
+        choices=["raw", "tile_subtract", "tile_normalize"],
+        default="raw",
+        help="Optional preprocessing before automatic DAPI segmentation.",
+    )
+    p.add_argument("--dapi-tile-size", type=int, default=512)
+    p.add_argument("--dapi-background-quantile", type=float, default=0.02)
+    p.add_argument("--dapi-low-percentile", type=float, default=1.0)
+    p.add_argument("--dapi-high-percentile", type=float, default=99.8)
     return p
 
 
@@ -355,7 +379,8 @@ def main() -> None:
         and model_manifest.feature_schema_version == "multiplanel_features.v1"
     )
 
-    total_stages = 7
+    run_nuclei = channel_cfg.dapi_channel is not None
+    total_stages = 8 if run_nuclei else 7
     t_all = time.perf_counter()
 
     with stage(1, total_stages, "prepare output + load image"):
@@ -634,6 +659,32 @@ def main() -> None:
         summary_path = output_dir / f"{stem}_summary.csv"
         save_dataframe(summary_path, summary_df)
 
+    nuclear_outputs: dict[str, Path] = {}
+    if run_nuclei:
+        with stage(8, total_stages, "segment DAPI nuclei + associate with fibers"):
+            nuclear_outputs = run_nuclear_analysis(
+                image=image,
+                input_path=args.input,
+                fiber_labels=np.asarray(labels).astype(np.int32),
+                fiber_labels_path=labels_path,
+                output_dir=output_dir / "nuclear",
+                dapi_channel=int(channel_cfg.dapi_channel),
+                dapi_preprocess=args.dapi_preprocess,
+                dapi_tile_size=args.dapi_tile_size,
+                dapi_background_quantile=args.dapi_background_quantile,
+                dapi_low_percentile=args.dapi_low_percentile,
+                dapi_high_percentile=args.dapi_high_percentile,
+                downsample_factor=args.nuclei_downsample_factor,
+                diameter=args.nuclei_diameter,
+                min_size=args.nuclei_min_size,
+                cpu=args.cpu,
+                cellpose_normalize=True,
+                reuse_artifacts=args.reuse_artifacts != "never",
+            )
+            summary["nuclear_output_dir"] = str(output_dir / "nuclear")
+            summary["nuclear_manifest_path"] = str(nuclear_outputs["manifest"])
+            save_dataframe(summary_path, pd.DataFrame([summary]))
+
     removed_outputs = _cleanup_outputs_for_retain_mode(
         retain_mode=args.retain_mode,
         labels_path=labels_path,
@@ -648,6 +699,8 @@ def main() -> None:
         print("saved fibers:", fibers_path)
     if diagnostics_path is not None and diagnostics_path.exists():
         print("saved diagnostics:", diagnostics_path)
+    if nuclear_outputs:
+        print("saved nuclear outputs:", output_dir / "nuclear")
     print("saved summary:", summary_path)
     if removed_outputs:
         print(
