@@ -27,7 +27,6 @@ uv run python -m src.run_panel_array_task \
   --panel-config manifests/vivienne_i_iia_dapi_panel.yaml \
   --fiber-downsample-factor 2 \
   --fiber-diameter 30 \
-  --run-nuclei \
   --nuclei-downsample-factor 2 \
   --nuclei-diameter 15 \
   --nuclei-min-size 30

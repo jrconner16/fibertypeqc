@@ -49,11 +49,11 @@ channels:
   emhc: null
 ```
 
-The legacy `membrane`/`markers` format remains accepted. eMHC can be mapped and recorded now, but
-requesting regeneration fails clearly until Phase 4 implements that output. Likewise,
-`--requested-domain nuclear_pathology` requires DAPI and then stops before processing until the
-Phase 5 DAPI workflow exists. These preflight failures prevent a missing marker from being silently
-treated as a negative finding.
+The legacy `membrane`/`markers` format remains accepted. eMHC can be mapped and recorded as a
+separate diagnostic measurement, but requesting regeneration fails clearly until the formal Phase 4
+output is implemented. When DAPI is configured, the main pipeline automatically runs nuclear
+segmentation and fiber association; this produces structural nuclear tables, not nuclear pathology
+calls. `--requested-domain nuclear_pathology` remains intentionally unsupported.
 
 ## `channels`
 

@@ -133,6 +133,12 @@ def test_run_pipeline_writes_summary_for_diagnostics_only_panel(tmp_path, monkey
 
     summary = pd.read_csv(tmp_path / "out" / f"{input_path.stem}_summary.csv")
     assert pd.isna(summary.loc[0, "type1_channel"])
+    nuclear_dir = tmp_path / "out" / "nuclear"
+    assert nuclear_dir.is_dir()
+    assert (nuclear_dir / f"{input_path.stem}_nuclear_run.json").exists()
+    assert summary.loc[0, "nuclear_manifest_path"] == str(
+        nuclear_dir / f"{input_path.stem}_nuclear_run.json"
+    )
 
 
 def test_cleanup_outputs_for_retain_mode_tables_removes_labels_only(tmp_path):

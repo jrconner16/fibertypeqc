@@ -9,8 +9,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from fibertypeqc.config import load_channel_config
-
 
 @dataclass(frozen=True)
 class ManifestRow:
@@ -34,7 +32,6 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--panel-config", type=Path, required=True)
     parser.add_argument("--fiber-downsample-factor", type=int, default=2)
     parser.add_argument("--fiber-diameter", type=float, default=30.0)
-    parser.add_argument("--run-nuclei", action="store_true")
     parser.add_argument("--nuclei-downsample-factor", type=int, default=2)
     parser.add_argument("--nuclei-diameter", type=float, default=15.0)
     parser.add_argument("--nuclei-min-size", type=int, default=30)
@@ -98,37 +95,11 @@ def main() -> None:
             "--export-diagnostics",
             "--retain-mode",
             "full",
-        ]
-    )
-
-    if not args.run_nuclei:
-        return
-
-    panel = load_channel_config(args.panel_config)
-    if panel.dapi_channel is None:
-        raise ValueError("--run-nuclei requires a DAPI channel in --panel-config")
-    labels_path = output_dir / f"{input_path.stem.replace(' ', '_')}_cellpose_labels.tif"
-    if not labels_path.is_file():
-        raise FileNotFoundError(f"Expected fiber labels were not produced: {labels_path}")
-
-    _run(
-        [
-            sys.executable,
-            "-m",
-            "src.run_nuclear_stage",
-            "--input",
-            str(input_path),
-            "--fiber-labels",
-            str(labels_path),
-            "--output-dir",
-            str(output_dir / "nuclear"),
-            "--dapi-channel",
-            str(panel.dapi_channel),
-            "--downsample-factor",
+            "--nuclei-downsample-factor",
             str(args.nuclei_downsample_factor),
-            "--diameter",
+            "--nuclei-diameter",
             str(args.nuclei_diameter),
-            "--min-size",
+            "--nuclei-min-size",
             str(args.nuclei_min_size),
         ]
     )
