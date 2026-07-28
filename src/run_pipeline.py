@@ -336,6 +336,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--nuclei-min-size", type=int, default=30)
     p.add_argument(
+        "--nuclei-cellprob-threshold",
+        type=float,
+        default=0.0,
+        help="Cellpose cell-probability threshold for DAPI nuclear segmentation.",
+    )
+    p.add_argument(
+        "--nuclei-flow-threshold",
+        type=float,
+        default=0.4,
+        help="Cellpose flow-error threshold for DAPI nuclear segmentation.",
+    )
+    p.add_argument(
         "--dapi-preprocess",
         choices=["raw", "tile_subtract", "tile_normalize"],
         default="raw",
@@ -677,6 +689,8 @@ def main() -> None:
                 downsample_factor=args.nuclei_downsample_factor,
                 diameter=args.nuclei_diameter,
                 min_size=args.nuclei_min_size,
+                cellprob_threshold=args.nuclei_cellprob_threshold,
+                flow_threshold=args.nuclei_flow_threshold,
                 cpu=args.cpu,
                 cellpose_normalize=True,
                 reuse_artifacts=args.reuse_artifacts != "never",
