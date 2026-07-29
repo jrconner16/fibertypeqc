@@ -1,6 +1,6 @@
 # QC and Manual Review System Plan
 
-Status: Phase 1 planned; repository audit complete; implementation not yet started.
+Status: Phase 1 complete; repository audit and shared headless foundation implemented.
 
 This document is the controlling product and implementation plan for turning
 FiberTypeQC into a project-based, human-in-the-loop review system. It records the
@@ -782,20 +782,20 @@ Phase 1.
 Most tests use small synthetic arrays and temporary directories and remain
 headless. Add a small number of GUI tests only where feasible.
 
-- [ ] Project manifest validation.
-- [ ] Missing/corrupt paths produce clear errors.
-- [ ] Save then reload preserves review state.
-- [ ] Predicted files are never overwritten.
-- [ ] Reviewed masks use copy-on-write.
-- [ ] Image statuses persist.
-- [ ] Domain-specific exclusions remain separate.
-- [ ] Region geometry/action/domain persist.
-- [ ] Fiber-type correction preserves model prediction.
+- [x] Project manifest validation.
+- [x] Missing/corrupt paths produce clear errors.
+- [x] Save then reload preserves review state.
+- [x] Predicted files are never overwritten.
+- [x] Reviewed masks use copy-on-write.
+- [x] Image statuses persist.
+- [x] Domain-specific exclusions remain separate.
+- [x] Region geometry/action/domain persist.
+- [x] Fiber-type correction preserves model prediction.
 - [ ] Random queue is reproducible with a seed.
 - [ ] Split assigns valid stable IDs.
 - [ ] Merge preserves lineage.
-- [ ] Fiber edit marks downstream outputs stale.
-- [ ] Nucleus edit does not invalidate fiber typing.
+- [x] Fiber edit marks downstream outputs stale.
+- [x] Nucleus edit does not invalidate fiber typing.
 - [ ] Nucleus reassignment updates affected associations.
 - [ ] Region exclusion affects only selected domains.
 - [ ] `all_passing` selection works.
@@ -803,7 +803,7 @@ headless. Add a small number of GUI tests only where feasible.
 - [ ] No-passing selection routes to review.
 - [ ] Biological endpoint values do not trigger technical hard fails.
 - [ ] Finalization respects section and region exclusions.
-- [ ] Resume restores queue position.
+- [x] Resume restores queue position.
 - [ ] Old reviewer output remains loadable where applicable.
 
 After each phase:
@@ -829,21 +829,21 @@ uv run ruff check <changed Python files and tests>
 - [x] Recorded architectural conflicts and decisions.
 - [x] Ran baseline full suite: 131 passed, 36 warnings.
 - [x] Created this plan before Phase 1 implementation.
-- [ ] Commit plan as its own commit.
+- [x] Committed plan separately as `660ff28`.
 
 ### Phase 1
 
-- [ ] Add `src/review/` headless package.
-- [ ] Add controlled enums and versioned schemas.
-- [ ] Add validated YAML project loader and resolved artifact paths.
-- [ ] Add `ReviewSession` with domain-separated status and queue position.
-- [ ] Add atomic save/resume and appendable event storage.
-- [ ] Add immutable prediction path checks and reviewed mask copy-on-write.
-- [ ] Add centralized invalidation/stale tracking.
-- [ ] Add Phase 1 tests.
-- [ ] Run lint on changed Python files.
-- [ ] Run the full test suite.
-- [ ] Commit Phase 1 separately.
+- [x] Added `src/review/` headless package.
+- [x] Added controlled enums and versioned schemas.
+- [x] Added validated YAML project loader and resolved artifact paths.
+- [x] Added `ReviewSession` with domain-separated status and queue position.
+- [x] Added atomic save/resume and appendable event storage.
+- [x] Added immutable prediction path checks and reviewed mask copy-on-write.
+- [x] Added centralized invalidation/stale tracking.
+- [x] Added 15 Phase 1 headless tests.
+- [x] Ran full repository lint: all checks passed.
+- [x] Ran full suite: 146 passed, 36 existing warnings.
+- [x] Committed Phase 1 separately from the planning commit.
 
 ### Later phases
 
