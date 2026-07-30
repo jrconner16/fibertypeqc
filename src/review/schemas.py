@@ -55,6 +55,19 @@ class ObjectReviewStatus(StrEnum):
     UNRESOLVED = "unresolved"
 
 
+class RegionAction(StrEnum):
+    """Explicit actions a reviewer can attach to a drawn region."""
+
+    EXCLUDE_DOMAIN = "exclude_domain"
+    QUEUE_OBJECTS = "queue_objects"
+    DETAILED_REVIEW = "detailed_review"
+    IGNORE_NUCLEI = "ignore_nuclei"
+    IGNORE_FIBER_TYPING = "ignore_fiber_typing"
+    EXCLUDE_ALL_ANALYSIS = "exclude_all_analysis"
+    RECOMMEND_RERUN = "recommend_regional_rerun"
+    UNRESOLVED = "unresolved"
+
+
 EnumT = TypeVar("EnumT", bound=StrEnum)
 
 
@@ -93,6 +106,9 @@ class RegionAnnotation:
         if not self.action.strip():
             raise ValueError("region action must not be empty")
         object.__setattr__(self, "domain", parse_enum(Domain, self.domain, "region domain"))
+        object.__setattr__(
+            self, "action", parse_enum(RegionAction, self.action, "region action").value
+        )
         if not self.timestamp:
             object.__setattr__(self, "timestamp", utc_now())
 

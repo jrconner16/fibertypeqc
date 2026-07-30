@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.review.schemas import ReviewEvent
+from src.review.schemas import RegionAnnotation, ReviewEvent
 from src.review.session import ReviewSession
 
 EVENT_COLUMNS = [
@@ -83,8 +83,7 @@ def load_session(
     session = ReviewSession.from_dict(raw)
     if expected_project_id is not None and session.project_id != expected_project_id:
         raise ValueError(
-            f"Review state project_id {session.project_id!r} does not match "
-            f"{expected_project_id!r}"
+            f"Review state project_id {session.project_id!r} does not match {expected_project_id!r}"
         )
     return session
 
@@ -98,9 +97,7 @@ def append_review_event(path: Path | str, event: ReviewEvent) -> None:
             with event_path.open(newline="", encoding="utf-8") as handle:
                 reader = csv.DictReader(handle)
                 if reader.fieldnames != EVENT_COLUMNS:
-                    raise ValueError(
-                        f"Review event CSV has incompatible columns: {event_path}"
-                    )
+                    raise ValueError(f"Review event CSV has incompatible columns: {event_path}")
                 rows.extend(reader)
         except csv.Error as exc:
             raise ValueError(f"Review event CSV is corrupt: {event_path}: {exc}") from exc
@@ -112,6 +109,28 @@ def append_review_event(path: Path | str, event: ReviewEvent) -> None:
         writer.writerows(rows)
         handle.seek(0)
         _atomic_replace_text(event_path, handle.read())
+
+
+def save_regions_geojson(path: Path | str, regions: list[RegionAnnotation]) -> None:
+    """Atomically materialize the current region annotations as GeoJSON."""
+    features = [
+        {
+            "type": "Feature",
+            "id": region.region_id,
+            "geometry": region.geometry,
+            "properties": {
+                key: value
+                for key, value in region.to_dict().items()
+                if key not in {"region_id", "geometry"}
+            },
+        }
+        for region in regions
+    ]
+    _atomic_replace_text(
+        Path(path),
+        json.dumps({"type": "FeatureCollection", "features": features}, indent=2, sort_keys=True)
+        + "\n",
+    )
 
 
 def materialize_reviewed_mask(

@@ -77,6 +77,15 @@ class ReviewSession:
         self.regions.append(region)
         self.touch()
 
+    def remove_region(self, region_id: str) -> RegionAnnotation | None:
+        """Remove one saved region so a mistaken annotation is reversible."""
+        for index, region in enumerate(self.regions):
+            if region.region_id == region_id:
+                self.regions.pop(index)
+                self.touch()
+                return region
+        return None
+
     def record_fiber_type_decision(self, decision: FiberTypeDecision) -> None:
         """Add or update a decision while keeping the original model value immutable."""
         for index, existing in enumerate(self.object_decisions):
