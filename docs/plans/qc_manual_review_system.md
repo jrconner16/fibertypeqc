@@ -1,6 +1,6 @@
 # QC and Manual Review System Plan
 
-Status: Phase 2A complete; dashboard work remains deferred to Phase 2B.
+Status: Phase 2B complete; image-level review remains deferred to Phase 3.
 
 This document is the controlling product and implementation plan for turning
 FiberTypeQC into a project-based, human-in-the-loop review system. It records the
@@ -1015,8 +1015,95 @@ Phase 1.
 
 ### Phase 2B: project dashboard
 
-- cohort dashboard; and
-- tests.
+- validate and load the versioned Phase 2A QC tables;
+- build a GUI-independent dashboard model;
+- summarize domain PASS / REVIEW / FAIL / not-applicable counts;
+- classify mouse/domain readiness as complete, targeted review, or no acceptable
+  section;
+- show section-level status, technical score, review priority, selection, and
+  explicit reason codes;
+- show review progress and correction burden from an existing `ReviewSession`;
+- allow in-memory switching between `all_passing` and `best_passing`, plus a
+  supplied manual selection;
+- add a read-only Napari/Qt cohort dashboard dock;
+- add a project dashboard CLI; and
+- add headless tests plus a minimal offscreen widget smoke test.
+
+Phase 2B does not load raw images, edit review state, persist changed section
+selections, or implement image/region/object review. Those actions begin in
+Phase 3.
+
+#### Phase 2B data validation
+
+The dashboard requires `image_qc.csv`; `fiber_qc.csv`, `nucleus_qc.csv`, and
+`section_selection.csv` are loaded when present. It rejects:
+
+- unsupported schema versions;
+- missing identity/status/reason columns;
+- project IDs that do not match `project.yaml`;
+- QC image IDs absent from the manifest;
+- duplicate image/domain rows;
+- missing image/domain rows for the three controlled domains; and
+- mixed QC/rules/model provenance within one table.
+
+Boolean CSV fields are parsed explicitly rather than with Python truthiness, so
+the string `"False"` cannot become true.
+
+#### Phase 2B dashboard model
+
+The GUI-independent model contains:
+
+- cohort counts: mice, sections, applicable image/domain rows, reviewed
+  image/domain rows, and correction burden;
+- per-domain PASS / REVIEW / FAIL / not-applicable counts;
+- one mouse/domain readiness row with section counts, acceptable and selected
+  image IDs, `requires_manual_review`, and explicit selection reason;
+- one section/domain display row with score, priority, selection, and QC reasons.
+
+An acceptable section is applicable and has no technical hard failure.
+Mouse/domain readiness is:
+
+- `no_acceptable_section` when no acceptable section exists;
+- `targeted_review` when selection requires review, no PASS section exists, or a
+  selected section has REVIEW status; and
+- `complete` otherwise.
+
+A mouse is `no_acceptable_section` if any applicable domain has that readiness;
+it is `targeted_review` if none are unacceptable and at least one domain needs
+targeted review; otherwise it is complete.
+
+Review progress is:
+
+```text
+reviewed applicable image/domain statuses /
+applicable image/domain rows
+```
+
+where a stored status other than `not_reviewed` counts as reviewed. Correction
+burden is reported as separate object-decision, region, and reviewed-mask counts;
+the dashboard does not combine them into a scientific score.
+
+#### Phase 2B widget and launcher
+
+The dashboard dock contains:
+
+- a persistent context header showing project, scope (`cohort`), domain filter,
+  and section-selection strategy;
+- cohort summary labels;
+- a domain-status count table;
+- a mouse → section → domain tree;
+- status/domain filters;
+- a reason/details panel; and
+- an in-memory strategy selector.
+
+The launcher is:
+
+```text
+uv run python -m src.review_project_napari --project project.yaml
+```
+
+It accepts an optional QC directory, initial strategy, and manual-selection YAML.
+It opens the dashboard only; image loading and edit actions remain Phase 3.
 
 ### Phase 3: image-level review
 
@@ -1156,10 +1243,25 @@ uv run ruff check <changed Python files and tests>
 - [x] Ran full suite: 156 passed, 36 existing warnings.
 - [x] Committed Phase 2A separately from Phases 1 and 2B.
 
+### Phase 2B
+
+- [x] Defined the exact read-only dashboard boundary before implementation.
+- [x] Recorded the authoritative frozen eMHC/DAPI baseline and excluded Vivienne
+  outputs from QC validation.
+- [x] Added validated Phase 2A QC-table loading and cross-table provenance checks.
+- [x] Added GUI-independent dashboard summaries and readiness classifications.
+- [x] Added ReviewSession progress and correction-burden summaries.
+- [x] Added Napari/Qt dashboard dock with filters and explicit reasons.
+- [x] Added `src.review_project_napari` launcher.
+- [x] Added six dashboard tests and operator documentation.
+- [x] Ran changed-file lint: all checks passed.
+- [x] Ran full suite: 162 passed, 36 existing warnings.
+- [x] Committed Phase 2B separately from Phase 2A.
+
 ### Later phases
 
 - [x] Phase 2A headless QC engine/section selection.
-- [ ] Phase 2B project dashboard.
+- [x] Phase 2B project dashboard.
 - [ ] Phase 3 image review.
 - [ ] Phase 4 fiber-type reviewer integration.
 - [ ] Phase 5 region review.
@@ -1239,6 +1341,16 @@ Every meaningful change from the proposed design is recorded here.
 21. **Defer region/tile and raw-signal metrics to a calibrated follow-up.**
     Phase 2A does not have a stable tissue-mask or channel-quality artifact
     contract, so inventing those values would be scientifically misleading.
+22. **Use `e3_exports/ta_emhc_baseline_v1_2026-07-29` as the authoritative
+    frozen eMHC/DAPI nuclei baseline.** Do not use
+    `phase5_vivienne_dapi`; those artifacts may originate from a different
+    pipeline. The dashboard consumes project/QC tables and does not encode either
+    user-specific SSD path.
+23. **Keep Phase 2B read-only.** Strategy changes are provisional in memory.
+    Persisted review decisions, manual section selection, and image navigation
+    require the Phase 3 session/action contract.
+24. **Keep the dashboard model Qt-free.** Qt/Napari imports live only in the
+    widget/launcher boundary so cohort logic remains headlessly testable.
 
 ## 13. Known limitations
 
