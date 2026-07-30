@@ -180,8 +180,7 @@ def test_dashboard_model_summarizes_readiness_progress_and_reasons(
     assert typing["readiness"] == "targeted_review"
     assert typing["selected_image_ids"] == "m1_s1|m1_s2"
     reason_row = model.section_rows[
-        model.section_rows["image_id"].eq("m1_s1")
-        & model.section_rows["domain"].eq("fiber_typing")
+        model.section_rows["image_id"].eq("m1_s1") & model.section_rows["domain"].eq("fiber_typing")
     ].iloc[0]
     assert reason_row["reason_codes"] == "fiber_typing.probabilities_unavailable"
 
@@ -214,9 +213,7 @@ def test_dashboard_loader_rejects_invalid_boolean_and_missing_rows(tmp_path: Pat
         load_dashboard_tables(project, qc_directory)
 
     _, qc_directory = _write_dashboard_fixture(tmp_path / "second")
-    second_project = load_project(
-        tmp_path / "second/project.yaml", validate_paths=False
-    )
+    second_project = load_project(tmp_path / "second/project.yaml", validate_paths=False)
     second_path = qc_directory / "image_qc.csv"
     second_table = pd.read_csv(second_path).iloc[:-1]
     second_table.to_csv(second_path, index=False)
@@ -230,7 +227,11 @@ def test_dashboard_launcher_import_does_not_import_napari() -> None:
 
     import src.review_project_napari as launcher
 
-    assert launcher.build_parser().parse_args(["--project", "project.yaml"]).project
+    args = launcher.build_parser().parse_args(
+        ["--project", "project.yaml", "--display-downsample", "2"]
+    )
+    assert args.project
+    assert args.display_downsample == 2
     assert ("napari" in sys.modules) is napari_was_loaded
 
 

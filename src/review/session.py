@@ -92,6 +92,15 @@ class ReviewSession:
         self.object_decisions.append(decision)
         self.touch()
 
+    def remove_fiber_type_decision(self, image_id: str, fiber_id: int) -> FiberTypeDecision | None:
+        """Remove one canonical decision for an immediate, reversible UI undo."""
+        for index, decision in enumerate(self.object_decisions):
+            if decision.image_id == image_id and decision.fiber_id == fiber_id:
+                self.object_decisions.pop(index)
+                self.touch()
+                return decision
+        return None
+
     def mark_stale(self, image_id: str, edit_kind: EditKind | str) -> frozenset[StaleProduct]:
         products = invalidated_products(edit_kind)
         existing = set(self.stale_products.get(image_id, []))
