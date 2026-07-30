@@ -11,6 +11,7 @@ from src.review.schemas import (
     Domain,
     DomainStatus,
     FiberTypeDecision,
+    NucleusAssociationDecision,
     RegionAnnotation,
     ReviewMode,
     Scope,
@@ -34,6 +35,7 @@ class ReviewSession:
     image_statuses: dict[str, dict[str, str]] = field(default_factory=dict)
     regions: list[RegionAnnotation] = field(default_factory=list)
     object_decisions: list[FiberTypeDecision] = field(default_factory=list)
+    nucleus_association_decisions: list[NucleusAssociationDecision] = field(default_factory=list)
     reviewed_mask_paths: dict[str, dict[str, str]] = field(default_factory=dict)
     stale_products: dict[str, list[str]] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now)
@@ -110,6 +112,18 @@ class ReviewSession:
                 return decision
         return None
 
+    def record_nucleus_association_decision(self, decision: NucleusAssociationDecision) -> None:
+        for index, existing in enumerate(self.nucleus_association_decisions):
+            if (
+                existing.image_id == decision.image_id
+                and existing.nucleus_id == decision.nucleus_id
+            ):
+                self.nucleus_association_decisions[index] = decision
+                self.touch()
+                return
+        self.nucleus_association_decisions.append(decision)
+        self.touch()
+
     def mark_stale(self, image_id: str, edit_kind: EditKind | str) -> frozenset[StaleProduct]:
         products = invalidated_products(edit_kind)
         existing = set(self.stale_products.get(image_id, []))
@@ -163,6 +177,9 @@ class ReviewSession:
             "image_statuses": self.image_statuses,
             "regions": [region.to_dict() for region in self.regions],
             "object_decisions": [decision.to_dict() for decision in self.object_decisions],
+            "nucleus_association_decisions": [
+                decision.to_dict() for decision in self.nucleus_association_decisions
+            ],
             "reviewed_mask_paths": self.reviewed_mask_paths,
             "stale_products": self.stale_products,
             "created_at": self.created_at,
@@ -207,9 +224,12 @@ class ReviewSession:
             )
 
         object_decisions = data.get("object_decisions", [])
+        nucleus_association_decisions = data.get("nucleus_association_decisions", [])
         reviewed_mask_paths = data.get("reviewed_mask_paths", {})
         if not isinstance(object_decisions, list):
             raise ValueError("object_decisions must be a list")
+        if not isinstance(nucleus_association_decisions, list):
+            raise ValueError("nucleus_association_decisions must be a list")
         if not isinstance(reviewed_mask_paths, dict):
             raise ValueError("reviewed_mask_paths must be a mapping")
         return cls(
@@ -230,6 +250,10 @@ class ReviewSession:
             regions=[RegionAnnotation.from_dict(region) for region in raw_regions],
             object_decisions=[
                 FiberTypeDecision.from_dict(decision) for decision in object_decisions
+            ],
+            nucleus_association_decisions=[
+                NucleusAssociationDecision.from_dict(decision)
+                for decision in nucleus_association_decisions
             ],
             reviewed_mask_paths=dict(reviewed_mask_paths),
             stale_products=normalized_stale,
