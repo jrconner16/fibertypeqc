@@ -1195,6 +1195,25 @@ must not affect decisions or persisted outputs.
 - region queues and exclusions; and
 - tests.
 
+### Phase 5.1: named analysis ROIs and subregions
+
+Extend region review with a separate, non-destructive **analysis ROI** workflow
+for anatomical subregions such as the four quadrants of a quadriceps section.
+This is distinct from artifact/exclusion annotations:
+
+- draw and name reusable anatomical ROIs with a role (for example, `quadrant`);
+- preserve ROI geometry and metadata in review GeoJSON without changing
+  predictions or masks;
+- define and display overlap, outside-ROI, and boundary-assignment policy;
+- assign objects by centroid during finalization, recording `region_id`,
+  `region_name`, and `region_role` in reviewed/final CSV outputs; and
+- retain ambiguous or boundary cases explicitly rather than silently forcing a
+  membership.
+
+The default intended policy is non-overlapping named ROIs with centroid-based
+assignment. Finalization/reporting owns the output columns so region drawing
+does not change scientific results until that step.
+
 ### Phase 6: nuclear review
 
 - reviewed-mask editing;
@@ -1334,6 +1353,7 @@ uv run ruff check <changed Python files and tests>
 - [x] Phase 4.6 reviewer navigation, recovery, and stain-aware display.
 - [x] Phase 4.7 responsive display and review ergonomics.
 - [x] Phase 5 region review.
+- [ ] Phase 5.1 named analysis ROIs and subregions.
 - [ ] Phase 6 nuclear review.
 - [ ] Phase 7 fiber segmentation review.
 - [ ] Phase 8 blinded review/adjudication.
