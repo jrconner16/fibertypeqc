@@ -101,3 +101,22 @@ def test_region_action_rejects_inapplicable_domain_and_removal_is_audited(tmp_pa
     assert session.regions == []
     assert json.loads(controller.regions_geojson_path.read_text(encoding="utf-8"))["features"] == []
     assert "remove_region_annotation" in project.review_events_path.read_text(encoding="utf-8")
+
+
+def test_region_coverage_heatmap_uses_saved_geometry_and_display_scale(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    session = ReviewSession(project_id=project.project_id, model_version=project.model_version)
+    controller = RegionReviewController(project, session)
+    controller.add_region(
+        image_id="one",
+        geometry={"type": "Polygon", "coordinates": [[[2, 2], [2, 6], [6, 2], [2, 2]]]},
+        domain=Domain.FIBER_TYPING,
+        action=RegionAction.DETAILED_REVIEW,
+    )
+
+    full = controller.coverage_heatmap("one", (10, 10))
+    downsampled = controller.coverage_heatmap("one", (5, 5), coordinate_scale=2)
+
+    assert full[3, 3] == 1
+    assert full[8, 8] == 0
+    assert downsampled[1, 1] == 1

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import uuid4
 
+import numpy as np
+
 from src.review.project import Project
 from src.review.schemas import (
     Domain,
@@ -60,6 +62,36 @@ class RegionReviewController:
             if RegionAction(region.action)
             in {RegionAction.QUEUE_OBJECTS, RegionAction.DETAILED_REVIEW, RegionAction.UNRESOLVED}
         )
+
+    def coverage_heatmap(
+        self,
+        image_id: str,
+        shape: tuple[int, int],
+        *,
+        coordinate_scale: int = 1,
+    ) -> np.ndarray:
+        """Return saved-region coverage for display, never an inferred QC score."""
+        if len(shape) != 2 or any(size < 1 for size in shape):
+            raise ValueError("heatmap shape must contain two positive dimensions")
+        if coordinate_scale < 1:
+            raise ValueError("coordinate_scale must be at least 1")
+        from skimage.draw import polygon
+
+        heatmap = np.zeros(shape, dtype=np.uint8)
+        for region in self.regions_for_image(image_id):
+            if region.geometry.get("type") != "Polygon":
+                continue
+            rings = region.geometry.get("coordinates", [])
+            if not rings or len(rings[0]) < 3:
+                continue
+            points = np.asarray(rings[0], dtype=float)
+            rows, columns = polygon(
+                points[:, 1] / coordinate_scale,
+                points[:, 0] / coordinate_scale,
+                shape=shape,
+            )
+            heatmap[rows, columns] = np.minimum(heatmap[rows, columns] + 1, 255)
+        return heatmap
 
     def add_region(
         self,
