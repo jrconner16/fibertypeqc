@@ -117,6 +117,54 @@ class NuclearReviewController:
             qc_version=self.session.qc_version,
         )
 
+    def add_nucleus(
+        self,
+        image_id: str,
+        pixels: np.ndarray,
+        *,
+        reason_code: str = "",
+    ) -> ReviewEvent:
+        """Add one painted nucleus to the copy-on-write reviewed mask.
+
+        ``pixels`` must be a boolean mask in the nucleus-label image coordinate
+        system.  It cannot overlap an existing reviewed nucleus.
+        """
+        reviewed = self.ensure_reviewed_mask(image_id)
+        labels = np.asarray(tifffile.imread(reviewed), dtype=np.int32)
+        painted = np.asarray(pixels)
+        if painted.dtype != np.bool_:
+            raise ValueError("pixels must be a boolean mask")
+        if painted.shape != labels.shape:
+            raise ValueError(
+                f"pixels shape {painted.shape} does not match nucleus mask shape {labels.shape}"
+            )
+        pixel_count = int(np.count_nonzero(painted))
+        if pixel_count == 0:
+            raise ValueError("pixels must contain at least one painted pixel")
+        if np.any(labels[painted] != 0):
+            raise ValueError("added nucleus pixels must not overlap an existing reviewed nucleus")
+        nucleus_id = self.session.allocate_reviewed_nucleus_id(image_id, int(labels.max(initial=0)))
+        labels[painted] = nucleus_id
+        _atomic_write_labels(reviewed, labels)
+        self.session.mark_stale(image_id, EditKind.NUCLEUS_MASK)
+        return ReviewEvent(
+            image_id=image_id,
+            scope=Scope.OBJECT,
+            domain=Domain.NUCLEI,
+            target_id=str(nucleus_id),
+            action="add_nucleus",
+            reason_code=reason_code,
+            old_value=None,
+            new_value={
+                "nucleus_id": nucleus_id,
+                "pixel_count": pixel_count,
+                "reviewed_mask": str(reviewed),
+            },
+            reviewer=self.session.reviewer,
+            model_version=self.session.model_version,
+            qc_version=self.session.qc_version,
+        )
+
     def association_queue(
         self,
         image_id: str,
@@ -202,6 +250,19 @@ class NuclearReviewController:
 
         present_ids = set(np.unique(self.load_nuclei_labels(image_id)).tolist()) - {0}
         table = table[table["nucleus_id"].map(_positive_int).isin(present_ids)].copy()
+        table["model_row_available"] = True
+        known_ids = set(table["nucleus_id"].map(_positive_int))
+        missing_ids = sorted(present_ids - known_ids)
+        if missing_ids:
+            additions = pd.DataFrame(
+                {
+                    "nucleus_id": missing_ids,
+                    "assigned_fiber_id": pd.NA,
+                    "assignment_status": pd.NA,
+                    "model_row_available": False,
+                }
+            )
+            table = pd.concat([table, additions], ignore_index=True, sort=False)
         decisions = {
             decision.nucleus_id: decision
             for decision in self.session.nucleus_association_decisions

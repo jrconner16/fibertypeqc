@@ -36,6 +36,7 @@ class ReviewSession:
     regions: list[RegionAnnotation] = field(default_factory=list)
     object_decisions: list[FiberTypeDecision] = field(default_factory=list)
     nucleus_association_decisions: list[NucleusAssociationDecision] = field(default_factory=list)
+    reviewed_nucleus_next_ids: dict[str, int] = field(default_factory=dict)
     reviewed_mask_paths: dict[str, dict[str, str]] = field(default_factory=dict)
     stale_products: dict[str, list[str]] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now)
@@ -135,6 +136,15 @@ class ReviewSession:
                 return decision
         return None
 
+    def allocate_reviewed_nucleus_id(self, image_id: str, observed_max_id: int) -> int:
+        """Allocate an ID that will not be reused after later reviewed deletions."""
+        if observed_max_id < 0:
+            raise ValueError("observed_max_id must not be negative")
+        next_id = max(observed_max_id, self.reviewed_nucleus_next_ids.get(image_id, 0)) + 1
+        self.reviewed_nucleus_next_ids[image_id] = next_id
+        self.touch()
+        return next_id
+
     def mark_stale(self, image_id: str, edit_kind: EditKind | str) -> frozenset[StaleProduct]:
         products = invalidated_products(edit_kind)
         existing = set(self.stale_products.get(image_id, []))
@@ -191,6 +201,7 @@ class ReviewSession:
             "nucleus_association_decisions": [
                 decision.to_dict() for decision in self.nucleus_association_decisions
             ],
+            "reviewed_nucleus_next_ids": self.reviewed_nucleus_next_ids,
             "reviewed_mask_paths": self.reviewed_mask_paths,
             "stale_products": self.stale_products,
             "created_at": self.created_at,
@@ -236,11 +247,20 @@ class ReviewSession:
 
         object_decisions = data.get("object_decisions", [])
         nucleus_association_decisions = data.get("nucleus_association_decisions", [])
+        reviewed_nucleus_next_ids = data.get("reviewed_nucleus_next_ids", {})
         reviewed_mask_paths = data.get("reviewed_mask_paths", {})
         if not isinstance(object_decisions, list):
             raise ValueError("object_decisions must be a list")
         if not isinstance(nucleus_association_decisions, list):
             raise ValueError("nucleus_association_decisions must be a list")
+        if not isinstance(reviewed_nucleus_next_ids, dict):
+            raise ValueError("reviewed_nucleus_next_ids must be a mapping")
+        normalized_next_ids: dict[str, int] = {}
+        for image_id, value in reviewed_nucleus_next_ids.items():
+            numeric_value = int(value)
+            if numeric_value < 0:
+                raise ValueError(f"reviewed_nucleus_next_ids[{image_id!r}] must not be negative")
+            normalized_next_ids[str(image_id)] = numeric_value
         if not isinstance(reviewed_mask_paths, dict):
             raise ValueError("reviewed_mask_paths must be a mapping")
         return cls(
@@ -266,6 +286,7 @@ class ReviewSession:
                 NucleusAssociationDecision.from_dict(decision)
                 for decision in nucleus_association_decisions
             ],
+            reviewed_nucleus_next_ids=normalized_next_ids,
             reviewed_mask_paths=dict(reviewed_mask_paths),
             stale_products=normalized_stale,
             created_at=str(data.get("created_at", "")) or utc_now(),
