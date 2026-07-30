@@ -54,8 +54,6 @@ class NuclearReviewController:
         self.project = project
         self.session = session
         self.queue: tuple[NucleusQueueItem, ...] = ()
-        self.session.active_domain = Domain.NUCLEI
-        self.session.active_scope = Scope.OBJECT
 
     @property
     def reviewed_associations_path(self) -> Path:

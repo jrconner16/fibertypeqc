@@ -169,3 +169,42 @@ def test_added_nucleus_rejects_overlap_and_mismatched_shape(tmp_path: Path) -> N
         controller.add_nucleus("one", overlap)
     with pytest.raises(ValueError, match="shape"):
         controller.add_nucleus("one", np.zeros((2, 2), dtype=bool))
+
+
+def test_nuclear_review_widget_saves_painted_draft_and_association(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    qtwidgets = pytest.importorskip("qtpy.QtWidgets")
+    from src.review.nuclear_review_widget import NuclearReviewWidget
+
+    application = qtwidgets.QApplication.instance() or qtwidgets.QApplication([])
+    project, _ = _project(tmp_path)
+    session = ReviewSession(
+        project_id=project.project_id,
+        model_version=project.model_version,
+        current_image_id="one",
+    )
+    controller = NuclearReviewController(project, session)
+    draft = np.zeros((8, 10), dtype=bool)
+    draft[5:7, 7:9] = True
+    changes: list[str] = []
+    widget = NuclearReviewWidget(
+        controller,
+        selected_nucleus_id=lambda: 2,
+        draft_pixels=lambda: draft,
+        reset_draft=lambda: draft.fill(False),
+        review_changed=lambda: changes.append("changed"),
+    )
+
+    widget._add()
+    assert widget.nucleus_id.value() == 3
+    assert not draft.any()
+    widget.fiber_id.setValue(2)
+    widget._associate()
+
+    assert changes == ["changed", "changed"]
+    assert session.nucleus_association_decisions[0].nucleus_id == 3
+    widget.close()
+    widget.deleteLater()
+    application.processEvents()

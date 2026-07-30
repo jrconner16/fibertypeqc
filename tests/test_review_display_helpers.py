@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from src.review_project_napari import (
+    downsample_label_data,
     downsample_review_data,
     selected_fiber_outline,
     selected_fiber_outline_rgba,
@@ -27,6 +28,14 @@ def test_display_downsample_rejects_invalid_factor_or_alignment() -> None:
         downsample_review_data(raw, None, 0)
     with pytest.raises(ValueError, match="does not match"):
         downsample_review_data(raw, np.zeros((3, 3), dtype=np.int32), 2)
+
+
+def test_label_display_downsample_preserves_ids() -> None:
+    labels = np.arange(4 * 6, dtype=np.int32).reshape(4, 6)
+
+    assert np.array_equal(downsample_label_data(labels, 2), labels[::2, ::2])
+    with pytest.raises(ValueError, match="2D"):
+        downsample_label_data(labels[None], 1)
 
 
 def test_selected_fiber_is_outline_only() -> None:

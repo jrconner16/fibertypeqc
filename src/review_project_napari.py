@@ -10,6 +10,7 @@ import numpy as np
 from src.generate_review_qc import load_manual_selections
 from src.review.dashboard import build_dashboard_model, load_dashboard_tables
 from src.review.image_review import ImageReviewController
+from src.review.nuclear_review import NuclearReviewController
 from src.review.project import load_project
 from src.review.schemas import Domain, Scope
 from src.review.section_selection import SelectionStrategy
@@ -53,6 +54,15 @@ def selected_fiber_outline_rgba(labels: np.ndarray, fiber_id: int) -> np.ndarray
     rgba[..., 2] = outline
     rgba[..., 3] = outline
     return rgba
+
+
+def downsample_label_data(labels: np.ndarray, factor: int) -> np.ndarray:
+    """Downsample a 2D labels layer for display without renumbering IDs."""
+    if factor < 1:
+        raise ValueError("display_downsample must be at least 1")
+    if labels.ndim != 2:
+        raise ValueError(f"Expected 2D labels, got shape {labels.shape}")
+    return labels[::factor, ::factor]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -119,6 +129,7 @@ def main(argv: list[str] | None = None) -> int:
     from src.review.fiber_type_review import FiberTypeReviewController
     from src.review.guided_review_widget import GuidedReviewWidget
     from src.review.image_review_widget import ImageReviewWidget
+    from src.review.nuclear_review_widget import NuclearReviewWidget
     from src.review.region_review import RegionReviewController
     from src.review.region_review_widget import RegionReviewWidget
     from src.review.schemas import RegionKind
@@ -140,8 +151,10 @@ def main(argv: list[str] | None = None) -> int:
         name="Channel Map",
     )
     controller = ImageReviewController(project, tables.image_qc, session)
+    nuclear_controller = NuclearReviewController(project, session)
     region_controller = RegionReviewController(project, session)
     loaded_image_id: str | None = None
+    nuclear_widget: NuclearReviewWidget | None = None
 
     def _region_shape_data(image_id: str, kind: RegionKind) -> list[np.ndarray]:
         data: list[np.ndarray] = []
@@ -215,11 +228,19 @@ def main(argv: list[str] | None = None) -> int:
         image = project.image(image_id)
         raw = load_multichannel_image(image.raw_image_path)
         labels_path = image.outputs.get("fiber_labels")
+        nuclei_path = image.outputs.get("nuclei_labels")
         labels = None
+        nuclei = None
         if labels_path is not None:
             import tifffile
 
             labels = np.asarray(tifffile.imread(labels_path), dtype=np.int32)
+        if nuclei_path is not None:
+            nuclei = nuclear_controller.load_nuclei_labels(image_id)
+            if nuclei.shape != raw.shape[1:]:
+                raise ValueError(
+                    f"Nuclei-label shape {nuclei.shape} does not match raw image {raw.shape[1:]}"
+                )
         raw, labels = downsample_review_data(raw, labels, args.display_downsample)
         displays = channel_displays(project.panel_manifest, raw.shape[0])
         channel_map_widget.set_displays(displays)
@@ -244,6 +265,22 @@ def main(argv: list[str] | None = None) -> int:
                 opacity=1.0,
                 blending="additive",
                 rgb=True,
+            )
+        if nuclei is not None:
+            displayed_nuclei = downsample_label_data(nuclei, args.display_downsample)
+            nuclei_layer = viewer.add_labels(
+                displayed_nuclei,
+                name="review_nuclei_labels",
+                opacity=0.45,
+            )
+            try:
+                nuclei_layer.editable = False
+            except AttributeError:
+                pass
+            viewer.add_labels(
+                np.zeros_like(displayed_nuclei, dtype=np.int32),
+                name="review_new_nucleus_draft",
+                opacity=0.7,
             )
         viewer.add_shapes(
             _region_shape_data(image_id, RegionKind.REVIEW),
@@ -275,6 +312,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         loaded_image_id = image_id
         region_widget.refresh()
+        if nuclear_widget is not None:
+            nuclear_widget.refresh()
 
     def show_object(image_id: str, fiber_id: int) -> None:
         controller.set_image(image_id)
@@ -317,6 +356,53 @@ def main(argv: list[str] | None = None) -> int:
     )
     image_review_dock.hide()
 
+    def _selected_nucleus_id() -> int:
+        try:
+            return int(viewer.layers["review_nuclei_labels"].selected_label)
+        except KeyError:
+            return 0
+
+    def _draft_nucleus_pixels() -> np.ndarray:
+        try:
+            return np.asarray(viewer.layers["review_new_nucleus_draft"].data, dtype=bool)
+        except KeyError as exc:
+            raise ValueError("This image has no nuclei-label artifact") from exc
+
+    def _reset_draft_nucleus() -> None:
+        try:
+            draft = viewer.layers["review_new_nucleus_draft"]
+        except KeyError:
+            return
+        draft.data = np.zeros_like(draft.data, dtype=np.int32)
+
+    def _refresh_nuclei_layers() -> None:
+        image_id = controller.current_image_id
+        try:
+            layer = viewer.layers["review_nuclei_labels"]
+        except KeyError:
+            nuclear_widget.refresh()
+            return
+        layer.data = downsample_label_data(
+            nuclear_controller.load_nuclei_labels(image_id), args.display_downsample
+        )
+        _reset_draft_nucleus()
+        nuclear_widget.refresh()
+
+    nuclear_widget = NuclearReviewWidget(
+        nuclear_controller,
+        selected_nucleus_id=_selected_nucleus_id,
+        draft_pixels=_draft_nucleus_pixels,
+        reset_draft=_reset_draft_nucleus,
+        review_changed=_refresh_nuclei_layers,
+        add_enabled=args.display_downsample == 1,
+    )
+    nuclear_review_dock = viewer.window.add_dock_widget(
+        nuclear_widget,
+        area="left",
+        name="Nuclei Review",
+    )
+    nuclear_review_dock.hide()
+
     def open_dashboard() -> None:
         dashboard_dock.show()
         dashboard_dock.raise_()
@@ -335,10 +421,19 @@ def main(argv: list[str] | None = None) -> int:
         region_review_dock.show()
         region_review_dock.raise_()
 
+    def open_nuclei_review() -> None:
+        controller.set_domain(Domain.NUCLEI)
+        show_image(controller.current_image_id)
+        nuclear_review_dock.show()
+        nuclear_review_dock.raise_()
+
     def show_domain(domain: Domain) -> None:
         controller.set_domain(domain)
         review_widget.refresh(notify=True)
-        open_image_review()
+        if domain is Domain.NUCLEI:
+            open_nuclei_review()
+        else:
+            open_image_review()
 
     guided_widget = GuidedReviewWidget(
         project,
@@ -360,6 +455,7 @@ def main(argv: list[str] | None = None) -> int:
         workspace_menu.addAction("Show Cohort QC", open_dashboard)
         workspace_menu.addAction("Show Image Controls", open_image_review)
         workspace_menu.addAction("Show Region Review", open_region_review)
+        workspace_menu.addAction("Show Nuclei Review", open_nuclei_review)
         workspace_menu.addAction("Show Channel Map", channel_map_dock.show)
 
         def restore_workspace() -> None:
