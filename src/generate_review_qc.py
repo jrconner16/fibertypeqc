@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _load_manual_selections(path: Path | None) -> dict[str, dict[str, list[str]]] | None:
+def load_manual_selections(path: Path | None) -> dict[str, dict[str, list[str]]] | None:
     if path is None:
         return None
     try:
@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     project = load_project(args.project, validate_paths=False)
     rules = load_rule_config(args.rules)
-    manual = _load_manual_selections(args.manual_selection)
+    manual = load_manual_selections(args.manual_selection)
     qc_result = generate_project_qc(project, rules)
     selections = select_sections(
         project,

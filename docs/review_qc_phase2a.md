@@ -159,3 +159,6 @@ Phase 2A reads label TIFFs and object CSVs only. It does not currently compute:
 
 Those require stable raw-signal/tissue-mask input contracts and calibration.
 They must not be approximated from biological endpoint values.
+
+The Phase 2B cohort dashboard that consumes these outputs is documented in
+[`review_dashboard_phase2b.md`](review_dashboard_phase2b.md).
