@@ -21,3 +21,17 @@ ignore, rerun recommendation, and unresolved intent. They do not alter masks,
 predictions, or finalized analysis in this phase; finalization applies their
 meaning later. Region geometry is stored at full image coordinates even when
 `--display-downsample` is active.
+
+## Named analysis ROIs (Phase 5.1)
+
+To draw anatomical subregions, such as four quadrants of a QUAD section, draw
+the polygon in the editable yellow **Region shapes** layer, choose **Analysis
+ROI**, and provide both an ROI name (for example, `quad_1`) and role (for
+example, `quadrant`). Applying it autosaves the ROI, then renders it in the
+separate cyan `review_analysis_rois` layer.
+
+ROIs remain geometry and metadata until finalization. The headless assignment
+contract uses fiber/object centroids and reports one of `assigned`, `outside`,
+`boundary`, or `ambiguous`; it never silently resolves overlapping ROIs or a
+centroid on an ROI boundary. Finalization can use these values to emit
+`region_id`, `region_name`, and `region_role` columns in reviewed/final CSVs.

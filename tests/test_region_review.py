@@ -9,7 +9,7 @@ import yaml
 
 from src.review.project import load_project
 from src.review.region_review import RegionReviewController
-from src.review.schemas import Domain, RegionAction
+from src.review.schemas import Domain, RegionAction, RegionKind
 from src.review.session import ReviewSession
 
 
@@ -120,3 +120,38 @@ def test_region_coverage_heatmap_uses_saved_geometry_and_display_scale(tmp_path:
     assert full[3, 3] == 1
     assert full[8, 8] == 0
     assert downsampled[1, 1] == 1
+
+
+def test_analysis_roi_requires_metadata_and_assigns_centroids_explicitly(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    session = ReviewSession(project_id=project.project_id, model_version=project.model_version)
+    controller = RegionReviewController(project, session)
+    geometry = {"type": "Polygon", "coordinates": [[[0, 0], [0, 5], [5, 5], [5, 0], [0, 0]]]}
+
+    with pytest.raises(ValueError, match="name and role"):
+        controller.add_region(
+            image_id="one",
+            geometry=geometry,
+            domain=Domain.FIBER_TYPING,
+            action=RegionAction.ANALYSIS_ROI,
+            kind=RegionKind.ANALYSIS_ROI,
+        )
+
+    controller.add_region(
+        image_id="one",
+        geometry=geometry,
+        domain=Domain.FIBER_TYPING,
+        action=RegionAction.ANALYSIS_ROI,
+        kind=RegionKind.ANALYSIS_ROI,
+        name="quad_1",
+        role="quadrant",
+    )
+    assignments = controller.assign_centroids(
+        "one",
+        {1: (2.0, 2.0), 2: (5.0, 2.0), 3: (8.0, 8.0)},
+    )
+
+    assert assignments[0].status == "assigned"
+    assert assignments[0].region_name == "quad_1"
+    assert assignments[1].status == "boundary"
+    assert assignments[2].status == "outside"
