@@ -5,6 +5,8 @@ from src.review.schemas import (
     Domain,
     DomainStatus,
     FiberTypeDecision,
+    NucleusAssociationDecision,
+    NucleusAssociationStatus,
     ObjectReviewStatus,
     RegionAnnotation,
     ReviewMode,
@@ -59,10 +61,7 @@ def test_domain_specific_exclusions_remain_separate() -> None:
     session.set_status("image", Domain.NUCLEI, DomainStatus.EXCLUDED)
 
     assert session.get_status("image", Domain.NUCLEI) is DomainStatus.EXCLUDED
-    assert (
-        session.get_status("image", Domain.FIBER_SEGMENTATION)
-        is DomainStatus.NOT_REVIEWED
-    )
+    assert session.get_status("image", Domain.FIBER_SEGMENTATION) is DomainStatus.NOT_REVIEWED
     assert session.get_status("image", Domain.FIBER_TYPING) is DomainStatus.NOT_REVIEWED
 
 
@@ -127,3 +126,33 @@ def test_fiber_type_decision_preserves_model_prediction_on_update(tmp_path: Path
 
     assert restored.object_decisions[0].model_fiber_type == "iib"
     assert restored.object_decisions[0].reviewed_fiber_type == "iix"
+
+
+def test_nucleus_association_decision_persists_and_updates_by_nucleus(tmp_path: Path) -> None:
+    session = ReviewSession(project_id="project", model_version="model.v1")
+    session.record_nucleus_association_decision(
+        NucleusAssociationDecision(
+            image_id="image",
+            nucleus_id=7,
+            reviewed_fiber_id=12,
+            association_status=NucleusAssociationStatus.ASSIGNED,
+        )
+    )
+    session.record_nucleus_association_decision(
+        NucleusAssociationDecision(
+            image_id="image",
+            nucleus_id=7,
+            reviewed_fiber_id=0,
+            association_status=NucleusAssociationStatus.UNASSIGNED,
+        )
+    )
+
+    state_path = tmp_path / "review_state.json"
+    save_session(state_path, session)
+    restored = load_session(state_path)
+
+    assert len(restored.nucleus_association_decisions) == 1
+    assert (
+        restored.nucleus_association_decisions[0].association_status
+        is NucleusAssociationStatus.UNASSIGNED
+    )

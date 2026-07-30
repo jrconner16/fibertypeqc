@@ -55,6 +55,13 @@ class ObjectReviewStatus(StrEnum):
     UNRESOLVED = "unresolved"
 
 
+class NucleusAssociationStatus(StrEnum):
+    ASSIGNED = "assigned"
+    UNASSIGNED = "unassigned"
+    AMBIGUOUS = "ambiguous"
+    UNRESOLVED = "unresolved"
+
+
 class RegionAction(StrEnum):
     """Explicit actions a reviewer can attach to a drawn region."""
 
@@ -245,6 +252,63 @@ class FiberTypeDecision:
                 "object review_status",
             ),
             queue_source=str(data.get("queue_source", "")),
+            reason_code=str(data.get("reason_code", "")),
+            reviewer=str(data.get("reviewer", "")),
+            timestamp=str(data.get("timestamp", "")),
+        )
+
+
+@dataclass(frozen=True)
+class NucleusAssociationDecision:
+    image_id: str
+    nucleus_id: int
+    reviewed_fiber_id: int
+    association_status: NucleusAssociationStatus
+    reason_code: str = ""
+    reviewer: str = ""
+    timestamp: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.image_id.strip():
+            raise ValueError("nucleus association image_id must not be empty")
+        if self.nucleus_id <= 0:
+            raise ValueError("nucleus_id must be positive")
+        if self.reviewed_fiber_id < 0:
+            raise ValueError("reviewed_fiber_id must not be negative")
+        object.__setattr__(
+            self,
+            "association_status",
+            parse_enum(NucleusAssociationStatus, self.association_status, "association status"),
+        )
+        if (
+            self.association_status is NucleusAssociationStatus.ASSIGNED
+            and self.reviewed_fiber_id <= 0
+        ):
+            raise ValueError("assigned nucleus associations require a positive reviewed_fiber_id")
+        if (
+            self.association_status is not NucleusAssociationStatus.ASSIGNED
+            and self.reviewed_fiber_id
+        ):
+            raise ValueError("non-assigned nucleus associations require reviewed_fiber_id=0")
+        if not self.timestamp:
+            object.__setattr__(self, "timestamp", utc_now())
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["association_status"] = self.association_status.value
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> NucleusAssociationDecision:
+        return cls(
+            image_id=str(data.get("image_id", "")),
+            nucleus_id=int(data.get("nucleus_id", 0)),
+            reviewed_fiber_id=int(data.get("reviewed_fiber_id", 0)),
+            association_status=parse_enum(
+                NucleusAssociationStatus,
+                data.get("association_status", ""),
+                "association status",
+            ),
             reason_code=str(data.get("reason_code", "")),
             reviewer=str(data.get("reviewer", "")),
             timestamp=str(data.get("timestamp", "")),
