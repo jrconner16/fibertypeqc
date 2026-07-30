@@ -1259,7 +1259,7 @@ headless. Add a small number of GUI tests only where feasible.
 - [ ] Merge preserves lineage.
 - [x] Fiber edit marks downstream outputs stale.
 - [x] Nucleus edit does not invalidate fiber typing.
-- [ ] Nucleus reassignment updates affected associations.
+- [x] Nucleus reassignment updates affected associations.
 - [ ] Region exclusion affects only selected domains.
 - [x] `all_passing` selection works.
 - [x] `best_passing` selection works.
@@ -1354,7 +1354,7 @@ uv run ruff check <changed Python files and tests>
 - [x] Phase 4.7 responsive display and review ergonomics.
 - [x] Phase 5 region review.
 - [x] Phase 5.1 named analysis ROIs and subregions.
-- [ ] Phase 6 nuclear review.
+- [x] Phase 6 nuclear review.
 - [ ] Phase 7 fiber segmentation review.
 - [ ] Phase 8 blinded review/adjudication.
 - [ ] Phase 9 finalization/reporting.
@@ -1447,8 +1447,9 @@ Every meaningful change from the proposed design is recorded here.
 - The current reviewers remain separate applications until Phases 3–4.
 - Current reviewer CSV saves are non-atomic until those UIs use shared storage.
 - Current fiber-mask edits do not record lineage or stale dependencies.
-- Split, merge, undo, nuclear mask editing, and association editing are not
-  implemented.
+- Split, merge, and undo for fiber segmentation are not implemented.
+- Nuclear review currently supports copy-on-write deletion and independent
+  association decisions; add/split/merge nucleus-mask editing remains deferred.
 - The current audit reviewer depends on a CSV audit set and inferred output
   paths; it does not yet open a project YAML.
 - Phase 1 has no QC computation, dashboard, section selection, queues, region UI,

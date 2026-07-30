@@ -124,6 +124,17 @@ class ReviewSession:
         self.nucleus_association_decisions.append(decision)
         self.touch()
 
+    def remove_nucleus_association_decision(
+        self, image_id: str, nucleus_id: int
+    ) -> NucleusAssociationDecision | None:
+        """Remove a superseded decision when its reviewed nucleus is deleted."""
+        for index, decision in enumerate(self.nucleus_association_decisions):
+            if decision.image_id == image_id and decision.nucleus_id == nucleus_id:
+                self.nucleus_association_decisions.pop(index)
+                self.touch()
+                return decision
+        return None
+
     def mark_stale(self, image_id: str, edit_kind: EditKind | str) -> frozenset[StaleProduct]:
         products = invalidated_products(edit_kind)
         existing = set(self.stale_products.get(image_id, []))
