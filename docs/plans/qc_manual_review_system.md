@@ -1223,6 +1223,15 @@ does not change scientific results until that step.
 - stale propagation; and
 - tests.
 
+### Phase 6.1: reviewed nucleus addition
+
+- [x] Add painted nuclei only to a copy-on-write reviewed mask.
+- [x] Allocate reviewed nucleus IDs that remain stable across deletion and resume.
+- [x] Include manually added nuclei in reviewed association output as unresolved
+  until independently associated.
+- [x] Mark nucleus features, associations, and fiber-level nucleus counts stale.
+- [x] Add headless tests for addition, stable IDs, and invalid geometry.
+
 ### Phase 7: fiber segmentation review
 
 - add/delete/split/merge/boundary editing;
@@ -1448,8 +1457,9 @@ Every meaningful change from the proposed design is recorded here.
 - Current reviewer CSV saves are non-atomic until those UIs use shared storage.
 - Current fiber-mask edits do not record lineage or stale dependencies.
 - Split, merge, and undo for fiber segmentation are not implemented.
-- Nuclear review currently supports copy-on-write deletion and independent
-  association decisions; add/split/merge nucleus-mask editing remains deferred.
+- Nuclear review currently supports copy-on-write addition/deletion and
+  independent association decisions; split/merge nucleus-mask editing remains
+  deferred.
 - The current audit reviewer depends on a CSV audit set and inferred output
   paths; it does not yet open a project YAML.
 - Phase 1 has no QC computation, dashboard, section selection, queues, region UI,

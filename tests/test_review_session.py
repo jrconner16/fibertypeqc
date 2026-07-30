@@ -156,3 +156,14 @@ def test_nucleus_association_decision_persists_and_updates_by_nucleus(tmp_path: 
         restored.nucleus_association_decisions[0].association_status
         is NucleusAssociationStatus.UNASSIGNED
     )
+
+
+def test_reviewed_nucleus_id_allocation_persists(tmp_path: Path) -> None:
+    session = ReviewSession(project_id="project", model_version="model.v1")
+
+    assert session.allocate_reviewed_nucleus_id("image", observed_max_id=7) == 8
+    state_path = tmp_path / "review_state.json"
+    save_session(state_path, session)
+    restored = load_session(state_path)
+
+    assert restored.allocate_reviewed_nucleus_id("image", observed_max_id=2) == 9

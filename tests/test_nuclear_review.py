@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 import tifffile
 import yaml
 
@@ -130,3 +131,41 @@ def test_deleted_nucleus_is_omitted_from_reviewed_associations(tmp_path: Path) -
     reviewed = pd.read_csv(controller.reviewed_associations_path)
     assert reviewed["nucleus_id"].tolist() == [2]
     assert session.nucleus_association_decisions == []
+
+
+def test_added_nucleus_has_stable_id_and_unresolved_reviewed_output(tmp_path: Path) -> None:
+    project, predicted = _project(tmp_path)
+    session = ReviewSession(project_id=project.project_id, model_version=project.model_version)
+    controller = NuclearReviewController(project, session)
+    pixels = np.zeros((8, 10), dtype=bool)
+    pixels[5:7, 7:9] = True
+
+    event = controller.add_nucleus("one", pixels, reason_code="missed_by_model")
+    controller.save(event)
+
+    assert int(event.target_id) == 3
+    assert not np.any(tifffile.imread(predicted) == 3)
+    assert np.count_nonzero(controller.load_nuclei_labels("one") == 3) == 4
+    reviewed = pd.read_csv(controller.reviewed_associations_path)
+    row = reviewed.loc[reviewed["nucleus_id"] == 3].iloc[0]
+    assert not row["model_row_available"]
+    assert row["reviewed_association_status"] == "unresolved"
+    assert StaleProduct.NUCLEUS_FEATURES.value in session.stale_products["one"]
+
+    controller.delete_nucleus("one", 3)
+    next_event = controller.add_nucleus("one", pixels)
+    assert int(next_event.target_id) == 4
+
+
+def test_added_nucleus_rejects_overlap_and_mismatched_shape(tmp_path: Path) -> None:
+    project, _ = _project(tmp_path)
+    controller = NuclearReviewController(
+        project, ReviewSession(project_id=project.project_id, model_version=project.model_version)
+    )
+    overlap = np.zeros((8, 10), dtype=bool)
+    overlap[2:4, 2:4] = True
+
+    with pytest.raises(ValueError, match="overlap"):
+        controller.add_nucleus("one", overlap)
+    with pytest.raises(ValueError, match="shape"):
+        controller.add_nucleus("one", np.zeros((2, 2), dtype=bool))
