@@ -1232,6 +1232,15 @@ does not change scientific results until that step.
 - [x] Mark nucleus features, associations, and fiber-level nucleus counts stale.
 - [x] Add headless tests for addition, stable IDs, and invalid geometry.
 
+### Phase 6.2: interactive nuclei review
+
+- [x] Add a project-Napari nuclei-review dock for DAPI/eMHC inspection.
+- [x] Support selecting/deleting a reviewed nucleus, painting a draft nucleus,
+  and recording independent nucleus-to-fiber association decisions.
+- [x] Save reviewed masks, association output, audit events, and stale state
+  through the Phase 6 controller.
+- [x] Add GUI-independent display and widget tests.
+
 ### Phase 7: fiber segmentation review
 
 - add/delete/split/merge/boundary editing;
