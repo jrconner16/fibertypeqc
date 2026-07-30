@@ -121,6 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     from src.review.image_review_widget import ImageReviewWidget
     from src.review.region_review import RegionReviewController
     from src.review.region_review_widget import RegionReviewWidget
+    from src.review.schemas import RegionKind
     from src.typing_display import normalize_for_display
 
     viewer = napari.Viewer(title=f"FiberTypeQC project: {project.project_name}")
@@ -142,9 +143,11 @@ def main(argv: list[str] | None = None) -> int:
     region_controller = RegionReviewController(project, session)
     loaded_image_id: str | None = None
 
-    def _region_shape_data(image_id: str) -> list[np.ndarray]:
+    def _region_shape_data(image_id: str, kind: RegionKind) -> list[np.ndarray]:
         data: list[np.ndarray] = []
         for region in region_controller.regions_for_image(image_id):
+            if region.kind is not kind:
+                continue
             if region.geometry.get("type") != "Polygon":
                 continue
             rings = region.geometry.get("coordinates", [])
@@ -167,16 +170,23 @@ def main(argv: list[str] | None = None) -> int:
             shapes = viewer.layers["review_region_shapes"]
         except KeyError:
             return
-        shapes.data = _region_shape_data(controller.current_image_id)
+        shapes.data = _region_shape_data(controller.current_image_id, RegionKind.REVIEW)
+        try:
+            rois = viewer.layers["review_analysis_rois"]
+        except KeyError:
+            rois = None
+        if rois is not None:
+            rois.data = _region_shape_data(controller.current_image_id, RegionKind.ANALYSIS_ROI)
         try:
             coverage = viewer.layers["review_region_coverage"]
         except KeyError:
             return
-        coverage.data = region_controller.coverage_heatmap(
-            controller.current_image_id,
-            coverage.data.shape,
-            coordinate_scale=args.display_downsample,
-        )
+            coverage.data = region_controller.coverage_heatmap(
+                controller.current_image_id,
+                coverage.data.shape,
+                coordinate_scale=args.display_downsample,
+                kind=RegionKind.REVIEW,
+            )
 
     def _selected_region_geometry() -> dict | None:
         try:
@@ -236,11 +246,19 @@ def main(argv: list[str] | None = None) -> int:
                 rgb=True,
             )
         viewer.add_shapes(
-            _region_shape_data(image_id),
+            _region_shape_data(image_id, RegionKind.REVIEW),
             name="review_region_shapes",
             shape_type="polygon",
             edge_color="yellow",
             face_color=[1.0, 1.0, 0.0, 0.08],
+            edge_width=2,
+        )
+        viewer.add_shapes(
+            _region_shape_data(image_id, RegionKind.ANALYSIS_ROI),
+            name="review_analysis_rois",
+            shape_type="polygon",
+            edge_color="cyan",
+            face_color=[0.0, 1.0, 1.0, 0.06],
             edge_width=2,
         )
         viewer.add_image(
@@ -248,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
                 image_id,
                 raw.shape[1:],
                 coordinate_scale=args.display_downsample,
+                kind=RegionKind.REVIEW,
             ),
             name="review_region_coverage",
             colormap="yellow",

@@ -66,6 +66,12 @@ class RegionAction(StrEnum):
     EXCLUDE_ALL_ANALYSIS = "exclude_all_analysis"
     RECOMMEND_RERUN = "recommend_regional_rerun"
     UNRESOLVED = "unresolved"
+    ANALYSIS_ROI = "analysis_roi"
+
+
+class RegionKind(StrEnum):
+    REVIEW = "review_region"
+    ANALYSIS_ROI = "analysis_roi"
 
 
 EnumT = TypeVar("EnumT", bound=StrEnum)
@@ -92,6 +98,9 @@ class RegionAnnotation:
     domain: Domain
     action: str
     reason_code: str
+    kind: RegionKind = RegionKind.REVIEW
+    name: str = ""
+    role: str = ""
     notes: str = ""
     reviewer: str = ""
     timestamp: str = ""
@@ -109,12 +118,18 @@ class RegionAnnotation:
         object.__setattr__(
             self, "action", parse_enum(RegionAction, self.action, "region action").value
         )
+        object.__setattr__(self, "kind", parse_enum(RegionKind, self.kind, "region kind"))
+        if self.kind is RegionKind.ANALYSIS_ROI and (
+            not self.name.strip() or not self.role.strip()
+        ):
+            raise ValueError("analysis ROI name and role must not be empty")
         if not self.timestamp:
             object.__setattr__(self, "timestamp", utc_now())
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["domain"] = self.domain.value
+        data["kind"] = self.kind.value
         return data
 
     @classmethod
@@ -126,6 +141,9 @@ class RegionAnnotation:
             domain=parse_enum(Domain, data.get("domain", ""), "region domain"),
             action=str(data.get("action", "")),
             reason_code=str(data.get("reason_code", "")),
+            kind=parse_enum(RegionKind, data.get("kind", RegionKind.REVIEW), "region kind"),
+            name=str(data.get("name", "")),
+            role=str(data.get("role", "")),
             notes=str(data.get("notes", "")),
             reviewer=str(data.get("reviewer", "")),
             timestamp=str(data.get("timestamp", "")),

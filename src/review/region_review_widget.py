@@ -20,7 +20,7 @@ from qtpy.QtWidgets import (
 )
 
 from src.review.region_review import RegionReviewController
-from src.review.schemas import Domain, RegionAction
+from src.review.schemas import Domain, RegionAction, RegionKind
 
 
 class RegionReviewWidget(QWidget):
@@ -44,10 +44,16 @@ class RegionReviewWidget(QWidget):
         self.context.setWordWrap(True)
         self.domain = QComboBox()
         self.domain.addItems([item.value for item in Domain])
+        self.kind = QComboBox()
+        self.kind.addItems(["Review region", "Analysis ROI"])
         self.action = QComboBox()
         self.action.addItems([item.value.replace("_", " ") for item in RegionAction])
         self.reason = QLineEdit()
         self.reason.setPlaceholderText("Optional reason, e.g. fold or edge artifact")
+        self.name = QLineEdit()
+        self.name.setPlaceholderText("Required for an analysis ROI, e.g. quad_1")
+        self.role = QLineEdit()
+        self.role.setPlaceholderText("Required for an analysis ROI, e.g. quadrant")
         self.notes = QTextEdit()
         self.notes.setPlaceholderText("Optional reviewer notes")
         self.notes.setMaximumHeight(70)
@@ -59,7 +65,10 @@ class RegionReviewWidget(QWidget):
 
         form = QFormLayout()
         form.addRow("Domain", self.domain)
+        form.addRow("Kind", self.kind)
         form.addRow("Action", self.action)
+        form.addRow("ROI name", self.name)
+        form.addRow("ROI role", self.role)
         form.addRow("Reason", self.reason)
         form.addRow("Notes", self.notes)
         action_group = QGroupBox("Region action")
@@ -80,7 +89,18 @@ class RegionReviewWidget(QWidget):
 
         self.apply_button.clicked.connect(self._apply)
         self.remove_button.clicked.connect(self._remove)
+        self.kind.currentTextChanged.connect(self._kind_changed)
+        self._kind_changed(self.kind.currentText())
         self.refresh()
+
+    def _kind_changed(self, value: str) -> None:
+        is_roi = value == "Analysis ROI"
+        self.action.setEnabled(not is_roi)
+        self.reason.setEnabled(not is_roi)
+        self.name.setEnabled(is_roi)
+        self.role.setEnabled(is_roi)
+        if is_roi:
+            self.action.setCurrentText(RegionAction.ANALYSIS_ROI.value.replace("_", " "))
 
     def _apply(self) -> None:
         geometry = self.selected_geometry()
@@ -95,13 +115,26 @@ class RegionReviewWidget(QWidget):
                 action=self.action.currentText().replace(" ", "_"),
                 reason_code=self.reason.text().strip(),
                 notes=self.notes.toPlainText().strip(),
+                kind=(
+                    RegionKind.ANALYSIS_ROI
+                    if self.kind.currentText() == "Analysis ROI"
+                    else RegionKind.REVIEW
+                ),
+                name=self.name.text().strip(),
+                role=self.role.text().strip(),
             )
             self.controller.save(event)
         except ValueError as exc:
             self.status.setText(str(exc))
             return
-        self.status.setText("Autosaved region action.")
+        self.status.setText(
+            "Autosaved analysis ROI."
+            if self.kind.currentText() == "Analysis ROI"
+            else "Autosaved region action."
+        )
         self.reason.clear()
+        self.name.clear()
+        self.role.clear()
         self.notes.clear()
         self.refresh()
         if self.regions_changed is not None:
@@ -130,7 +163,8 @@ class RegionReviewWidget(QWidget):
         self.region_list.clear()
         for region in self.controller.regions_for_image(image_id):
             item = QListWidgetItem(
-                f"{region.domain.value}: {region.action.replace('_', ' ')}"
+                f"{region.name + ' · ' if region.name else ''}{region.domain.value}: "
+                f"{region.role if region.role else region.action.replace('_', ' ')}"
                 f"{' · ' + region.reason_code if region.reason_code else ''}"
             )
             item.setData(Qt.UserRole, region.region_id)

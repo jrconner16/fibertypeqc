@@ -1353,7 +1353,7 @@ uv run ruff check <changed Python files and tests>
 - [x] Phase 4.6 reviewer navigation, recovery, and stain-aware display.
 - [x] Phase 4.7 responsive display and review ergonomics.
 - [x] Phase 5 region review.
-- [ ] Phase 5.1 named analysis ROIs and subregions.
+- [x] Phase 5.1 named analysis ROIs and subregions.
 - [ ] Phase 6 nuclear review.
 - [ ] Phase 7 fiber segmentation review.
 - [ ] Phase 8 blinded review/adjudication.
