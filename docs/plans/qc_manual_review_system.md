@@ -1,6 +1,6 @@
 # QC and Manual Review System Plan
 
-Status: Phase 4.7 complete; region- and mask-level review remain deferred.
+Status: Phase 5 complete; mask-level review remains deferred.
 
 This document is the controlling product and implementation plan for turning
 FiberTypeQC into a project-based, human-in-the-loop review system. It records the
@@ -1333,7 +1333,7 @@ uv run ruff check <changed Python files and tests>
 - [x] Phase 4.5 guided-review UX consolidation.
 - [x] Phase 4.6 reviewer navigation, recovery, and stain-aware display.
 - [x] Phase 4.7 responsive display and review ergonomics.
-- [ ] Phase 5 region review.
+- [x] Phase 5 region review.
 - [ ] Phase 6 nuclear review.
 - [ ] Phase 7 fiber segmentation review.
 - [ ] Phase 8 blinded review/adjudication.
