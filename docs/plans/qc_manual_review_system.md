@@ -1,6 +1,6 @@
 # QC and Manual Review System Plan
 
-Status: Phase 2B complete; image-level review remains deferred to Phase 3.
+Status: Phase 4.7 complete; region- and mask-level review remain deferred.
 
 This document is the controlling product and implementation plan for turning
 FiberTypeQC into a project-based, human-in-the-loop review system. It records the
@@ -1121,6 +1121,72 @@ It opens the dashboard only; image loading and edit actions remain Phase 3.
 - canonical model/reviewed/status fields; and
 - tests.
 
+### Phase 4.5: guided-review UX consolidation
+
+Refine the completed Phase 2B–4 capabilities into a focused reviewer workflow
+without removing advanced controls or changing review-state semantics:
+
+- make the cohort dashboard a launch point rather than a permanently competing
+  workspace;
+- present a clear review-plan choice first (for example, flagged fibers,
+  selected section, or cohort QC), with **Review flagged fibers** as the
+  default entry point when applicable;
+- show one active domain and one current object at a time, while representing
+  other domain states as compact context/status chips;
+- prioritize plain-language actions such as **Keep model call** and **Needs
+  follow-up**, retaining technical status names and QC evidence in expandable
+  details;
+- group uncommon actions (uncertain, exclude, unresolved, queue configuration,
+  random-audit settings) under an explicit advanced/details affordance;
+- automatically advance after a saved object decision and provide an immediate,
+  reversible Undo affordance;
+- retain a short persistent context header with mouse, section, domain, queue,
+  and queue position; and
+- add reviewer-oriented usability tests, including keyboard navigation and
+  resume/undo behavior.
+
+This is a presentation and interaction milestone only. It must preserve the
+existing project manifest, QC tables, ReviewSession fields, audit events,
+prediction immutability, and advanced controls.
+
+### Phase 4.6: reviewer navigation, recovery, and stain-aware display
+
+Improve confidence and recoverability while retaining the focused Phase 4.5
+workflow:
+
+- add a persistent, clickable cohort → section → domain → object navigator;
+- provide a globally reachable Workspace menu to restore Guided Review, cohort
+  QC, image controls, and the channel map after any dock is closed;
+- show a concise first-run guide per project, with an always-available replay
+  control rather than a blocking tutorial;
+- load panel-aware display mappings where available, with a display-only legacy
+  fallback for incomplete manifests;
+- show a stain-aware additive composite by default, plus individually named
+  color layers such as `IIb (ch 3)` and a compact channel-map legend; and
+- add tests for mapping, navigation callbacks, workspace recovery boundaries,
+  and onboarding dismissal.
+
+Display colors and onboarding preferences must never affect predictions, QC,
+review decisions, or project artifacts.
+
+### Phase 4.7: responsive display and review ergonomics
+
+Make large-section review practical without changing the scientific workflow:
+
+- add a `--display-downsample` launcher option that applies the same
+  display-only stride to raw and label layers while preserving label IDs;
+- replace the filled selected-fiber overlay with a high-contrast outline that
+  leaves raw stain signal visible;
+- provide a button and shortcut that re-centers the current reviewed fiber, and
+  avoid reloading a section while moving between its fibers;
+- surface and implement reviewer shortcuts for navigation, keeping the model
+  call, type choices, and immediate Undo; and
+- document an explicit normal-flow smoke-test walkthrough, including recovery
+  from closed docks and the boundary between fiber-object and other domains.
+
+The full-resolution prediction artifacts remain immutable; display resolution
+must not affect decisions or persisted outputs.
+
 ### Phase 5: region review
 
 - shapes layer;
@@ -1262,12 +1328,16 @@ uv run ruff check <changed Python files and tests>
 
 - [x] Phase 2A headless QC engine/section selection.
 - [x] Phase 2B project dashboard.
-- [ ] Phase 3 image review.
-- [ ] Phase 4 fiber-type reviewer integration.
+- [x] Phase 3 image review.
+- [x] Phase 4 fiber-type reviewer integration.
+- [x] Phase 4.5 guided-review UX consolidation.
+- [x] Phase 4.6 reviewer navigation, recovery, and stain-aware display.
+- [x] Phase 4.7 responsive display and review ergonomics.
 - [ ] Phase 5 region review.
 - [ ] Phase 6 nuclear review.
 - [ ] Phase 7 fiber segmentation review.
-- [ ] Phase 8 finalization/reporting.
+- [ ] Phase 8 blinded review/adjudication.
+- [ ] Phase 9 finalization/reporting.
 
 ## 12. Decisions and deviations
 
@@ -1373,3 +1443,15 @@ Every meaningful change from the proposed design is recorded here.
 - The provisional nuclear baseline remains intentionally unchanged.
 - GUI tests may require a display-capable CI environment; core behavior will be
   covered headlessly.
+
+
+# Bug fixes / UI fixes
+
+- [x] Channel map initializes compactly and keeps a fixed maximum width.
+- [x] Clarify automatic saving with a visible autosave/decision-count status.
+- [x] Make the navigator a labeled, prominent review-navigation bar.
+- [x] Show hotkeys on their corresponding primary action buttons.
+- [x] Label the collapsed review-strategy and uncommon-action controls as
+  **Advanced review options**.
+- [x] Restore the saved standard queue and its position when Guided Review
+  reopens; cover that behavior with a widget smoke test.
