@@ -42,6 +42,9 @@ class ProjectImage:
     prediction_directory: Path
     condition: dict[str, Any] = field(default_factory=dict)
     outputs: dict[str, Path] = field(default_factory=dict)
+    applicable_domains: frozenset[Domain] = field(
+        default_factory=lambda: frozenset({Domain.FIBER_SEGMENTATION})
+    )
 
 
 @dataclass(frozen=True)
@@ -137,6 +140,20 @@ def _parse_image(
         outputs[key] = _resolve(
             prediction_directory, value, f"{context}.outputs.{key}"
         )
+    raw_applicable_domains = raw.get("applicable_domains")
+    if raw_applicable_domains is None:
+        applicable_domains = {Domain.FIBER_SEGMENTATION}
+        if "fiber_table" in outputs:
+            applicable_domains.add(Domain.FIBER_TYPING)
+        if {"nuclei_labels", "nuclei_table"} & outputs.keys():
+            applicable_domains.add(Domain.NUCLEI)
+    else:
+        if not isinstance(raw_applicable_domains, list):
+            raise ValueError(f"{context}.applicable_domains must be a list")
+        applicable_domains = {
+            parse_enum(Domain, value, f"{context}.applicable_domains")
+            for value in raw_applicable_domains
+        }
 
     if validate_paths:
         if not raw_image_path.is_file():
@@ -157,6 +174,7 @@ def _parse_image(
         prediction_directory=prediction_directory,
         condition=dict(condition),
         outputs=outputs,
+        applicable_domains=frozenset(applicable_domains),
     )
 
 
