@@ -119,6 +119,8 @@ def main(argv: list[str] | None = None) -> int:
     from src.review.fiber_type_review import FiberTypeReviewController
     from src.review.guided_review_widget import GuidedReviewWidget
     from src.review.image_review_widget import ImageReviewWidget
+    from src.review.region_review import RegionReviewController
+    from src.review.region_review_widget import RegionReviewWidget
     from src.typing_display import normalize_for_display
 
     viewer = napari.Viewer(title=f"FiberTypeQC project: {project.project_name}")
@@ -137,7 +139,43 @@ def main(argv: list[str] | None = None) -> int:
         name="Channel Map",
     )
     controller = ImageReviewController(project, tables.image_qc, session)
+    region_controller = RegionReviewController(project, session)
     loaded_image_id: str | None = None
+
+    def _region_shape_data(image_id: str) -> list[np.ndarray]:
+        data: list[np.ndarray] = []
+        for region in region_controller.regions_for_image(image_id):
+            if region.geometry.get("type") != "Polygon":
+                continue
+            rings = region.geometry.get("coordinates", [])
+            if not rings:
+                continue
+            # GeoJSON is x/y; Napari image coordinates are row/y then column/x.
+            data.append(np.asarray([[y, x] for x, y in rings[0]], dtype=float))
+        return data
+
+    def _refresh_region_shapes() -> None:
+        try:
+            shapes = viewer.layers["review_region_shapes"]
+        except KeyError:
+            return
+        shapes.data = _region_shape_data(controller.current_image_id)
+
+    def _selected_region_geometry() -> dict | None:
+        try:
+            shapes = viewer.layers["review_region_shapes"]
+        except KeyError:
+            return None
+        selected = sorted(shapes.selected_data)
+        if not selected:
+            return None
+        points = np.asarray(shapes.data[selected[-1]])
+        if points.ndim != 2 or points.shape[1] != 2 or len(points) < 3:
+            return None
+        coordinates = [[float(x), float(y)] for y, x in points]
+        if coordinates[0] != coordinates[-1]:
+            coordinates.append(coordinates[0])
+        return {"type": "Polygon", "coordinates": [coordinates]}
 
     def show_image(image_id: str) -> None:
         nonlocal loaded_image_id
@@ -177,7 +215,16 @@ def main(argv: list[str] | None = None) -> int:
                 blending="additive",
                 rgb=True,
             )
+        viewer.add_shapes(
+            _region_shape_data(image_id),
+            name="review_region_shapes",
+            shape_type="polygon",
+            edge_color="yellow",
+            face_color=[1.0, 1.0, 0.0, 0.08],
+            edge_width=2,
+        )
         loaded_image_id = image_id
+        region_widget.refresh()
 
     def show_object(image_id: str, fiber_id: int) -> None:
         controller.set_image(image_id)
@@ -201,6 +248,17 @@ def main(argv: list[str] | None = None) -> int:
         if item is not None:
             show_object(item.image_id, item.fiber_id)
 
+    region_widget = RegionReviewWidget(
+        region_controller,
+        selected_geometry=_selected_region_geometry,
+        regions_changed=_refresh_region_shapes,
+    )
+    region_review_dock = viewer.window.add_dock_widget(
+        region_widget,
+        area="left",
+        name="Region Review",
+    )
+    region_review_dock.hide()
     review_widget = ImageReviewWidget(controller, image_changed=show_image)
     image_review_dock = viewer.window.add_dock_widget(
         review_widget,
@@ -222,6 +280,11 @@ def main(argv: list[str] | None = None) -> int:
         show_image(controller.current_image_id)
         open_image_review()
 
+    def open_region_review() -> None:
+        show_image(controller.current_image_id)
+        region_review_dock.show()
+        region_review_dock.raise_()
+
     def show_domain(domain: Domain) -> None:
         controller.set_domain(domain)
         review_widget.refresh(notify=True)
@@ -233,6 +296,7 @@ def main(argv: list[str] | None = None) -> int:
         object_changed=show_object,
         show_dashboard=open_dashboard,
         show_section=show_section,
+        show_region=open_region_review,
         show_domain=show_domain,
         focus_current_object=focus_current_object,
     )
@@ -245,6 +309,7 @@ def main(argv: list[str] | None = None) -> int:
         workspace_menu.addAction("Show Guided Review", guided_dock.show)
         workspace_menu.addAction("Show Cohort QC", open_dashboard)
         workspace_menu.addAction("Show Image Controls", open_image_review)
+        workspace_menu.addAction("Show Region Review", open_region_review)
         workspace_menu.addAction("Show Channel Map", channel_map_dock.show)
 
         def restore_workspace() -> None:

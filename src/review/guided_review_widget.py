@@ -41,6 +41,7 @@ class GuidedReviewWidget(QWidget):
         object_changed: Callable[[str, int], None] | None = None,
         show_dashboard: Callable[[], None] | None = None,
         show_section: Callable[[], None] | None = None,
+        show_region: Callable[[], None] | None = None,
         show_domain: Callable[[Domain], None] | None = None,
         focus_current_object: Callable[[], None] | None = None,
         parent: QWidget | None = None,
@@ -51,6 +52,7 @@ class GuidedReviewWidget(QWidget):
         self.object_changed = object_changed
         self.show_dashboard = show_dashboard
         self.show_section = show_section
+        self.show_region = show_region
         self.show_domain = show_domain
         self.focus_current_object = focus_current_object
         self.rows = load_fiber_type_rows(project)
@@ -65,6 +67,7 @@ class GuidedReviewWidget(QWidget):
         for label, callback in (
             ("Cohort", self._show_dashboard),
             ("Section", self._show_section),
+            ("Regions", self._show_region),
             ("Fiber typing", self._show_fiber_typing),
             ("Segmentation", lambda: self._show_domain(Domain.FIBER_SEGMENTATION)),
             ("Nuclei", lambda: self._show_domain(Domain.NUCLEI)),
@@ -282,6 +285,10 @@ class GuidedReviewWidget(QWidget):
     def _show_section(self) -> None:
         if self.show_section is not None:
             self.show_section()
+
+    def _show_region(self) -> None:
+        if self.show_region is not None:
+            self.show_region()
 
     def _show_fiber_typing(self) -> None:
         self.controller.session.active_domain = Domain.FIBER_TYPING
