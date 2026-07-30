@@ -1,6 +1,6 @@
 # QC and Manual Review System Plan
 
-Status: Phase 1 complete; repository audit and shared headless foundation implemented.
+Status: Phase 2A complete; dashboard work remains deferred to Phase 2B.
 
 This document is the controlling product and implementation plan for turning
 FiberTypeQC into a project-based, human-in-the-loop review system. It records the
@@ -380,10 +380,15 @@ images:
       genotype: example
     raw_image_path: inputs/mouse_1_section_1.czi
     prediction_directory: predictions/mouse_1_section_1
+    applicable_domains:
+      - fiber_segmentation
+      - fiber_typing
+      - nuclei
     outputs:
       fiber_labels: mouse_1_section_1_cellpose_labels.tif
       fiber_table: mouse_1_section_1_fibers.csv
       nuclei_labels: mouse_1_section_1_nuclei_labels.tif
+      nuclei_table: mouse_1_section_1_nuclei.csv
 ```
 
 Relative paths resolve against the manifest directory. Explicit metadata takes
@@ -519,6 +524,78 @@ Reports include sections used per mouse/domain, exclusions and reasons, reviewed
 and corrected object counts, random-audit results, unresolved items, review
 burden, and schema/model/QC versions.
 
+### 5.10 Phase 2A QC output schemas
+
+Phase 2A writes four CSV files under `qc/`. JSON-valued columns use compact,
+sorted JSON rather than Python representations.
+
+`image_qc.csv` has one row per image and applicable top-level domain, plus an
+explicit `not_applicable` row for other domains:
+
+- provenance: `schema_version`, `qc_version`, `rules_version`, `model_version`,
+  `computed_at`;
+- identity: `project_id`, `image_id`, `mouse_id`, `section_id`, `domain`;
+- disposition: `applicable`, `status`, `hard_fail`,
+  `technical_quality_score`, `review_priority`;
+- explanations: `reason_codes` (pipe-delimited), `reason_details_json`;
+- inputs: `artifact_paths_json`;
+- common availability/consistency metrics:
+  `fiber_labels_available`, `fiber_labels_valid`, `fiber_table_available`,
+  `nuclei_labels_available`, `nuclei_labels_valid`,
+  `nuclei_table_available`, `label_shape_match`;
+- fiber-segmentation metrics: `fiber_count`, `image_pixel_count`,
+  `segmented_pixel_count`, `segmented_image_fraction`,
+  `median_fiber_area_px`, `border_touching_fiber_count`,
+  `border_touching_fiber_fraction`, `fiber_id_mismatch_fraction`;
+- fiber-typing metrics: `typing_row_count`, `prediction_available`,
+  `unknown_fraction`, `needs_review_fraction`, `probability_row_count`,
+  `probability_coverage`, `mean_max_probability`, `mean_probability_margin`,
+  `mean_normalized_entropy`, `type_counts_json`;
+- nuclei metrics: `nucleus_count`, `nucleus_pixel_count`,
+  `nucleus_image_fraction`, `median_nucleus_area_px`,
+  `nucleus_id_mismatch_fraction`, `unassigned_nucleus_fraction`,
+  `ambiguous_nucleus_fraction`, `mean_association_overlap`,
+  `assigned_nuclei_per_fiber`.
+
+Metrics not applicable to a row are null, never zero-filled. Absence therefore
+cannot be confused with a measured zero.
+
+`fiber_qc.csv` has one row per positive fiber-mask ID:
+
+- provenance (including `model_version`) and image identity fields;
+- `fiber_id`, `area_px`, `touches_image_border`;
+- `predicted_type`, `prob_i`, `prob_iia`, `prob_iib`, `prob_iix`;
+- `max_probability`, `probability_margin`, `normalized_entropy`,
+  `needs_review`;
+- `technical_reason_codes`, `review_priority`.
+
+Typing fields are null when the fiber table or probabilities are unavailable.
+Mask IDs remain authoritative for object rows; table-only IDs are represented by
+the image-level mismatch metric rather than invented mask objects.
+
+`nucleus_qc.csv` has one row per positive nucleus-mask ID:
+
+- provenance (including `model_version`) and image identity fields;
+- `nucleus_id`, `area_px`;
+- `assigned_fiber_id`, `assignment_status`, `association_category`,
+  `overlap_fraction`, `distance_to_boundary_px`,
+  `normalized_radial_position`;
+- `technical_reason_codes`, `review_priority`.
+
+Association fields are null when unavailable. Mask IDs remain authoritative.
+
+`section_selection.csv` has one row per mouse/domain for the requested strategy:
+
+- provenance and grouping: `schema_version`, `qc_version`, `rules_version`,
+  `model_version`, `computed_at`, `project_id`, `mouse_id`, `domain`,
+  `strategy`;
+- result: `selected_image_ids` (pipe-delimited),
+  `eligible_image_ids` (pipe-delimited), `requires_manual_review`,
+  `reason_code`.
+
+The selected IDs always refer to explicit manifest image IDs, never inferred
+filenames.
+
 ## 6. QC metrics and rules
 
 QC is precomputed outside GUI click handlers. Rules live in a versioned,
@@ -630,6 +707,215 @@ elif multiple sections pass:
     permit best-passing or manual selection
 ```
 
+### 6.6 Exact Phase 2A metric design
+
+Phase 2A intentionally does not load raw microscopy channels. It measures the
+integrity and review burden of prediction artifacts already produced by the
+pipeline. Raw-signal, tissue-mask, focus, saturation, membrane-support, and DAPI
+support metrics remain deferred until their input contracts and calibration
+datasets exist.
+
+#### Artifact contract and domain applicability
+
+Canonical `images[].outputs` keys are:
+
+| Artifact key | Domain use | Required when applicable |
+|---|---|---|
+| `fiber_labels` | fiber segmentation; fiber object rows; nuclei shape comparison | yes for fiber segmentation |
+| `fiber_table` | fiber typing; typing fields in fiber object rows | yes for fiber typing |
+| `nuclei_labels` | nuclei segmentation; nucleus object rows | yes for nuclei |
+| `nuclei_table` | nucleus association metrics and fields | yes for nuclei |
+| `nucleus_fiber_links` | future association audit cross-check | no in Phase 2A |
+| `fiber_nuclei` | future per-fiber nuclear cross-check | no in Phase 2A |
+
+Each image may declare `applicable_domains` as a list of controlled domain
+values. If omitted:
+
+- fiber segmentation is applicable;
+- fiber typing is applicable only when `fiber_table` is declared; and
+- nuclei is applicable only when `nuclei_labels` or `nuclei_table` is declared.
+
+An absent artifact for an applicable domain produces a QC row and an explicit
+hard-fail reason; QC generation continues for other images/domains. An absent
+artifact for a non-applicable domain produces `status=not_applicable` and no
+failure. Unreadable, non-2D, non-finite, negative, or non-integral label masks are
+structurally invalid. A fiber/nucleus shape mismatch is a nuclei-domain hard
+failure. Missing optional columns or probability vectors produce null metrics
+and informational reasons rather than fabricated values.
+
+#### Fiber-segmentation formulas
+
+For a valid 2D fiber label mask \(L_f\), let \(P\) be the number of image pixels,
+\(S = \{p : L_f(p) > 0\}\), and \(F\) the set of unique positive IDs.
+
+- `fiber_count = |F|`.
+- `image_pixel_count = P`.
+- `segmented_pixel_count = |S|`.
+- `segmented_image_fraction = |S| / P`.
+- `area_px(f) = count(L_f == f)`.
+- `median_fiber_area_px = median(area_px(f) for f in F)`.
+- a fiber touches the image border when its ID appears in the first/last row or
+  first/last column.
+- `border_touching_fiber_fraction = border_touching_fiber_count / |F|`.
+- if the table has IDs \(T\),
+  `fiber_id_mismatch_fraction = |F symmetric_difference T| / |F union T|`.
+
+Zero-denominator fractions are null except `segmented_image_fraction`, whose
+denominator is a valid non-empty image. An all-background fiber mask has
+`fiber_count=0` and triggers the unmistakable `fiber_segmentation.no_objects`
+hard failure. Area and border fractions remain informational in the default
+configuration because pathology, cropping, and acquisition geometry affect
+their distributions.
+
+#### Fiber-typing formulas
+
+The denominator is the number of unique positive integer fiber IDs after keeping
+the first row for each duplicated ID; duplicate or invalid IDs trigger REVIEW.
+The prediction column is the first available
+of `predicted_type`, `fiber_type`, or `model_prediction`.
+
+- `typing_row_count = number of valid table rows`.
+- `unknown_fraction = count(prediction is blank, "unknown", or "uncertain") /
+  typing_row_count`. `iix_candidate` is not counted as unknown.
+- `needs_review_fraction = count(needs_review is true) / typing_row_count` when
+  that column exists.
+- probability columns are the available members of
+  `prob_i`, `prob_iia`, `prob_iib`, `prob_iix`.
+- a probability row is usable when at least two values are finite,
+  non-negative, and have a positive sum. Values are normalized to sum to one.
+- `probability_coverage = probability_row_count / typing_row_count`.
+- per usable row, `max_probability = max(p)`.
+- per usable row, `probability_margin = largest(p) - second_largest(p)`.
+- per usable row with \(K\) probabilities,
+  `normalized_entropy = -sum(p * ln(p)) / ln(K)`, treating `0 ln 0` as zero.
+- image means use only usable probability rows.
+- `type_counts_json` records exact predicted-label counts and is informational.
+
+No default confidence, margin, entropy, unknown-rate, `needs_review`-rate, or
+composition threshold is enabled. Those distributions require model/panel
+calibration. Missing probabilities trigger an informational reason only.
+
+#### Nuclei formulas
+
+For a valid 2D nucleus mask \(L_n\), use the same mask definitions as fibers:
+
+- `nucleus_count = number of unique positive IDs`.
+- `nucleus_pixel_count = count(L_n > 0)`.
+- `nucleus_image_fraction = nucleus_pixel_count / image_pixel_count`.
+- `area_px(n) = count(L_n == n)`.
+- `median_nucleus_area_px = median(area_px(n))`.
+- `nucleus_id_mismatch_fraction` uses the same symmetric-difference/union
+  formula between mask and table IDs.
+
+For a nuclei table with \(N\) unique valid positive nucleus IDs after keeping the
+first duplicate:
+
+- `unassigned_nucleus_fraction = count(assignment_status ==
+  "unassigned_or_interstitial" or assigned_fiber_id == 0) / N`.
+- `ambiguous_nucleus_fraction = count(assignment_status == "ambiguous") / N`.
+- `mean_association_overlap = mean(overlap_fraction)` over finite values.
+- `assigned_nuclei_per_fiber = count(assignment_status == "assigned") /
+  fiber_count` when a valid nonempty fiber mask exists.
+
+Nuclear density, central nuclei, nuclei per fiber, and area distributions are
+biologically sensitive and remain informational. An empty but structurally valid
+nucleus mask triggers REVIEW, not hard failure. Uncalibrated association
+fractions do not trigger review by default.
+
+#### Missing-input behavior
+
+| Condition | Result |
+|---|---|
+| Missing/corrupt required label mask | applicable domain hard fails; dependent metrics null |
+| Missing/corrupt required table | applicable domain hard fails; mask-only metrics still emitted |
+| Missing prediction column in an applicable typing table | typing hard fails |
+| Empty applicable typing table | typing hard fails |
+| Empty fiber mask | fiber segmentation hard fails |
+| Empty nucleus mask | nuclei REVIEW |
+| Fiber/nucleus mask shape mismatch | nuclei hard fails |
+| Missing probabilities/optional association columns | metrics null; informational reason |
+| Missing artifact for non-applicable domain | `not_applicable`; no reason penalty |
+
+#### Technical quality versus review priority
+
+These fields are deliberately separate and transparent:
+
+- `technical_quality_score` is a coarse disposition summary, not a biological
+  quality model: `1.0` for PASS, `0.5` for REVIEW, `0.0` for hard FAIL, and null
+  when not applicable.
+- `review_priority` sorts work: `100 * hard_fail_reason_count +
+  10 * review_reason_count`. Informational reasons add zero. Higher values are
+  reviewed first; stable manifest order breaks ties.
+
+Neither field contains biological endpoints. The score must not be interpreted
+as a calibrated probability, and priority must not be used as an acceptance
+threshold.
+
+#### Rule severities and default rules
+
+Controlled severities:
+
+- `informational`: retain a reason without changing status or priority;
+- `review`: set REVIEW unless a hard failure is present and add 10 priority;
+- `hard_fail`: set FAIL, set `hard_fail=true`, and add 100 priority.
+
+The versioned YAML rule configuration contains `rules_version`, `qc_version`,
+and rules with `reason_code`, `domain`, `metric`, `operator`, `threshold`,
+`severity`, `enabled`, and `description`.
+
+Enabled default hard failures are restricted to:
+
+- missing/unreadable/invalid required fiber labels;
+- no positive fiber objects;
+- missing/unreadable/empty applicable fiber table;
+- missing typing prediction column;
+- missing/unreadable/invalid required nuclei labels;
+- missing/unreadable required nuclei table; and
+- fiber/nucleus label-shape mismatch.
+
+Enabled default REVIEW rules are:
+
+- fiber mask/table ID mismatch greater than zero;
+- duplicate/invalid fiber-table IDs;
+- empty nucleus mask;
+- nucleus mask/table ID mismatch greater than zero; and
+- duplicate/invalid nucleus-table IDs.
+
+Enabled informational rules report unavailable typing probabilities and optional
+nucleus association fields. Rules for segmented fraction, border fraction,
+fiber/nuclear area, typing confidence/margin/entropy, unknown fraction,
+composition, nuclei density, unassigned/ambiguous fractions, and association
+overlap are present but disabled or informational with no default threshold.
+
+### 6.7 Phase 2A test fixtures and expected results
+
+All fixtures use temporary project directories and synthetic TIFF/CSV artifacts.
+
+1. **Two-fiber geometry fixture:** a `4 x 5` mask contains fiber 1 in four
+   interior pixels and fiber 2 in four pixels touching the right border.
+   Expected: `fiber_count=2`, `segmented_image_fraction=8/20`,
+   `median_fiber_area_px=4`, and `border_touching_fiber_fraction=1/2`.
+2. **Typing fixture:** two rows have probabilities `[0.8, 0.2]` and
+   `[0.5, 0.5]`. Expected mean maximum probability `0.65`, mean margin `0.30`,
+   probability coverage `1.0`, and normalized entropies calculated with the
+   two-class formula. No default confidence/entropy rule changes PASS status.
+3. **Nucleus fixture:** four nuclei contain two assigned, one ambiguous, and one
+   unassigned nucleus. Expected unassigned fraction `1/4`, ambiguous fraction
+   `1/4`, and assigned nuclei per fiber `2/fiber_count`.
+4. **Missing typing table fixture:** typing is explicitly applicable but its
+   declared table is absent. Expected typing FAIL with
+   `fiber_typing.missing_table`; fiber segmentation remains independently
+   evaluable.
+5. **Biological-extreme fixture:** all fibers have the same predicted type and
+   all nuclei are assigned/central. Expected no technical hard failure because
+   composition and biological outcomes are informational.
+6. **Selection fixture:** one mouse has PASS, REVIEW, and hard-FAIL sections.
+   `all_passing` selects PASS and REVIEW sections; `best_passing` selects PASS;
+   manual selection accepts an explicitly chosen eligible section. A mouse with
+   only hard failures selects none and routes to review.
+7. **CLI fixture:** generation writes all four versioned CSVs, respects an
+   alternate rules file and selection strategy, and does not import Napari/Qt.
+
 ## 7. Review modes
 
 ### 7.1 QC-gated automatic
@@ -718,12 +1004,17 @@ CLI compatibility.
 No Qt/Napari UI integration and no scientific QC thresholds are introduced in
 Phase 1.
 
-### Phase 2: QC engine and project dashboard
+### Phase 2A: headless QC engine and section selection
 
-- image/fiber/nucleus QC tables;
+- artifact-derived image/fiber/nucleus QC tables;
 - versioned configurable rules and explicit reasons;
 - mouse/section grouping;
-- domain-specific section recommendations;
+- domain-specific `all_passing`, `best_passing`, and `manual` selection;
+- headless CLI;
+- tests and schema/workflow documentation.
+
+### Phase 2B: project dashboard
+
 - cohort dashboard; and
 - tests.
 
@@ -798,10 +1089,10 @@ headless. Add a small number of GUI tests only where feasible.
 - [x] Nucleus edit does not invalidate fiber typing.
 - [ ] Nucleus reassignment updates affected associations.
 - [ ] Region exclusion affects only selected domains.
-- [ ] `all_passing` selection works.
-- [ ] `best_passing` selection works.
-- [ ] No-passing selection routes to review.
-- [ ] Biological endpoint values do not trigger technical hard fails.
+- [x] `all_passing` selection works.
+- [x] `best_passing` selection works.
+- [x] No-passing selection routes to review.
+- [x] Biological endpoint values do not trigger technical hard fails.
 - [ ] Finalization respects section and region exclusions.
 - [x] Resume restores queue position.
 - [ ] Old reviewer output remains loadable where applicable.
@@ -845,9 +1136,30 @@ uv run ruff check <changed Python files and tests>
 - [x] Ran full suite: 146 passed, 36 existing warnings.
 - [x] Committed Phase 1 separately from the planning commit.
 
+### Phase 2A
+
+- [x] Documented exact artifact inputs, formulas, denominators, and missing-input
+  behavior before implementation.
+- [x] Documented `technical_quality_score` separately from `review_priority`.
+- [x] Added explicit and inferred per-image domain applicability.
+- [x] Added versioned YAML QC rules with controlled severities.
+- [x] Restricted default hard failures to structurally unusable artifacts.
+- [x] Left uncalibrated distribution and biological rules informational/disabled.
+- [x] Added headless image, fiber, and nucleus QC generation.
+- [x] Added explicit reason codes and version/model provenance.
+- [x] Added mouse/section grouping and all-passing, best-passing, and manual
+  selection.
+- [x] Added the `src.generate_review_qc` CLI and four atomic CSV outputs.
+- [x] Added operator-facing Phase 2A documentation and output-schema links.
+- [x] Added 10 Phase 2A tests; focused review tests pass.
+- [x] Ran changed-file Ruff checks: all checks passed.
+- [x] Ran full suite: 156 passed, 36 existing warnings.
+- [x] Committed Phase 2A separately from Phases 1 and 2B.
+
 ### Later phases
 
-- [ ] Phase 2 QC engine/dashboard.
+- [x] Phase 2A headless QC engine/section selection.
+- [ ] Phase 2B project dashboard.
 - [ ] Phase 3 image review.
 - [ ] Phase 4 fiber-type reviewer integration.
 - [ ] Phase 5 region review.
@@ -907,6 +1219,26 @@ Every meaningful change from the proposed design is recorded here.
 15. **No product-goal deviation.** The project-based progressive workflow,
     mandatory random audit, technical-versus-biological separation, immutable
     predictions, and finalization requirements remain unchanged.
+16. **Split Phase 2 into 2A headless generation and 2B dashboard.** This keeps
+    expensive cohort computation out of interactive handlers and gives the later
+    GUI a versioned, tested file contract.
+17. **Do not reuse legacy `QCConfig` thresholds as project-review defaults.**
+    `src.quantify_classify.QCConfig` contains fixed development-era thresholds
+    for label count, unknown rate, median area, and marker correlation. Phase 2A
+    emits corresponding evidence where possible but does not silently promote
+    those thresholds into cohort acceptance rules.
+18. **Add optional explicit per-image `applicable_domains`.** Artifact presence
+    supplies a backward-compatible default, while explicit applicability
+    distinguishes “not run by design” from “expected output missing.”
+19. **Use mask-derived area and identity as the object-QC authority.** Prediction
+    tables enrich those rows. Table-only IDs are reported through mismatch
+    reasons rather than represented as nonexistent mask objects.
+20. **Use coarse rule-derived scores, not opaque learned QC scores.** Phase 2A
+    separates disposition (`technical_quality_score`) from work ordering
+    (`review_priority`) and documents both formulas.
+21. **Defer region/tile and raw-signal metrics to a calibrated follow-up.**
+    Phase 2A does not have a stable tissue-mask or channel-quality artifact
+    contract, so inventing those values would be scientifically misleading.
 
 ## 13. Known limitations
 

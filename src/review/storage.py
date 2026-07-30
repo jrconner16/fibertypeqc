@@ -9,6 +9,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import pandas as pd
+
 from src.review.schemas import ReviewEvent
 from src.review.session import ReviewSession
 
@@ -51,6 +53,12 @@ def _atomic_replace_text(path: Path, text: str) -> None:
     finally:
         if temporary_path is not None and temporary_path.exists():
             temporary_path.unlink()
+
+
+def atomic_write_dataframe(path: Path | str, table: pd.DataFrame) -> None:
+    """Write a CSV through atomic replacement."""
+    output_path = Path(path)
+    _atomic_replace_text(output_path, table.to_csv(index=False, lineterminator="\n"))
 
 
 def save_session(path: Path | str, session: ReviewSession) -> None:

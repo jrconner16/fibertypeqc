@@ -50,6 +50,32 @@ def test_project_manifest_loads_and_resolves_paths(tmp_path: Path) -> None:
     ).resolve()
     reviewed = project.reviewed_mask_path("image_1", Domain.FIBER_SEGMENTATION)
     assert reviewed == (tmp_path / "review/reviewed_fiber_labels/labels.tif").resolve()
+    assert project.image("image_1").applicable_domains == {
+        Domain.FIBER_SEGMENTATION
+    }
+
+
+def test_project_manifest_infers_and_accepts_explicit_domain_applicability(
+    tmp_path: Path,
+) -> None:
+    path = _write_project(tmp_path)
+    data = yaml.safe_load(path.read_text())
+    data["images"][0]["outputs"]["fiber_table"] = "fibers.csv"
+    (tmp_path / "predictions/image_1/fibers.csv").write_text(
+        "fiber_id,fiber_type\n1,iib\n",
+        encoding="utf-8",
+    )
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    inferred = load_project(path)
+    assert inferred.image("image_1").applicable_domains == {
+        Domain.FIBER_SEGMENTATION,
+        Domain.FIBER_TYPING,
+    }
+
+    data["images"][0]["applicable_domains"] = ["nuclei"]
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    explicit = load_project(path)
+    assert explicit.image("image_1").applicable_domains == {Domain.NUCLEI}
 
 
 def test_project_manifest_rejects_duplicate_image_ids(tmp_path: Path) -> None:
