@@ -53,6 +53,9 @@ class NuclearReviewController:
             raise ValueError("Review session does not belong to this project")
         self.project = project
         self.session = session
+        self.queue: tuple[NucleusQueueItem, ...] = ()
+        self.session.active_domain = Domain.NUCLEI
+        self.session.active_scope = Scope.OBJECT
 
     @property
     def reviewed_associations_path(self) -> Path:
@@ -93,6 +96,7 @@ class NuclearReviewController:
             raise ValueError(f"nucleus_id {nucleus_id} is not present in {image_id!r}")
         labels[labels == nucleus_id] = 0
         _atomic_write_labels(reviewed, labels)
+        removed_association = self.session.remove_nucleus_association_decision(image_id, nucleus_id)
         self.session.mark_stale(image_id, EditKind.NUCLEUS_MASK)
         return ReviewEvent(
             image_id=image_id,
@@ -101,7 +105,12 @@ class NuclearReviewController:
             target_id=str(nucleus_id),
             action="delete_nucleus",
             reason_code=reason_code,
-            old_value={"pixel_count": pixel_count},
+            old_value={
+                "pixel_count": pixel_count,
+                "association_decision": removed_association.to_dict()
+                if removed_association is not None
+                else None,
+            },
             new_value={"pixel_count": 0, "reviewed_mask": str(reviewed)},
             reviewer=self.session.reviewer,
             model_version=self.session.model_version,
@@ -117,7 +126,7 @@ class NuclearReviewController:
         table_path = self.project.image(image_id).outputs.get("nuclei_table")
         if table_path is None:
             raise ValueError(f"Image {image_id!r} has no nuclei_table artifact")
-        table = pd.read_csv(table_path, low_memory=False)
+        table = self.reviewed_associations(image_id)
         required = {"nucleus_id", "assigned_fiber_id", "assignment_status"}
         missing = sorted(required - set(table.columns))
         if missing:
@@ -125,21 +134,105 @@ class NuclearReviewController:
         work = table.copy()
         if parsed_source is NucleusQueueSource.UNASSIGNED:
             work = work[
-                work["assignment_status"].astype(str).str.contains("unassigned", case=False)
+                work["reviewed_association_status"].eq(NucleusAssociationStatus.UNASSIGNED.value)
             ]
         elif parsed_source is NucleusQueueSource.AMBIGUOUS:
-            work = work[work["assignment_status"].astype(str).str.lower().eq("ambiguous")]
+            work = work[
+                work["reviewed_association_status"].eq(NucleusAssociationStatus.AMBIGUOUS.value)
+            ]
         return tuple(
             NucleusQueueItem(
                 image_id=image_id,
                 nucleus_id=int(row.nucleus_id),
-                model_fiber_id=int(row.assigned_fiber_id),
-                assignment_status=str(row.assignment_status),
+                model_fiber_id=_positive_int(row.assigned_fiber_id),
+                assignment_status=str(row.reviewed_association_status),
                 queue_source=parsed_source,
             )
             for row in work.sort_values("nucleus_id").itertuples(index=False)
             if int(row.nucleus_id) > 0
         )
+
+    @property
+    def current_item(self) -> NucleusQueueItem | None:
+        return self.queue[self.session.queue_position] if self.queue else None
+
+    def set_association_queue(
+        self,
+        image_id: str,
+        source: NucleusQueueSource | str,
+        *,
+        position: int = 0,
+    ) -> None:
+        """Select a deterministic per-image association queue and persist its position."""
+        parsed_source = NucleusQueueSource(source)
+        self.queue = self.association_queue(image_id, parsed_source)
+        self.session.current_image_id = image_id
+        self.session.active_domain = Domain.NUCLEI
+        self.session.active_scope = Scope.OBJECT
+        self.session.set_queue(
+            f"nuclei:{image_id}:{parsed_source.value}",
+            position=min(position, len(self.queue) - 1) if self.queue else 0,
+        )
+
+    def move(self, offset: int) -> NucleusQueueItem:
+        if not self.queue:
+            raise ValueError("The nucleus association queue is empty")
+        self.session.set_queue(
+            self.session.active_queue,
+            (self.session.queue_position + offset) % len(self.queue),
+        )
+        return self.queue[self.session.queue_position]
+
+    def reviewed_associations(self, image_id: str) -> pd.DataFrame:
+        """Return model associations overlaid with canonical manual decisions.
+
+        Model columns are retained unchanged.  Reviewed columns make the effective
+        association explicit without overwriting prediction outputs.
+        """
+        table_path = self.project.image(image_id).outputs.get("nuclei_table")
+        if table_path is None:
+            raise ValueError(f"Image {image_id!r} has no nuclei_table artifact")
+        table = pd.read_csv(table_path, low_memory=False)
+        required = {"nucleus_id", "assigned_fiber_id", "assignment_status"}
+        missing = sorted(required - set(table.columns))
+        if missing:
+            raise ValueError(f"nuclei table is missing required columns: {missing}")
+        if table["nucleus_id"].duplicated().any():
+            raise ValueError(f"nuclei table has duplicate nucleus IDs: {table_path}")
+
+        present_ids = set(np.unique(self.load_nuclei_labels(image_id)).tolist()) - {0}
+        table = table[table["nucleus_id"].map(_positive_int).isin(present_ids)].copy()
+        decisions = {
+            decision.nucleus_id: decision
+            for decision in self.session.nucleus_association_decisions
+            if decision.image_id == image_id and decision.nucleus_id in present_ids
+        }
+        reviewed_ids: list[int] = []
+        reviewed_statuses: list[str] = []
+        reason_codes: list[str] = []
+        reviewers: list[str] = []
+        timestamps: list[str] = []
+        for row in table.itertuples(index=False):
+            nucleus_id = _positive_int(row.nucleus_id)
+            decision = decisions.get(nucleus_id)
+            if decision is None:
+                reviewed_ids.append(_positive_int(row.assigned_fiber_id))
+                reviewed_statuses.append(_model_association_status(row.assignment_status).value)
+                reason_codes.append("")
+                reviewers.append("")
+                timestamps.append("")
+            else:
+                reviewed_ids.append(decision.reviewed_fiber_id)
+                reviewed_statuses.append(decision.association_status.value)
+                reason_codes.append(decision.reason_code)
+                reviewers.append(decision.reviewer)
+                timestamps.append(decision.timestamp)
+        table["reviewed_fiber_id"] = reviewed_ids
+        table["reviewed_association_status"] = reviewed_statuses
+        table["review_reason_code"] = reason_codes
+        table["review_reviewer"] = reviewers
+        table["review_timestamp"] = timestamps
+        return table
 
     def set_association(
         self,
@@ -198,8 +291,13 @@ class NuclearReviewController:
 
     def save(self, event: ReviewEvent | None = None) -> None:
         save_session(self.project.review_state_path, self.session)
-        rows = [item.to_dict() for item in self.session.nucleus_association_decisions]
-        atomic_write_dataframe(self.reviewed_associations_path, pd.DataFrame(rows))
+        tables = [
+            self.reviewed_associations(image.image_id)
+            for image in self.project.images
+            if "nuclei_table" in image.outputs and "nuclei_labels" in image.outputs
+        ]
+        rows = pd.concat(tables, ignore_index=True) if tables else pd.DataFrame()
+        atomic_write_dataframe(self.reviewed_associations_path, rows)
         if event is not None:
             append_review_event(self.project.review_events_path, event)
 
@@ -216,3 +314,21 @@ def _atomic_write_labels(path: Path, labels: np.ndarray) -> None:
         os.replace(temporary_path, path)
     finally:
         temporary_path.unlink(missing_ok=True)
+
+
+def _positive_int(value: object) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _model_association_status(value: object) -> NucleusAssociationStatus:
+    normalized = str(value).strip().lower()
+    if normalized == NucleusAssociationStatus.ASSIGNED.value:
+        return NucleusAssociationStatus.ASSIGNED
+    if normalized == NucleusAssociationStatus.AMBIGUOUS.value:
+        return NucleusAssociationStatus.AMBIGUOUS
+    if "unassigned" in normalized or "interstitial" in normalized:
+        return NucleusAssociationStatus.UNASSIGNED
+    return NucleusAssociationStatus.UNRESOLVED

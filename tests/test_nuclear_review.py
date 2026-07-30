@@ -94,6 +94,39 @@ def test_nucleus_association_queue_and_reviewed_output(tmp_path: Path) -> None:
     controller.save(event)
 
     reviewed = pd.read_csv(controller.reviewed_associations_path)
-    assert int(reviewed.loc[0, "reviewed_fiber_id"]) == 2
+    assert reviewed["nucleus_id"].tolist() == [1, 2]
+    row = reviewed.loc[reviewed["nucleus_id"] == 2].iloc[0]
+    assert int(row["reviewed_fiber_id"]) == 2
+    assert row["reviewed_association_status"] == "assigned"
     assert StaleProduct.NUCLEUS_ASSOCIATIONS.value in session.stale_products["one"]
     assert StaleProduct.FIBER_NUCLEUS_COUNTS.value in session.stale_products["one"]
+
+
+def test_association_queue_uses_manual_decisions_and_persists_position(tmp_path: Path) -> None:
+    project, _ = _project(tmp_path)
+    session = ReviewSession(project_id=project.project_id, model_version=project.model_version)
+    controller = NuclearReviewController(project, session)
+
+    controller.set_association_queue("one", NucleusQueueSource.UNASSIGNED)
+    assert controller.current_item is not None
+    assert controller.current_item.nucleus_id == 2
+    controller.set_association("one", 2, fiber_id=2)
+
+    assert controller.association_queue("one", NucleusQueueSource.UNASSIGNED) == ()
+    full_queue = controller.association_queue("one", NucleusQueueSource.FULL)
+    assert [item.nucleus_id for item in full_queue] == [1, 2]
+    assert session.active_queue == "nuclei:one:unassigned_nuclei"
+    assert session.queue_position == 0
+
+
+def test_deleted_nucleus_is_omitted_from_reviewed_associations(tmp_path: Path) -> None:
+    project, _ = _project(tmp_path)
+    session = ReviewSession(project_id=project.project_id, model_version=project.model_version)
+    controller = NuclearReviewController(project, session)
+    controller.set_association("one", 1, fiber_id=1)
+    event = controller.delete_nucleus("one", 1)
+    controller.save(event)
+
+    reviewed = pd.read_csv(controller.reviewed_associations_path)
+    assert reviewed["nucleus_id"].tolist() == [2]
+    assert session.nucleus_association_decisions == []
