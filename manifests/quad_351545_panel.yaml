@@ -1,0 +1,16 @@
+# Verified channel mapping for the raw 351545 QUAD CZI panel.
+# This mapping was used by the local semantic-model holdout run.
+channels:
+  laminin: 2
+  dapi: null
+  type_i: 0
+  type_iia: 1
+  type_iib: 3
+  type_iix: null
+  emhc: null
+
+classification:
+  residual_inference:
+    enabled: false
+    target_class: null
+    requires_negative_markers: []

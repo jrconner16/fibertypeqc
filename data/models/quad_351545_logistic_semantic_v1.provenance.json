@@ -1,0 +1,34 @@
+{
+  "model_id": "quad_351545_logistic_i_iia_iib_iix_v1",
+  "bundle_path": "data/models/quad_351545_logistic_semantic_v1.joblib",
+  "sha256": "bacb30547603025afeb16ec6fd93aef696e54de400d09b8523eacc00b3fd7ca9",
+  "candidate_version": "panel_baselines.v1",
+  "model_family": "logistic_regression",
+  "classes": ["i", "iia", "iib", "iix"],
+  "features": [
+    "type_i.mean",
+    "type_i.p90",
+    "type_i.coverage_high",
+    "type_i.snr_mean",
+    "type_i.snr_p90",
+    "type_iia.mean",
+    "type_iia.p90",
+    "type_iia.coverage_high",
+    "type_iia.snr_mean",
+    "type_iia.snr_p90",
+    "type_iib.mean",
+    "type_iib.p90",
+    "type_iib.coverage_high",
+    "type_iib.snr_mean",
+    "type_iib.snr_p90"
+  ],
+  "panel_config": "manifests/quad_351545_panel.yaml",
+  "model_manifest": "manifests/quad_351545_logistic_semantic_v1.yaml",
+  "source_artifact": "fibertypeqc_outputs/phase3_type_i_candidates/quad_351545_baselines/logistic_regression.joblib",
+  "validation": {
+    "existing_351545_holdout_prediction_match": "10604/10604",
+    "heldout_accuracy": 0.7918781725888325,
+    "heldout_balanced_accuracy": 0.7836127523745768,
+    "heldout_evaluation": "one frozen whole-image holdout; do not select a winner from it"
+  }
+}
