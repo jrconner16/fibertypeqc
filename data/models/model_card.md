@@ -6,6 +6,8 @@
 - Public status: frozen default alpha classifier
 - Framework: scikit-learn-compatible joblib model
 - Task: per-fiber classification into `iib`, `iia`, or inferred `iix`
+- Manifest: `data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.yaml`
+- SHA-256: `5a1042a31ad4d90be61a58fabf9204e52517e17b63baccf027c8d84db1d9f946`
 
 This is the baseline model used by the documented public alpha workflow. Candidate models should be
 compared against this frozen baseline before any default-model change is considered.

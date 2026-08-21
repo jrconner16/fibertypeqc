@@ -31,59 +31,59 @@ Under `examples/demo_outputs/`:
 - Screenshots derived from published/cleared JAG images should remain de-identified in naming and
   should avoid exposing private paths in UI captures.
 
-## Intended Commands For Demo Reproduction
+## Executable Reference Command
 
-Single-image pipeline:
-
-```bash
-uv run python -m scripts.run_pipeline \
-  --input test_inputs/demo_screenshots/demo_image_a.czi \
-  --output-dir outputs/demo_run/demo_image_a \
-  --iib-channel 0 \
-  --iia-channel 1 \
-  --membrane-channel 2 \
-  --typing-preprocess tile_subtract \
-  --typing-tile-size 256 \
-  --typing-erode-px 2 \
-  --classifier-path data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib
-```
-
-Batch pipeline:
+From the repository root, run the public-safe synthetic fixture through the frozen classifier,
+merge the supplied review corrections, and validate the declared outputs:
 
 ```bash
-uv run python -m scripts.run_batch \
-  --input-dir path/to/demo_inputs \
-  --output-dir outputs/demo_batch
+uv run python -m scripts.run_reference
 ```
 
-Review UI:
+The command writes to `outputs/reference/`. To rerun only the validator:
+
+```bash
+uv run python -m scripts.validate_reference_outputs \
+  --output-dir outputs/reference
+```
+
+The synthetic reference uses a supplied exact label mask to keep golden tables independent of
+Cellpose device behavior. It therefore validates deterministic image loading, quantification,
+frozen-model prediction, versioned preflight/post-run QC, review merge, artifact schemas, and
+digests. It does not claim to validate segmentation or biology.
+
+The review UI can be opened against the generated reference artifacts:
 
 ```bash
 uv run python -m scripts.review_labels_napari \
-  --image test_inputs/demo_screenshots/demo_image_a.czi \
-  --labels outputs/demo_run/demo_image_a/demo_image_a_cellpose_labels.tif \
-  --fibers outputs/demo_run/demo_image_a/demo_image_a_fibers.csv \
-  --output outputs/demo_run/demo_image_a/demo_image_a_fibers_manual_review.csv
+  --image examples/reference/synthetic_reference.tif \
+  --labels outputs/reference/synthetic_reference_cellpose_labels.tif \
+  --fibers outputs/reference/synthetic_reference_fibers.csv \
+  --channel-config examples/reference/panel.yaml \
+  --output outputs/reference/synthetic_reference_fibers_manual_review.csv
 ```
 
-Merge review labels:
+To merge an interactively reviewed table instead of the supplied deterministic corrections:
 
 ```bash
 uv run python -m scripts.merge_reviewed_labels \
-  --fibers outputs/demo_run/demo_image_a/demo_image_a_fibers.csv \
-  --review outputs/demo_run/demo_image_a/demo_image_a_fibers_manual_review.csv \
-  --output outputs/demo_run/demo_image_a/demo_image_a_fibers_final.csv
+  --fibers outputs/reference/synthetic_reference_fibers.csv \
+  --review outputs/reference/synthetic_reference_fibers_manual_review.csv \
+  --panel-config examples/reference/panel.yaml \
+  --output outputs/reference/synthetic_reference_fibers_reviewed.csv
 ```
 
 ## What The Demo Validates
 
-- Public workflow documentation completeness.
+- Executable public mechanics path from tracked inputs.
+- Frozen-model artifact and fixture digest verification.
 - Expected output file schema and review-table integration.
 - Example QC field interpretation for an alpha review-assisted pipeline.
 
 ## What The Demo Does Not Validate
 
 - Full biological equivalence to MyoSight across cohorts.
+- Cellpose segmentation repeatability or quality.
 - Final clinical/research conclusions without image-level review and validation.
 - Generalization to arbitrary staining/channel schemas.
 

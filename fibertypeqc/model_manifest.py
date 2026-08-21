@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,9 @@ class ModelManifest:
     required_markers: frozenset[str]
     outputs: tuple[str, ...]
     source_path: Path
+    artifact: str | None = None
+    artifact_sha256: str | None = None
+    intended_use: str | None = None
 
 
 def load_model_manifest(path: Path) -> ModelManifest:
@@ -52,6 +56,22 @@ def load_model_manifest(path: Path) -> ModelManifest:
     outputs = raw["outputs"]
     if not isinstance(outputs, list) or not all(isinstance(value, str) for value in outputs):
         raise ValueError(f"Model manifest {path} outputs must be a list of names.")
+    artifact = raw.get("artifact")
+    if artifact is not None and not isinstance(artifact, str):
+        raise ValueError(f"Model manifest {path} artifact must be a path string.")
+    artifact_sha256 = raw.get("artifact_sha256")
+    if artifact_sha256 is not None:
+        if not isinstance(artifact_sha256, str) or len(artifact_sha256) != 64:
+            raise ValueError(f"Model manifest {path} artifact_sha256 must be a SHA-256 digest.")
+        try:
+            int(artifact_sha256, 16)
+        except ValueError as exc:
+            raise ValueError(
+                f"Model manifest {path} artifact_sha256 must be a SHA-256 digest."
+            ) from exc
+    intended_use = raw.get("intended_use")
+    if intended_use is not None and not isinstance(intended_use, str):
+        raise ValueError(f"Model manifest {path} intended_use must be a string.")
     return ModelManifest(
         model_id=str(raw["model_id"]),
         task=str(raw["task"]),
@@ -59,7 +79,32 @@ def load_model_manifest(path: Path) -> ModelManifest:
         required_markers=frozenset(markers),
         outputs=tuple(outputs),
         source_path=path,
+        artifact=artifact,
+        artifact_sha256=artifact_sha256,
+        intended_use=intended_use,
     )
+
+
+def validate_model_artifact(path: Path, manifest: ModelManifest) -> None:
+    """Verify a selected model artifact against an optional manifest digest."""
+    if not path.is_file():
+        raise ValueError(f"Model artifact not found: {path}")
+    if manifest.artifact is not None:
+        declared = Path(manifest.artifact)
+        declared_name = declared.name
+        if path.name != declared_name:
+            raise ValueError(
+                f"Model manifest {manifest.source_path} declares artifact '{declared_name}', "
+                f"but --classifier-path selected '{path.name}'."
+            )
+    if manifest.artifact_sha256 is None:
+        return
+    digest = sha256(path.read_bytes()).hexdigest()
+    if digest != manifest.artifact_sha256.lower():
+        raise ValueError(
+            f"Model artifact digest mismatch for {path}: expected "
+            f"{manifest.artifact_sha256.lower()}, got {digest}."
+        )
 
 
 def validate_model_compatibility(

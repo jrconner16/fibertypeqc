@@ -1,9 +1,10 @@
 # Panel Schema
 
-FiberTypeQC is moving from a fixed `type1/type2` typing model to a panel-aware channel schema.
+FiberTypeQC supports a panel-aware channel schema alongside the frozen `type1/type2` baseline.
 
-This document defines the config contract for `--channel-config`. It describes the intended
-panel model even where the current alpha pipeline still only activates a narrower default path.
+This document defines the config contract for `--panel-config` (preferred) and
+`--channel-config` (compatibility alias). The frozen baseline remains the default; panel-aware
+features are explicit opt-ins.
 
 ## Design Goals
 
@@ -49,11 +50,17 @@ channels:
   emhc: null
 ```
 
-The legacy `membrane`/`markers` format remains accepted. eMHC can be mapped and recorded as a
-separate diagnostic measurement, but requesting regeneration fails clearly until the formal Phase 4
-output is implemented. When DAPI is configured, the main pipeline automatically runs nuclear
-segmentation and fiber association; this produces structural nuclear tables, not nuclear pathology
-calls. `--requested-domain nuclear_pathology` remains intentionally unsupported.
+The legacy `membrane`/`markers` format remains accepted. Configured Type I, direct IIx, and eMHC
+channels are measured in the versioned semantic diagnostics table. A compatible
+`multiplanel_features.v1` candidate model can consume those features and writes predictions to a
+separate `*_model_predictions.csv`; it does not replace calls in the stable `*_fibers.csv`.
+
+eMHC measurements and manual eMHC review labels are operational, but FiberTypeQC does not promote
+an automatic regeneration-status policy. Consequently, `--requested-domain regeneration` remains
+intentionally unsupported. When DAPI is configured, the main pipeline automatically runs nuclear
+segmentation and fiber association. Those outputs are geometric/structural measurements, not
+myonucleus or pathology calls, so `--requested-domain nuclear_pathology` is also intentionally
+unsupported.
 
 ## `channels`
 
@@ -84,20 +91,24 @@ software versions, Git commit, and stage fingerprints. It is ignored as generate
 must declare its version, identifier, task, feature-schema version, required observed markers, and
 outputs. The pipeline rejects a model whose required markers are absent before Cellpose runs.
 It also rejects a model whose declared feature schema is not available in the running pipeline.
-Until Phase 3 adds semantic features, only the frozen `legacy_type1_type2.v1` schema can run;
-`multiplanel_features.v1` sidecars therefore fail safely rather than receiving mismatched features.
-The no-sidecar path remains the frozen IIa/IIb/laminin compatibility adapter.
+Both the frozen `legacy_type1_type2.v1` path and manifest-declared
+`multiplanel_features.v1` candidate bundles can run. Candidate bundles must declare their required
+observed markers and exact features. Their predictions are isolated in
+`*_model_predictions.csv`; the no-sidecar path remains the frozen IIa/IIb/laminin compatibility
+adapter.
 
-The artifact module also exposes the documented cache-invalidation decision matrix. Classifier or
-threshold changes reuse fiber/nuclear labels and recompute downstream features; changing fiber
-Cellpose settings invalidates fiber labels, while a future nuclear Cellpose change invalidates only
-nuclear labels. The CLI implements the fiber-label portion of this contract now; nuclear reuse will
-be added with the future DAPI stage.
+The artifact module also exposes the cache-invalidation decision matrix. Classifier or threshold
+changes can reuse segmentation and recompute downstream features; changing fiber Cellpose,
+preprocessing, or the panel fingerprint invalidates fiber-label reuse. Nuclear segmentation writes
+its own manifest and can reuse an existing same-name nuclear label TIFF when artifact reuse is
+enabled; the cached shape is checked before association tables are regenerated.
 
 `--reuse-artifacts auto|never|required` is now available in both single-image and batch commands.
 It reuses only a same-output-directory `*_cellpose_labels.tif` whose prior `run.json` has an
 identical fiber-segmentation fingerprint. `required` stops before Cellpose if no compatible labels
 exist; `auto` recomputes safely. Cached label shape is also checked against the current image.
+`--labels-path` is the explicit corrected-mask route and cannot be combined with
+`--reuse-artifacts`.
 
 ## `classification.residual_inference`
 
@@ -124,26 +135,26 @@ This gate applies to automatic calls. Manual review may assign IIx when expert r
 that the panel's negative-marker logic supports it; review provenance distinguishes that human
 decision from an automatic residual inference.
 
-## Current v0.2 Activation Scope
+## Current Activation Scope
 
-The schema is broader than the currently active typing logic.
-
-Currently active baseline path:
+Stable frozen baseline path:
 
 - `membrane` required
 - `iib` required for the frozen typing model path
 - `iia` required for the frozen typing model path
 - residual inferred `iix`
 
-Accepted in config but not yet fully used by the default typing logic:
+Operational opt-in mechanics:
 
-- `i`
-- direct `iix`
-- `dapi`
-- alternate residual targets
+- Type I, direct IIx, and eMHC feature extraction in `multiplanel_features.v1` diagnostics
+- manifest-gated semantic candidate inference in a separate predictions sidecar
+- DAPI nuclear segmentation, nucleus-to-fiber association, and per-fiber nuclear summaries
+- Type I and eMHC manual review fields plus optional nuclear-label display
+- fingerprint-gated fiber-label reuse and explicit corrected-label reuse
 
-Those broader fields are being added now so the config contract can stabilize before the typing
-engine is generalized.
+These mechanics do not promote a candidate model, an automatic regeneration policy, or a nuclear
+pathology interpretation. Alternate residual targets likewise require explicit supported policy;
+they are not inferred merely because a marker is absent.
 
 ## Legacy Flat Schema
 

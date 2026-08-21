@@ -1,0 +1,9 @@
+manifest_version: 1
+model_id: rebaseline_tile_v2_p75p90_iib_iia_iix
+task: fiber_identity
+feature_schema_version: legacy_type1_type2.v1
+required_markers: [laminin, type_iia, type_iib]
+outputs: [iia, iib, iix]
+artifact: rebaseline_tile_v2_p75p90_iib_iia_iix.joblib
+artifact_sha256: 5a1042a31ad4d90be61a58fabf9204e52517e17b63baccf027c8d84db1d9f946
+intended_use: Review-assisted frozen alpha baseline for the IIb/IIa/residual-IIx panel.
