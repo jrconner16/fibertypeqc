@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from src.plot_biological_story import add_biology_metadata
+from src.biology_metadata import add_biology_metadata
 from src.plot_validation_summary import INPUT_LABELS, prep_table
 
 METHOD_COLORS = {
