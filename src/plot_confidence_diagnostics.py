@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from src.plot_biological_story import (
+from src.biology_metadata import (
     AGE_ORDER,
     GENOTYPE_ORDER,
     TYPE_COLORS,
