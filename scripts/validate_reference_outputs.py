@@ -14,6 +14,7 @@ import tifffile
 
 from fibertypeqc.model_manifest import load_model_manifest, validate_model_artifact
 from fibertypeqc.qc_contract import QC_SCHEMA_VERSION
+from fibertypeqc.result_bundle import RESULT_BUNDLE_SCHEMA_VERSION
 
 REFERENCE_CONTRACT_SCHEMA_VERSION = 1
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -142,6 +143,31 @@ def validate_reference_outputs(output_dir: Path, contract_path: Path = DEFAULT_C
             )
         if qc_report.get("recommended_next_action") != expected[action_key]:
             raise ValueError(f"Reference {stage} QC recommended an unexpected next action.")
+
+    result_bundle = json.loads(outputs["result_bundle"].read_text())
+    if result_bundle.get("schema_version") != RESULT_BUNDLE_SCHEMA_VERSION:
+        raise ValueError("Reference result bundle used an unexpected schema version.")
+    if result_bundle.get("image_id") != "synthetic_reference":
+        raise ValueError("Reference result bundle used an unexpected image identifier.")
+    bundle_artifacts = result_bundle.get("artifacts", {})
+    expected_bundle_paths = {
+        "fiber_labels": outputs["labels"].name,
+        "fiber_table": outputs["fibers"].name,
+        "image_summary": outputs["summary"].name,
+        "preflight_qc": outputs["preflight_qc"].name,
+        "postrun_qc": outputs["postrun_qc"].name,
+        "run_provenance": outputs["run_manifest"].name,
+    }
+    actual_bundle_paths = {
+        name: bundle_artifacts.get(name, {}).get("path") for name in expected_bundle_paths
+    }
+    if actual_bundle_paths != expected_bundle_paths:
+        raise ValueError(
+            "Reference result-bundle paths differ: "
+            f"expected {expected_bundle_paths}, got {actual_bundle_paths}."
+        )
+    if any(Path(str(entry.get("path", ""))).is_absolute() for entry in bundle_artifacts.values()):
+        raise ValueError("Reference result bundle must use portable relative artifact paths.")
 
     reviewed = pd.read_csv(outputs["reviewed_fibers"])
     reviewed_indexed = reviewed.set_index(reviewed["fiber_id"].astype(int))

@@ -29,6 +29,7 @@ from fibertypeqc.qc_contract import (
     qc_check,
     write_qc_report,
 )
+from fibertypeqc.result_bundle import build_result_bundle, write_result_bundle
 from fibertypeqc.semantic_model import predict_semantic_candidate
 from src.io_utils import (
     ensure_dir,
@@ -894,6 +895,34 @@ def main() -> None:
         summary_path=summary_path,
     )
 
+    result_bundle_path = output_dir / f"{stem}_result_bundle.json"
+    result_bundle = build_result_bundle(
+        output_dir=output_dir,
+        image_id=stem,
+        retain_mode=args.retain_mode,
+        artifact_paths={
+            "fiber_labels": labels_path,
+            "fiber_table": fibers_path,
+            "feature_diagnostics": diagnostics_path,
+            "fiber_identity_predictions": semantic_predictions_path,
+            "image_summary": summary_path,
+            "preflight_qc": preflight_qc_path,
+            "postrun_qc": postrun_qc_path,
+            "run_provenance": run_manifest_path,
+            "nuclei_labels": nuclear_outputs.get("nuclei_labels"),
+            "nuclei_table": nuclear_outputs.get("nuclei"),
+            "nucleus_fiber_associations": nuclear_outputs.get("links"),
+            "fiber_nuclei_summary": nuclear_outputs.get("fiber_nuclei"),
+            "nuclear_provenance": nuclear_outputs.get("manifest"),
+        },
+        additional_domains=(
+            {"feature_diagnostics": ["regeneration"]}
+            if channel_cfg.emhc_channel is not None
+            else None
+        ),
+    )
+    write_result_bundle(result_bundle_path, result_bundle)
+
     if labels_path.exists():
         print("saved labels:", labels_path)
     if fibers_path.exists():
@@ -905,6 +934,7 @@ def main() -> None:
     print("saved summary:", summary_path)
     print("saved preflight QC:", preflight_qc_path)
     print("saved post-run QC:", postrun_qc_path)
+    print("saved result bundle:", result_bundle_path)
     if removed_outputs:
         print(
             "removed retained-mode outputs:",
