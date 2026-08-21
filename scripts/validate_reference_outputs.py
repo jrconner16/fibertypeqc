@@ -39,7 +39,7 @@ def _assert_digest(path: Path, expected: str) -> None:
         raise ValueError(f"Digest mismatch for {path}: expected {expected}, got {actual}.")
 
 
-def validate_reference_outputs(output_dir: Path, contract_path: Path = DEFAULT_CONTRACT) -> None:
+def validate_reference_inputs(contract_path: Path = DEFAULT_CONTRACT) -> dict[str, Any]:
     contract = _load_contract(contract_path)
     for relative_path, expected_digest in contract["fixtures"].items():
         _assert_digest(REPO_ROOT / relative_path, expected_digest)
@@ -49,6 +49,11 @@ def validate_reference_outputs(output_dir: Path, contract_path: Path = DEFAULT_C
     manifest = load_model_manifest(REPO_ROOT / model_contract["manifest"])
     validate_model_artifact(model_path, manifest)
     _assert_digest(model_path, model_contract["sha256"])
+    return contract
+
+
+def validate_reference_outputs(output_dir: Path, contract_path: Path = DEFAULT_CONTRACT) -> None:
+    contract = validate_reference_inputs(contract_path)
 
     outputs = {name: output_dir / filename for name, filename in contract["outputs"].items()}
     missing = [str(path) for path in outputs.values() if not path.is_file()]
@@ -156,15 +161,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        required=True,
         help="Directory containing outputs from scripts.run_reference.",
     )
     parser.add_argument("--contract", type=Path, default=DEFAULT_CONTRACT)
+    parser.add_argument(
+        "--inputs-only",
+        action="store_true",
+        help="Verify tracked fixture, config, correction, and model digests without run outputs.",
+    )
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.inputs_only:
+        validate_reference_inputs(args.contract)
+        print("reference input validation passed")
+        return
+    if args.output_dir is None:
+        raise ValueError("--output-dir is required unless --inputs-only is supplied.")
     validate_reference_outputs(args.output_dir, args.contract)
     print(f"reference validation passed: {args.output_dir}")
 
