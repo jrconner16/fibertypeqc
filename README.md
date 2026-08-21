@@ -187,8 +187,7 @@ uv run python -m scripts.review_labels_napari \
   --output outputs/v0_run/image_name/image_name_fibers_manual_review.csv
 ```
 
-(See [docs/review_workflow.md](docs/review_workflow.md) and
-[README_review_workflow.md](README_review_workflow.md) for detailed review instructions.)
+See [README_review_workflow.md](README_review_workflow.md) for detailed review instructions.
 
 ### Merge Reviewed Labels
 
