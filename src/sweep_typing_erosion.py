@@ -8,14 +8,14 @@ import pandas as pd
 import seaborn as sns
 import tifffile
 
-from src.io_utils import extract_pixel_size_um, load_multichannel_image
-from src.plot_biological_story import (
+from src.biology_metadata import (
     AGE_ORDER,
     GENOTYPE_ORDER,
     TYPE_COLORS,
     add_biology_metadata,
     remove_unused_categories,
 )
+from src.io_utils import extract_pixel_size_um, load_multichannel_image
 from src.quantify_classify import QuantifyConfig, quantify_labels
 from src.run_batch import V0_PARAMS
 

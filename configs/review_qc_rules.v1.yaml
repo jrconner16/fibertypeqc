@@ -1,0 +1,241 @@
+schema_version: review_qc_rules.v1
+rules_version: review_qc_rules.default.v1
+qc_version: review_qc.v1
+
+# Structural rules are enabled. Distribution-sensitive rules remain disabled
+# until calibrated for a panel/model/cohort.
+rules:
+  - reason_code: fiber_segmentation.missing_labels
+    domain: fiber_segmentation
+    metric: fiber_labels_available
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: The applicable fiber-label artifact is absent.
+  - reason_code: fiber_segmentation.unreadable_labels
+    domain: fiber_segmentation
+    metric: fiber_labels_readable
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: The fiber-label artifact cannot be read.
+  - reason_code: fiber_segmentation.invalid_labels
+    domain: fiber_segmentation
+    metric: fiber_labels_valid
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: Fiber labels are not a finite non-negative 2D integer mask.
+  - reason_code: fiber_segmentation.no_objects
+    domain: fiber_segmentation
+    metric: fiber_count
+    operator: eq
+    threshold: 0
+    severity: hard_fail
+    enabled: true
+    description: The fiber mask contains no positive objects.
+  - reason_code: fiber_segmentation.table_id_mismatch
+    domain: fiber_segmentation
+    metric: fiber_id_mismatch_fraction
+    operator: gt
+    threshold: 0.0
+    severity: review
+    enabled: true
+    description: Fiber-mask and fiber-table IDs do not match.
+  - reason_code: fiber_segmentation.invalid_table_ids
+    domain: fiber_segmentation
+    metric: fiber_table_ids_valid
+    operator: eq
+    threshold: false
+    severity: review
+    enabled: true
+    description: Fiber-table IDs are missing, invalid, or duplicated.
+  - reason_code: fiber_segmentation.low_segmented_fraction
+    domain: fiber_segmentation
+    metric: segmented_image_fraction
+    operator: lt
+    threshold:
+    severity: review
+    enabled: false
+    description: Disabled until tissue-aware coverage is calibrated.
+  - reason_code: fiber_segmentation.high_border_fraction
+    domain: fiber_segmentation
+    metric: border_touching_fiber_fraction
+    operator: gt
+    threshold:
+    severity: review
+    enabled: false
+    description: Disabled because section cropping changes the expected fraction.
+
+  - reason_code: fiber_typing.missing_table
+    domain: fiber_typing
+    metric: fiber_table_available
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: The applicable fiber typing table is absent.
+  - reason_code: fiber_typing.unreadable_table
+    domain: fiber_typing
+    metric: fiber_table_readable
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: The fiber typing table cannot be read.
+  - reason_code: fiber_typing.empty_table
+    domain: fiber_typing
+    metric: typing_row_count
+    operator: eq
+    threshold: 0
+    severity: hard_fail
+    enabled: true
+    description: The applicable fiber typing table has no valid object rows.
+  - reason_code: fiber_typing.missing_prediction
+    domain: fiber_typing
+    metric: prediction_available
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: No supported model-prediction column is present.
+  - reason_code: fiber_typing.invalid_table_ids
+    domain: fiber_typing
+    metric: fiber_table_ids_valid
+    operator: eq
+    threshold: false
+    severity: review
+    enabled: true
+    description: Fiber-table IDs are missing, invalid, or duplicated.
+  - reason_code: fiber_typing.probabilities_unavailable
+    domain: fiber_typing
+    metric: probability_coverage
+    operator: lt
+    threshold: 1.0
+    severity: informational
+    enabled: true
+    description: Some valid fiber rows lack a usable multi-class probability vector.
+  - reason_code: fiber_typing.high_unknown_fraction
+    domain: fiber_typing
+    metric: unknown_fraction
+    operator: gt
+    threshold:
+    severity: review
+    enabled: false
+    description: Disabled until calibrated by panel and model.
+  - reason_code: fiber_typing.high_entropy
+    domain: fiber_typing
+    metric: mean_normalized_entropy
+    operator: gt
+    threshold:
+    severity: review
+    enabled: false
+    description: Disabled until calibrated by model.
+  - reason_code: fiber_typing.low_probability_margin
+    domain: fiber_typing
+    metric: mean_probability_margin
+    operator: lt
+    threshold:
+    severity: review
+    enabled: false
+    description: Disabled until calibrated by model.
+
+  - reason_code: nuclei.missing_labels
+    domain: nuclei
+    metric: nuclei_labels_available
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: The applicable nucleus-label artifact is absent.
+  - reason_code: nuclei.unreadable_labels
+    domain: nuclei
+    metric: nuclei_labels_readable
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: The nucleus-label artifact cannot be read.
+  - reason_code: nuclei.invalid_labels
+    domain: nuclei
+    metric: nuclei_labels_valid
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: Nucleus labels are not a finite non-negative 2D integer mask.
+  - reason_code: nuclei.missing_table
+    domain: nuclei
+    metric: nuclei_table_available
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: The applicable nuclei table is absent.
+  - reason_code: nuclei.unreadable_table
+    domain: nuclei
+    metric: nuclei_table_readable
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: The nuclei table cannot be read.
+  - reason_code: nuclei.label_shape_mismatch
+    domain: nuclei
+    metric: label_shape_match
+    operator: eq
+    threshold: false
+    severity: hard_fail
+    enabled: true
+    description: Fiber and nucleus masks have different image shapes.
+  - reason_code: nuclei.no_objects
+    domain: nuclei
+    metric: nucleus_count
+    operator: eq
+    threshold: 0
+    severity: review
+    enabled: true
+    description: The valid nucleus mask contains no positive objects.
+  - reason_code: nuclei.table_id_mismatch
+    domain: nuclei
+    metric: nucleus_id_mismatch_fraction
+    operator: gt
+    threshold: 0.0
+    severity: review
+    enabled: true
+    description: Nucleus-mask and nuclei-table IDs do not match.
+  - reason_code: nuclei.invalid_table_ids
+    domain: nuclei
+    metric: nuclei_table_ids_valid
+    operator: eq
+    threshold: false
+    severity: review
+    enabled: true
+    description: Nuclei-table IDs are missing, invalid, or duplicated.
+  - reason_code: nuclei.association_fields_unavailable
+    domain: nuclei
+    metric: nucleus_association_available
+    operator: eq
+    threshold: false
+    severity: informational
+    enabled: true
+    description: Optional nucleus-to-fiber association fields are unavailable.
+  - reason_code: nuclei.high_unassigned_fraction
+    domain: nuclei
+    metric: unassigned_nucleus_fraction
+    operator: gt
+    threshold:
+    severity: review
+    enabled: false
+    description: Disabled until calibrated by panel, tissue, and disease context.
+  - reason_code: nuclei.high_ambiguous_fraction
+    domain: nuclei
+    metric: ambiguous_nucleus_fraction
+    operator: gt
+    threshold:
+    severity: review
+    enabled: false
+    description: Disabled until calibrated for the association method.
