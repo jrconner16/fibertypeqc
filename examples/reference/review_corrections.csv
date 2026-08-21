@@ -1,0 +1,4 @@
+fiber_id,corrected_type,emhc_manual_label,is_uncertain,is_hybrid,is_excluded,label_source
+1,iib,,False,False,False,manual_gold
+5,,,True,False,False,manual_gold
+9,,,False,False,True,manual_gold
