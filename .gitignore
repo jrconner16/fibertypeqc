@@ -39,6 +39,9 @@ roadmap.md
 notebooks/
 /data/labels/
 
+# Private interview-study notes
+learning/
+
 # Experimental/internal scripts not included in v0.1-alpha release surface
 /src/ui_napari.py
 /src/check_mergeability.py
