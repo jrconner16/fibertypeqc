@@ -14,6 +14,7 @@ FiberTypeQC writes one output folder per image.
 - `*_summary.csv`: one row with image-level processing settings, counts, QC metrics, and summaries.
 - `*_run.json`: versioned run provenance and stage fingerprints used for compatible fiber-label
   reuse.
+- `*_result_bundle.json`: portable, versioned index of the artifacts retained for the image.
 - `*_preflight_qc.json`: versioned input/config/model compatibility checks written before expensive
   processing whenever an output directory can be created.
 - `*_postrun_qc.json`: versioned segmentation/typing QC checks and recommended next action.
@@ -31,6 +32,34 @@ When a DAPI channel is configured, the pipeline also writes a `nuclear/` subdire
 
 These are structural association artifacts. They do not assert that every DAPI object is a
 myonucleus or make a nuclear-pathology call.
+
+## Result Bundle
+
+`*_result_bundle.json` uses schema version `fibertypeqc.result_bundle.v1`. It is written after
+`--retain-mode` cleanup and therefore indexes only files that are present. Artifact paths are POSIX
+paths relative to the per-image output directory; private or machine-specific absolute paths are
+not recorded.
+
+Top-level fields are:
+
+- `schema_version`: `fibertypeqc.result_bundle.v1`;
+- `image_id`: the normalized input-image stem;
+- `retain_mode`: `full`, `tables`, or `summary`;
+- `artifacts`: mapping from a stable artifact name to its descriptor.
+
+Each descriptor contains `path`, `kind`, `media_type`, `cardinality`, `join_keys`, and `domains`.
+The initial stable artifact names are:
+
+- fiber outputs: `fiber_labels`, `fiber_table`, `feature_diagnostics`, and
+  `fiber_identity_predictions`;
+- run-level outputs: `image_summary`, `preflight_qc`, `postrun_qc`, and `run_provenance`;
+- optional DAPI outputs: `nuclei_labels`, `nuclei_table`, `nucleus_fiber_associations`,
+  `fiber_nuclei_summary`, and `nuclear_provenance`.
+
+When an eMHC channel is configured, retained semantic diagnostics advertise the additional
+`regeneration` domain. This indicates that eMHC measurements are present; it does not constitute an
+automatic regeneration call. Likewise, the `nuclei` and `association` domains describe structural
+outputs, not nuclear pathology.
 
 ## QC Artifacts
 

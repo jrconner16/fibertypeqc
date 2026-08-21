@@ -176,6 +176,7 @@ outputs/v0_run/image_name/
 ├── image_name_fibers.csv                   # Feature table (rows=fibers)
 ├── image_name_feature_diagnostics.csv      # Optional diagnostics table (advanced/debugging)
 ├── image_name_summary.csv                  # Class statistics + confidence intervals
+├── image_name_result_bundle.json            # Portable index of retained result artifacts
 ├── image_name_fibers_manual_review.csv     # Empty; filled by review UI
 └── image_name_weak_labels.csv              # Model confidence flags
 ```

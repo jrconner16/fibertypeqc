@@ -18,6 +18,7 @@
     "run_manifest": "synthetic_reference_run.json",
     "preflight_qc": "synthetic_reference_preflight_qc.json",
     "postrun_qc": "synthetic_reference_postrun_qc.json",
+    "result_bundle": "synthetic_reference_result_bundle.json",
     "reviewed_fibers": "synthetic_reference_fibers_final.csv"
   },
   "expected": {
