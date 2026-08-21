@@ -126,6 +126,13 @@ Advanced/model-development note:
 - It is off by default.
 - It writes a separate diagnostics CSV and does not expand the stable `*_fibers.csv` schema.
 
+Panel-aware opt-ins are operational: semantic Type I/direct IIx/eMHC measurements, isolated
+candidate-model prediction sidecars, DAPI nuclear segmentation/association, compatible label-cache
+reuse, and matching review overlays. They do not promote automatic regeneration or nuclear
+pathology calls. See [docs/panel_schema.md](docs/panel_schema.md),
+[docs/output_schema.md](docs/output_schema.md), and
+[README_review_workflow.md](README_review_workflow.md).
+
 ### 3. Batch Processing
 
 Process multiple images in a directory:
