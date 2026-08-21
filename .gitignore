@@ -39,6 +39,9 @@ roadmap.md
 notebooks/
 /data/labels/
 
+# Private interview-study notes
+learning/
+
 # Experimental/internal scripts not included in v0.1-alpha release surface
 /src/ui_napari.py
 /src/check_mergeability.py
@@ -50,6 +53,8 @@ notebooks/
 # Model release surface: keep only the v0.1-alpha default classifier.
 /data/models/*
 !/data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib
+!/data/models/quad_351545_logistic_semantic_v1.joblib
+!/data/models/quad_351545_logistic_semantic_v1.provenance.json
 !/data/models/README.md
 !/data/models/model_card.md
 
