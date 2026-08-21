@@ -17,7 +17,11 @@ from fibertypeqc.artifacts import (
     write_run_manifest,
 )
 from fibertypeqc.config import resolve_channel_config
-from fibertypeqc.model_manifest import load_model_manifest, validate_model_compatibility
+from fibertypeqc.model_manifest import (
+    load_model_manifest,
+    validate_model_artifact,
+    validate_model_compatibility,
+)
 from fibertypeqc.panels import Panel, validate_requested_domains
 from fibertypeqc.semantic_model import predict_semantic_candidate
 from src.io_utils import (
@@ -386,6 +390,8 @@ def main() -> None:
     model_manifest = (
         load_model_manifest(args.model_manifest) if args.model_manifest is not None else None
     )
+    if model_manifest is not None:
+        validate_model_artifact(Path(args.classifier_path), model_manifest)
     semantic_candidate = (
         model_manifest is not None
         and model_manifest.feature_schema_version == "multiplanel_features.v1"

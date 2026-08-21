@@ -43,6 +43,16 @@ view for per-fiber confidence/probability interpretation.
 Demo CSV outputs and provenance notes are documented in
 [docs/demo_manifest.md](docs/demo_manifest.md).
 
+Run the public-safe deterministic reference workflow and validate its outputs:
+
+```bash
+uv run python -m scripts.run_reference
+```
+
+This reference uses a supplied synthetic label mask so its golden tables do not depend on Cellpose
+device behavior. It validates pipeline, frozen-model, QC-summary, review-merge, schema, and digest
+mechanics; it is not biological validation.
+
 ---
 
 ## Quick Start
