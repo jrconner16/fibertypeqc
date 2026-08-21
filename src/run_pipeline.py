@@ -17,6 +17,7 @@ from fibertypeqc.artifacts import (
     write_run_manifest,
 )
 from fibertypeqc.config import resolve_channel_config
+from fibertypeqc.html_report import generate_result_report
 from fibertypeqc.model_manifest import (
     load_model_manifest,
     validate_model_artifact,
@@ -896,32 +897,40 @@ def main() -> None:
     )
 
     result_bundle_path = output_dir / f"{stem}_result_bundle.json"
-    result_bundle = build_result_bundle(
-        output_dir=output_dir,
-        image_id=stem,
-        retain_mode=args.retain_mode,
-        artifact_paths={
-            "fiber_labels": labels_path,
-            "fiber_table": fibers_path,
-            "feature_diagnostics": diagnostics_path,
-            "fiber_identity_predictions": semantic_predictions_path,
-            "image_summary": summary_path,
-            "preflight_qc": preflight_qc_path,
-            "postrun_qc": postrun_qc_path,
-            "run_provenance": run_manifest_path,
-            "nuclei_labels": nuclear_outputs.get("nuclei_labels"),
-            "nuclei_table": nuclear_outputs.get("nuclei"),
-            "nucleus_fiber_associations": nuclear_outputs.get("links"),
-            "fiber_nuclei_summary": nuclear_outputs.get("fiber_nuclei"),
-            "nuclear_provenance": nuclear_outputs.get("manifest"),
-        },
-        additional_domains=(
+    result_report_path = output_dir / f"{stem}_result_report.html"
+    artifact_paths = {
+        "fiber_labels": labels_path,
+        "fiber_table": fibers_path,
+        "feature_diagnostics": diagnostics_path,
+        "fiber_identity_predictions": semantic_predictions_path,
+        "image_summary": summary_path,
+        "preflight_qc": preflight_qc_path,
+        "postrun_qc": postrun_qc_path,
+        "run_provenance": run_manifest_path,
+        "nuclei_labels": nuclear_outputs.get("nuclei_labels"),
+        "nuclei_table": nuclear_outputs.get("nuclei"),
+        "nucleus_fiber_associations": nuclear_outputs.get("links"),
+        "fiber_nuclei_summary": nuclear_outputs.get("fiber_nuclei"),
+        "nuclear_provenance": nuclear_outputs.get("manifest"),
+        "html_report": result_report_path,
+    }
+    bundle_kwargs = {
+        "output_dir": output_dir,
+        "image_id": stem,
+        "retain_mode": args.retain_mode,
+        "artifact_paths": artifact_paths,
+        "additional_domains": (
             {"feature_diagnostics": ["regeneration"]}
             if channel_cfg.emhc_channel is not None
             else None
         ),
-    )
+    }
+    result_bundle = build_result_bundle(**bundle_kwargs)
     write_result_bundle(result_bundle_path, result_bundle)
+    generate_result_report(result_bundle_path, result_report_path)
+    result_bundle = build_result_bundle(**bundle_kwargs)
+    write_result_bundle(result_bundle_path, result_bundle)
+    generate_result_report(result_bundle_path, result_report_path)
 
     if labels_path.exists():
         print("saved labels:", labels_path)
@@ -935,6 +944,7 @@ def main() -> None:
     print("saved preflight QC:", preflight_qc_path)
     print("saved post-run QC:", postrun_qc_path)
     print("saved result bundle:", result_bundle_path)
+    print("saved result report:", result_report_path)
     if removed_outputs:
         print(
             "removed retained-mode outputs:",

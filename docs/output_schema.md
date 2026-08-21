@@ -15,6 +15,8 @@ FiberTypeQC writes one output folder per image.
 - `*_run.json`: versioned run provenance and stage fingerprints used for compatible fiber-label
   reuse.
 - `*_result_bundle.json`: portable, versioned index of the artifacts retained for the image.
+- `*_result_report.html`: self-contained results/QC summary with portable artifact links and the
+  recommended review or configuration action.
 - `*_preflight_qc.json`: versioned input/config/model compatibility checks written before expensive
   processing whenever an output directory can be created.
 - `*_postrun_qc.json`: versioned segmentation/typing QC checks and recommended next action.
@@ -52,7 +54,8 @@ The initial stable artifact names are:
 
 - fiber outputs: `fiber_labels`, `fiber_table`, `feature_diagnostics`, and
   `fiber_identity_predictions`;
-- run-level outputs: `image_summary`, `preflight_qc`, `postrun_qc`, and `run_provenance`;
+- run-level outputs: `image_summary`, `preflight_qc`, `postrun_qc`, `run_provenance`, and
+  `html_report`;
 - optional DAPI outputs: `nuclei_labels`, `nuclei_table`, `nucleus_fiber_associations`,
   `fiber_nuclei_summary`, and `nuclear_provenance`.
 
@@ -64,6 +67,28 @@ outputs, not nuclear pathology.
 The complete external-consumer contract—including required fields, artifact presence rules,
 cardinalities, and joins—is documented in
 [Result Bundle Schema v1](result_bundle_schema.md).
+
+## HTML Results/QC Report
+
+Every successful pipeline run writes `*_result_report.html` and indexes it as `html_report` in the
+result bundle. The report uses inline CSS and requires no network connection, JavaScript, or
+external assets. It summarizes safe image-level metrics, declared domains, QC checks, artifact
+availability, and limited provenance; it deliberately omits the source-image path.
+
+The highlighted action is selected from the highest-severity readable preflight or post-run QC
+report. Stable action codes remain visible alongside plain-language guidance. For example, a clean
+run directs the user to manual review, while warnings can direct the user to inspect segmentation,
+confirm pixel scale, or verify channel mapping/crosstalk.
+
+To regenerate a report from an existing bundle:
+
+```bash
+uv run python -m scripts.generate_result_report \
+  --bundle outputs/run/image_name/image_name_result_bundle.json
+```
+
+Artifact links are relative to the report directory. Moving the complete per-image output folder
+preserves those links.
 
 ## QC Artifacts
 

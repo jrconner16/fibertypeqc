@@ -157,6 +157,7 @@ def validate_reference_outputs(output_dir: Path, contract_path: Path = DEFAULT_C
         "preflight_qc": outputs["preflight_qc"].name,
         "postrun_qc": outputs["postrun_qc"].name,
         "run_provenance": outputs["run_manifest"].name,
+        "html_report": outputs["result_report"].name,
     }
     actual_bundle_paths = {
         name: bundle_artifacts.get(name, {}).get("path") for name in expected_bundle_paths
@@ -168,6 +169,17 @@ def validate_reference_outputs(output_dir: Path, contract_path: Path = DEFAULT_C
         )
     if any(Path(str(entry.get("path", ""))).is_absolute() for entry in bundle_artifacts.values()):
         raise ValueError("Reference result bundle must use portable relative artifact paths.")
+
+    result_report = outputs["result_report"].read_text()
+    for required_text in (
+        "FiberTypeQC result report",
+        "proceed_to_review",
+        "synthetic_reference_fibers.csv",
+    ):
+        if required_text not in result_report:
+            raise ValueError(f"Reference result report is missing expected text: {required_text}")
+    if "source_image" in result_report:
+        raise ValueError("Reference result report must not expose the source-image path field.")
 
     reviewed = pd.read_csv(outputs["reviewed_fibers"])
     reviewed_indexed = reviewed.set_index(reviewed["fiber_id"].astype(int))

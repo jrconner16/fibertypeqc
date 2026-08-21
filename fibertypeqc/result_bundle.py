@@ -102,6 +102,13 @@ ARTIFACT_CONTRACTS: dict[str, dict[str, Any]] = {
         "join_keys": [],
         "domains": ["provenance", "nuclei"],
     },
+    "html_report": {
+        "kind": "report",
+        "media_type": "text/html",
+        "cardinality": "one_report_per_image",
+        "join_keys": [],
+        "domains": ["summary", "quality_control"],
+    },
 }
 
 
