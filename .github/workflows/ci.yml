@@ -1,0 +1,55 @@
+name: CI
+
+"on":
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  headless:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MPLBACKEND: Agg
+      PYTHONPATH: .
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: "3.11"
+
+      - name: Sync locked environment
+        run: uv sync --frozen --extra dev
+
+      - name: Lint
+        run: uv run --frozen ruff check .
+
+      - name: Check documentation, tracked artifacts, and digests
+        run: uv run --frozen python -m scripts.check_repository
+
+      - name: Smoke-test public CLI help
+        run: |
+          uv run --frozen python -m scripts.run_pipeline --help
+          uv run --frozen python -m scripts.run_batch --help
+          uv run --frozen python -m scripts.review_labels_napari --help
+          uv run --frozen python -m scripts.merge_reviewed_labels --help
+
+      - name: Run fast tests
+        run: uv run --frozen pytest -m "not integration" -q
+
+      - name: Run deterministic reference workflow
+        run: uv run --frozen python -m scripts.run_reference

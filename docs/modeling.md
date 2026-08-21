@@ -1,15 +1,16 @@
 # Modeling Notes
 
-This document describes the current frozen alpha feature contract, the main feature gaps, and the
-experimental feature directions that are under evaluation for later panel-aware releases.
+This document describes the frozen alpha feature contract and the operational, opt-in semantic
+feature path used to evaluate panel-aware candidate models.
 
 ## Scope
 
-FiberTypeQC `v0.1.x` and the current `v0.2` foundation work keep the public workflow conservative:
+FiberTypeQC keeps the public workflow conservative:
 
 - the stable fiber table remains the main public output;
 - the default classifier remains the frozen alpha model;
-- new feature ideas are treated as internal/diagnostic unless they prove useful.
+- semantic features and candidate predictions stay in separate diagnostic/model sidecars unless
+  they are explicitly promoted.
 
 This document is about the per-fiber typing model and feature representation. It is not a statement
 that the experimental features are ready for public use.
@@ -69,14 +70,16 @@ Notes:
 The frozen alpha feature set is narrow by design. That keeps the baseline reproducible, but it
 leaves several clear gaps for future modeling work.
 
-### Gap 1: No direct support for extra markers
+### Gap 1: The frozen classifier does not consume extra markers
 
 The frozen model uses only the legacy IIb/IIa pair. Even if an image includes:
 
 - direct type I stain, or
 - direct type IIx stain
 
-those features are not used by the frozen alpha classifier.
+those features are not used by the frozen alpha classifier. They are operational in the
+`multiplanel_features.v1` diagnostics schema and may be consumed by a compatible manifest-declared
+candidate model without changing stable fiber calls.
 
 ### Gap 2: Limited coverage representation
 
@@ -155,12 +158,13 @@ Examples:
 
 ### Extra-marker experimental features
 
-When direct extra markers are present, future internal/diagnostic feature tables may include:
+When direct extra markers are present, the semantic diagnostic table includes columns such as:
 
-- `marker_i_*`
-- `marker_iix_*`
+- `type_i.mean`, `type_i.p90`, and `type_i.coverage_high`
+- `type_iix.mean`, `type_iix.p90`, and `type_iix.coverage_high`
+- `emhc.mean`, `emhc.p90`, and `emhc.coverage_high`
 
-for mean, percentiles, coverage, and background-relative summaries.
+with corresponding SNR and optional center/edge summaries.
 
 These are currently intended for diagnostics and later model experiments, not for stable default
 classification behavior.
@@ -177,19 +181,16 @@ Current policy:
 - experimental features should stay internal or diagnostic by default;
 - classifier behavior should not change just because additional internal features exist.
 
-Future-facing optional diagnostic outputs are reasonable, for example:
+The operational optional outputs are `*_feature_diagnostics.csv` and, for a compatible semantic
+candidate bundle, `*_model_predictions.csv`. They remain outside the stable biological output
+contract until the added features and a candidate model prove useful.
 
-- `*_model_features.csv`
-- `*_feature_diagnostics.csv`
-
-but they should remain optional and not part of the stable public schema until the added features
-prove useful.
-
-Current `v0.2` direction:
+Current policy:
 
 - stable `*_fibers.csv` stays focused on biological/review output;
 - optional diagnostics exports can expose model-development features in a separate table;
 - diagnostics exports are disabled by default.
+- semantic candidate predictions never overwrite the stable `*_fibers.csv` calls.
 
 ## Comparison Workflow
 

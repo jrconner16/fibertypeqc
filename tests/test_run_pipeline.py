@@ -71,6 +71,14 @@ def test_run_pipeline_export_diagnostics_flag_controls_output(tmp_path, monkeypa
     assert run_manifest["output_schema_version"] == "legacy_fibers.v1"
     diagnostics_path = tmp_path / "out" / f"{stem}_feature_diagnostics.csv"
     assert not diagnostics_path.exists()
+    preflight = json.loads((tmp_path / "out" / f"{stem}_preflight_qc.json").read_text())
+    assert preflight["schema_version"] == "fibertypeqc.qc.v1"
+    assert preflight["overall_status"] == "warn"
+    assert preflight["recommended_next_action"] == (
+        "confirm_pixel_size_before_area_interpretation"
+    )
+    postrun = json.loads((tmp_path / "out" / f"{stem}_postrun_qc.json").read_text())
+    assert postrun["stage"] == "postrun"
 
     monkeypatch.setattr(
         run_pipeline.sys,
@@ -185,3 +193,36 @@ def test_cleanup_outputs_for_retain_mode_summary_keeps_only_summary(tmp_path):
     assert not fibers_path.exists()
     assert not diagnostics_path.exists()
     assert summary_path.exists()
+
+
+@pytest.mark.integration
+def test_run_pipeline_writes_failed_preflight_before_processing(tmp_path, monkeypatch):
+    _mock_pipeline_primitives(monkeypatch)
+    input_path = tmp_path / "image.tif"
+    input_path.write_bytes(b"fake")
+    output_dir = tmp_path / "out"
+    monkeypatch.setattr(
+        run_pipeline.sys,
+        "argv",
+        [
+            "run_pipeline",
+            "--input",
+            str(input_path),
+            "--output-dir",
+            str(output_dir),
+            "--iib-channel",
+            "8",
+            "--iia-channel",
+            "1",
+            "--membrane-channel",
+            "2",
+        ],
+    )
+
+    with pytest.raises(ValueError, match="type_iib channel 8"):
+        run_pipeline.main()
+
+    report = json.loads((output_dir / "image_preflight_qc.json").read_text())
+    assert report["overall_status"] == "fail"
+    assert report["recommended_next_action"] == "correct_channel_mapping"
+    assert report["checks"][-1]["code"] == "preflight.panel_compatible"

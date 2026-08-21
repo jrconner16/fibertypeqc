@@ -7,11 +7,65 @@ FiberTypeQC writes one output folder per image.
 - `*_cellpose_labels.tif`: integer label mask; `0` is background.
 - `*_fibers.csv`: one row per segmented fiber.
 - `*_feature_diagnostics.csv`: optional model-development/debugging table written only when
-  diagnostics export is enabled.
+  `--export-diagnostics` is enabled. The same schema is built internally for semantic candidate
+  inference even when the file is not retained.
+- `*_model_predictions.csv`: predictions from a compatible `multiplanel_features.v1` candidate
+  bundle. This sidecar never overwrites stable fiber calls.
 - `*_summary.csv`: one row with image-level processing settings, counts, QC metrics, and summaries.
+- `*_run.json`: versioned run provenance and stage fingerprints used for compatible fiber-label
+  reuse.
+- `*_preflight_qc.json`: versioned input/config/model compatibility checks written before expensive
+  processing whenever an output directory can be created.
+- `*_postrun_qc.json`: versioned segmentation/typing QC checks and recommended next action.
 - `*_fibers_manual_review.csv`: manual review table written by the Napari review UI.
 - `*_weak_labels.csv`: fibers prioritized for review.
 - `batch_summary.csv`: batch-level status table from `scripts.run_batch`.
+
+When a DAPI channel is configured, the pipeline also writes a `nuclear/` subdirectory containing:
+
+- `*_nuclei_labels.tif`: integer nuclear segmentation labels;
+- `*_nuclei.csv`: per-nucleus geometry and conservative fiber-association status;
+- `*_nucleus_fiber_links.csv`: assigned nucleus-to-fiber links;
+- `*_fiber_nuclei.csv`: associated and central-interior counts per fiber;
+- `*_nuclear_run.json`: nuclear settings, runtime/reuse status, outputs, and terminology.
+
+These are structural association artifacts. They do not assert that every DAPI object is a
+myonucleus or make a nuclear-pathology call.
+
+## QC Artifacts
+
+Both QC JSON files use schema version `fibertypeqc.qc.v1` and contain:
+
+- `stage`: `preflight` or `postrun`;
+- `overall_status`: `pass`, `warn`, or `fail`;
+- `recommended_next_action`: a stable machine-readable action name;
+- `checks`: ordered checks with stable `code`, `status`, explanatory `message`, `next_action`, and
+  optional measurements;
+- `context`: input, panel, model, or generated-artifact context relevant to the stage.
+
+Stable preflight codes are:
+
+- `preflight.arguments_valid`;
+- `preflight.channel_config_valid` and `preflight.channel_config_warning`;
+- `preflight.model_artifact_valid`;
+- `preflight.input_readable`;
+- `preflight.panel_compatible`;
+- `preflight.requested_domains_supported`;
+- `preflight.model_panel_compatible`;
+- `preflight.pixel_size_available`.
+
+Stable post-run codes are:
+
+- `postrun.fiber_count`;
+- `postrun.unknown_rate`;
+- `postrun.median_area`;
+- `postrun.marker_correlation`.
+
+The post-run report exposes the existing CLI QC thresholds; it does not introduce new exclusion or
+classification policy. A warning never silently removes fibers. Its next action directs the user to
+inspect segmentation, confirm channels/pixel scale, or proceed to manual review. Preflight failures
+are recorded before processing when the command supplies enough information to create the output
+directory; argument-parser failures and an unwritable output directory cannot produce an artifact.
 
 ## Fiber Table Columns
 
@@ -63,6 +117,13 @@ It may include:
 - the frozen alpha baseline model features;
 - experimental coverage/SNR/extra-marker features used for diagnostics.
 
+Semantic marker columns use names such as `type_i.mean`, `type_iix.coverage_high`, and
+`emhc.snr_mean`, and advertise `feature_schema_version=multiplanel_features.v1`. eMHC is a measured
+marker here; no automatic positive/negative regeneration status is added to the stable fiber table.
+
+When a compatible semantic model manifest is supplied, the model sidecar contains `label`,
+`model_prediction`, `model_id`, `task`, and any available `prob_<class>` columns.
+
 This optional file does not change classifier predictions or expand the stable `*_fibers.csv`
 schema by default.
 
@@ -72,6 +133,8 @@ The Napari review UI writes:
 
 - `fiber_id`: fiber label ID.
 - `corrected_type`: manual label, normalized during merge.
+- `emhc_manual_label`: separate `positive`, `negative`, or `uncertain` eMHC assessment when
+  reviewed; it does not replace `corrected_type`.
 - `is_uncertain`: reviewer marked uncertain.
 - `is_hybrid`: reviewer marked hybrid.
 - `is_excluded`: reviewer excluded the fiber.
@@ -86,6 +149,7 @@ The Napari review UI writes:
 - `predicted_internal_type`: internal prediction label.
 - `predicted_biological_type`: display/biological label mapping.
 - `final_type`: prediction replaced by manual correction, uncertainty, hybrid, or exclusion status.
+- `emhc_manual_label`: the separately preserved manual eMHC assessment.
 
 ## Batch Summary Columns
 

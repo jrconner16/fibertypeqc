@@ -43,6 +43,17 @@ view for per-fiber confidence/probability interpretation.
 Demo CSV outputs and provenance notes are documented in
 [docs/demo_manifest.md](docs/demo_manifest.md).
 
+Run the public-safe deterministic reference workflow and validate its outputs:
+
+```bash
+uv run python -m scripts.run_reference
+```
+
+This reference uses a supplied synthetic label mask so its golden tables do not depend on Cellpose
+device behavior. It validates pipeline, frozen-model, versioned QC, review-merge, schema, and digest
+mechanics; it is not biological validation. See [docs/output_schema.md](docs/output_schema.md) for
+the stable QC codes and next-action contract.
+
 ---
 
 ## Quick Start
@@ -115,6 +126,13 @@ Advanced/model-development note:
 - It is off by default.
 - It writes a separate diagnostics CSV and does not expand the stable `*_fibers.csv` schema.
 
+Panel-aware opt-ins are operational: semantic Type I/direct IIx/eMHC measurements, isolated
+candidate-model prediction sidecars, DAPI nuclear segmentation/association, compatible label-cache
+reuse, and matching review overlays. They do not promote automatic regeneration or nuclear
+pathology calls. See [docs/panel_schema.md](docs/panel_schema.md),
+[docs/output_schema.md](docs/output_schema.md), and
+[README_review_workflow.md](README_review_workflow.md).
+
 ### 3. Batch Processing
 
 Process multiple images in a directory:
@@ -176,8 +194,7 @@ uv run python -m scripts.review_labels_napari \
   --output outputs/v0_run/image_name/image_name_fibers_manual_review.csv
 ```
 
-(See [docs/review_workflow.md](docs/review_workflow.md) and
-[README_review_workflow.md](README_review_workflow.md) for detailed review instructions.)
+See [README_review_workflow.md](README_review_workflow.md) for detailed review instructions.
 
 ### Merge Reviewed Labels
 

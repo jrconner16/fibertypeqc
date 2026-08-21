@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "fixtures": {
+    "examples/reference/synthetic_reference.tif": "2a02b24b3411fc073f81431a4e953f33867ce84a8b53ecdb47f62e4d7cf2274b",
+    "examples/reference/synthetic_reference_labels.tif": "af974e2ba9306c6aa461105226df073800df896871d78551ad88f7be4775206e",
+    "examples/reference/panel.yaml": "7e35964089b47e01e4cbcea48427580dff09a55c20b4aede8eb7cb376535394a",
+    "examples/reference/review_corrections.csv": "cbb6c72b87d866722789c4808deee633ce99046eb0478a810814cb0db8c0f384"
+  },
+  "model": {
+    "manifest": "data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.yaml",
+    "artifact": "data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib",
+    "sha256": "5a1042a31ad4d90be61a58fabf9204e52517e17b63baccf027c8d84db1d9f946"
+  },
+  "outputs": {
+    "labels": "synthetic_reference_cellpose_labels.tif",
+    "fibers": "synthetic_reference_fibers.csv",
+    "summary": "synthetic_reference_summary.csv",
+    "run_manifest": "synthetic_reference_run.json",
+    "preflight_qc": "synthetic_reference_preflight_qc.json",
+    "postrun_qc": "synthetic_reference_postrun_qc.json",
+    "reviewed_fibers": "synthetic_reference_fibers_final.csv"
+  },
+  "expected": {
+    "label_ids": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "required_fiber_columns": [
+      "label",
+      "area",
+      "fiber_type",
+      "prob_iia",
+      "prob_iib",
+      "prob_iix",
+      "model_confidence",
+      "model_margin",
+      "needs_review",
+      "classifier_path"
+    ],
+    "fiber_type_by_label": {
+      "1": "iia",
+      "2": "iib",
+      "3": "iib",
+      "4": "iia",
+      "5": "iia",
+      "6": "iia",
+      "7": "iia",
+      "8": "iia",
+      "9": "iia"
+    },
+    "model_confidence_by_label": {
+      "1": 0.49142686,
+      "2": 0.59155554,
+      "3": 0.59155554,
+      "4": 0.77936316,
+      "5": 0.9092949,
+      "6": 0.94540745,
+      "7": 0.77936316,
+      "8": 0.77936316,
+      "9": 0.77936316
+    },
+    "numeric_absolute_tolerance": 0.000001,
+    "qc_status": "pass",
+    "qc_reasons": "",
+    "preflight_qc_codes": [
+      "preflight.arguments_valid",
+      "preflight.channel_config_valid",
+      "preflight.model_artifact_valid",
+      "preflight.input_readable",
+      "preflight.panel_compatible",
+      "preflight.requested_domains_supported",
+      "preflight.model_panel_compatible",
+      "preflight.pixel_size_available"
+    ],
+    "postrun_qc_codes": [
+      "postrun.fiber_count",
+      "postrun.unknown_rate",
+      "postrun.median_area",
+      "postrun.marker_correlation"
+    ],
+    "preflight_next_action": "proceed_to_processing",
+    "postrun_next_action": "proceed_to_review",
+    "final_type_by_label": {
+      "1": "iib",
+      "2": "iib",
+      "3": "iib",
+      "4": "iia",
+      "5": "uncertain",
+      "6": "iia",
+      "7": "iia",
+      "8": "iia",
+      "9": "exclude"
+    }
+  }
+}
