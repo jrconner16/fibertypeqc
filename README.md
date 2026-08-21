@@ -50,8 +50,9 @@ uv run python -m scripts.run_reference
 ```
 
 This reference uses a supplied synthetic label mask so its golden tables do not depend on Cellpose
-device behavior. It validates pipeline, frozen-model, QC-summary, review-merge, schema, and digest
-mechanics; it is not biological validation.
+device behavior. It validates pipeline, frozen-model, versioned QC, review-merge, schema, and digest
+mechanics; it is not biological validation. See [docs/output_schema.md](docs/output_schema.md) for
+the stable QC codes and next-action contract.
 
 ---
 

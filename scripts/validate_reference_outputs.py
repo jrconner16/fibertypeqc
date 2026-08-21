@@ -13,6 +13,7 @@ import pandas as pd
 import tifffile
 
 from fibertypeqc.model_manifest import load_model_manifest, validate_model_artifact
+from fibertypeqc.qc_contract import QC_SCHEMA_VERSION
 
 REFERENCE_CONTRACT_SCHEMA_VERSION = 1
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -118,6 +119,24 @@ def validate_reference_outputs(output_dir: Path, contract_path: Path = DEFAULT_C
         raise ValueError("Reference run used an unexpected fiber output schema.")
     if Path(str(run_manifest.get("source_image", ""))).is_absolute():
         raise ValueError("Reference run manifest must record a portable source-image path.")
+
+    for artifact_name, stage, codes_key, action_key in (
+        ("preflight_qc", "preflight", "preflight_qc_codes", "preflight_next_action"),
+        ("postrun_qc", "postrun", "postrun_qc_codes", "postrun_next_action"),
+    ):
+        qc_report = json.loads(outputs[artifact_name].read_text())
+        if qc_report.get("schema_version") != QC_SCHEMA_VERSION:
+            raise ValueError(f"Reference {stage} QC used an unexpected schema version.")
+        if qc_report.get("stage") != stage or qc_report.get("overall_status") != "pass":
+            raise ValueError(f"Reference {stage} QC did not report a passing {stage} stage.")
+        actual_codes = [check.get("code") for check in qc_report.get("checks", [])]
+        if actual_codes != expected[codes_key]:
+            raise ValueError(
+                f"Reference {stage} QC codes differ: expected {expected[codes_key]}, "
+                f"got {actual_codes}."
+            )
+        if qc_report.get("recommended_next_action") != expected[action_key]:
+            raise ValueError(f"Reference {stage} QC recommended an unexpected next action.")
 
     reviewed = pd.read_csv(outputs["reviewed_fibers"])
     reviewed_indexed = reviewed.set_index(reviewed["fiber_id"].astype(int))

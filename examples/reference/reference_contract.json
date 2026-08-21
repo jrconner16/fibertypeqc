@@ -16,6 +16,8 @@
     "fibers": "synthetic_reference_fibers.csv",
     "summary": "synthetic_reference_summary.csv",
     "run_manifest": "synthetic_reference_run.json",
+    "preflight_qc": "synthetic_reference_preflight_qc.json",
+    "postrun_qc": "synthetic_reference_postrun_qc.json",
     "reviewed_fibers": "synthetic_reference_fibers_final.csv"
   },
   "expected": {
@@ -57,6 +59,24 @@
     "numeric_absolute_tolerance": 0.000001,
     "qc_status": "pass",
     "qc_reasons": "",
+    "preflight_qc_codes": [
+      "preflight.arguments_valid",
+      "preflight.channel_config_valid",
+      "preflight.model_artifact_valid",
+      "preflight.input_readable",
+      "preflight.panel_compatible",
+      "preflight.requested_domains_supported",
+      "preflight.model_panel_compatible",
+      "preflight.pixel_size_available"
+    ],
+    "postrun_qc_codes": [
+      "postrun.fiber_count",
+      "postrun.unknown_rate",
+      "postrun.median_area",
+      "postrun.marker_correlation"
+    ],
+    "preflight_next_action": "proceed_to_processing",
+    "postrun_next_action": "proceed_to_review",
     "final_type_by_label": {
       "1": "iib",
       "2": "iib",

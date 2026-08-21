@@ -23,6 +23,12 @@ from fibertypeqc.model_manifest import (
     validate_model_compatibility,
 )
 from fibertypeqc.panels import Panel, validate_requested_domains
+from fibertypeqc.qc_contract import (
+    build_qc_report,
+    postrun_checks,
+    qc_check,
+    write_qc_report,
+)
 from fibertypeqc.semantic_model import predict_semantic_candidate
 from src.io_utils import (
     ensure_dir,
@@ -366,32 +372,101 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
-    if args.labels_path is not None and args.reuse_artifacts != "never":
-        raise ValueError("--labels-path cannot be combined with --reuse-artifacts.")
-    if args.channel_config is not None and args.panel_config is not None:
-        raise ValueError("Use only one of --panel-config and --channel-config.")
+    output_dir = ensure_dir(args.output_dir)
+    stem = args.input.stem.replace(" ", "_")
+    preflight_qc_path = output_dir / f"{stem}_preflight_qc.json"
+    preflight_checks: list[dict[str, object]] = []
+    preflight_context: dict[str, object] = {"input": str(args.input)}
+
+    def fail_preflight(code: str, error: Exception, next_action: str) -> None:
+        preflight_checks.append(qc_check(code, "fail", str(error), next_action))
+        write_qc_report(
+            preflight_qc_path,
+            build_qc_report(
+                stage="preflight",
+                checks=preflight_checks,
+                context=preflight_context,
+            ),
+        )
+
+    try:
+        if args.labels_path is not None and args.reuse_artifacts != "never":
+            raise ValueError("--labels-path cannot be combined with --reuse-artifacts.")
+        if args.channel_config is not None and args.panel_config is not None:
+            raise ValueError("Use only one of --panel-config and --channel-config.")
+        if args.model_manifest is not None and args.classifier_path is None:
+            raise ValueError("--model-manifest requires --classifier-path.")
+    except ValueError as exc:
+        fail_preflight("preflight.arguments_valid", exc, "correct_command_arguments")
+        raise
+    preflight_checks.append(
+        qc_check(
+            "preflight.arguments_valid",
+            "pass",
+            "Command arguments are internally compatible.",
+            "proceed_to_channel_config",
+        )
+    )
+
     config_path = args.panel_config or args.channel_config
-    channel_cfg, channel_warnings = resolve_channel_config(
-        channel_config_path=config_path,
-        i_channel=args.i_channel,
-        iia_channel=args.iia_channel,
-        iib_channel=args.iib_channel,
-        iix_channel=args.iix_channel,
-        emhc_channel=args.emhc_channel,
-        dapi_channel=args.dapi_channel,
-        type1_channel=args.type1_channel,
-        type2_channel=args.type2_channel,
-        membrane_channel=args.membrane_channel,
+    try:
+        channel_cfg, channel_warnings = resolve_channel_config(
+            channel_config_path=config_path,
+            i_channel=args.i_channel,
+            iia_channel=args.iia_channel,
+            iib_channel=args.iib_channel,
+            iix_channel=args.iix_channel,
+            emhc_channel=args.emhc_channel,
+            dapi_channel=args.dapi_channel,
+            type1_channel=args.type1_channel,
+            type2_channel=args.type2_channel,
+            membrane_channel=args.membrane_channel,
+        )
+    except (OSError, ValueError) as exc:
+        fail_preflight("preflight.channel_config_valid", exc, "correct_channel_config")
+        raise
+    preflight_checks.append(
+        qc_check(
+            "preflight.channel_config_valid",
+            "pass",
+            "Channel configuration loaded successfully.",
+            "proceed_to_model_validation",
+        )
     )
     for warning in channel_warnings:
         print(f"Warning: {warning}", file=sys.stderr, flush=True)
-    if args.model_manifest is not None and args.classifier_path is None:
-        raise ValueError("--model-manifest requires --classifier-path.")
-    model_manifest = (
-        load_model_manifest(args.model_manifest) if args.model_manifest is not None else None
+        preflight_checks.append(
+            qc_check(
+                "preflight.channel_config_warning",
+                "warn",
+                warning,
+                "confirm_channel_mapping",
+            )
+        )
+    try:
+        model_manifest = (
+            load_model_manifest(args.model_manifest) if args.model_manifest is not None else None
+        )
+        if model_manifest is not None:
+            validate_model_artifact(Path(args.classifier_path), model_manifest)
+    except (OSError, ValueError) as exc:
+        fail_preflight("preflight.model_artifact_valid", exc, "select_verified_model_artifact")
+        raise
+    preflight_checks.append(
+        qc_check(
+            "preflight.model_artifact_valid",
+            "pass",
+            "Selected model artifact and manifest are readable and compatible."
+            if model_manifest is not None
+            else (
+                "Selected legacy model has no sidecar; panel compatibility will use the "
+                "legacy adapter."
+                if args.classifier_path
+                else "No classifier was selected; the compatible rule path will be used."
+            ),
+            "proceed_to_input_validation",
+        )
     )
-    if model_manifest is not None:
-        validate_model_artifact(Path(args.classifier_path), model_manifest)
     semantic_candidate = (
         model_manifest is not None
         and model_manifest.feature_schema_version == "multiplanel_features.v1"
@@ -402,18 +477,104 @@ def main() -> None:
     t_all = time.perf_counter()
 
     with stage(1, total_stages, "prepare output + load image"):
-        output_dir = ensure_dir(args.output_dir)
-        image = load_multichannel_image(args.input)
-        pixel_size_x_um, pixel_size_y_um = extract_pixel_size_um(args.input)
+        try:
+            image = load_multichannel_image(args.input)
+            pixel_size_x_um, pixel_size_y_um = extract_pixel_size_um(args.input)
+        except (ImportError, OSError, ValueError) as exc:
+            fail_preflight("preflight.input_readable", exc, "select_readable_input_image")
+            raise
+        preflight_checks.append(
+            qc_check(
+                "preflight.input_readable",
+                "pass",
+                "Input image loaded successfully.",
+                "proceed_to_panel_validation",
+                metrics={"image_shape": list(image.shape)},
+            )
+        )
         n_channels = image.shape[0]
 
         panel = Panel.from_channel_config(channel_cfg)
-        panel.validate(image_channel_count=n_channels)
-        validate_requested_domains(panel, tuple(args.requested_domain))
-        validate_model_compatibility(
-            panel,
-            model_manifest,
-            require_legacy_model=bool(args.classifier_path),
+        try:
+            panel.validate(image_channel_count=n_channels)
+        except ValueError as exc:
+            fail_preflight("preflight.panel_compatible", exc, "correct_channel_mapping")
+            raise
+        preflight_checks.append(
+            qc_check(
+                "preflight.panel_compatible",
+                "pass",
+                "Panel channels are compatible with the input image.",
+                "proceed_to_domain_validation",
+            )
+        )
+        try:
+            validate_requested_domains(panel, tuple(args.requested_domain))
+        except ValueError as exc:
+            fail_preflight(
+                "preflight.requested_domains_supported",
+                exc,
+                "remove_or_correct_requested_domain",
+            )
+            raise
+        preflight_checks.append(
+            qc_check(
+                "preflight.requested_domains_supported",
+                "pass",
+                "Requested output domains are supported by the selected panel.",
+                "proceed_to_model_compatibility",
+            )
+        )
+        try:
+            validate_model_compatibility(
+                panel,
+                model_manifest,
+                require_legacy_model=bool(args.classifier_path),
+            )
+        except ValueError as exc:
+            fail_preflight(
+                "preflight.model_panel_compatible",
+                exc,
+                "select_compatible_panel_or_model",
+            )
+            raise
+        preflight_checks.append(
+            qc_check(
+                "preflight.model_panel_compatible",
+                "pass",
+                "Selected model is compatible with the observed panel.",
+                "proceed_to_pixel_size_check",
+            )
+        )
+        has_pixel_size = pixel_size_x_um is not None and pixel_size_y_um is not None
+        preflight_checks.append(
+            qc_check(
+                "preflight.pixel_size_available",
+                "pass" if has_pixel_size else "warn",
+                "Physical pixel size is available."
+                if has_pixel_size
+                else "Physical pixel size is unavailable; pixel-area outputs remain usable.",
+                "proceed_to_processing"
+                if has_pixel_size
+                else "confirm_pixel_size_before_area_interpretation",
+                metrics={"x_um": pixel_size_x_um, "y_um": pixel_size_y_um},
+            )
+        )
+        preflight_context.update(
+            {
+                "image_shape": list(image.shape),
+                "panel_channels": dict(panel.channels),
+                "requested_domains": list(args.requested_domain),
+                "model_id": model_manifest.model_id if model_manifest is not None else None,
+            }
+        )
+        write_qc_report(
+            preflight_qc_path,
+            build_qc_report(
+                stage="preflight",
+                checks=preflight_checks,
+                context=preflight_context,
+            ),
         )
 
     with stage(2, total_stages, "preprocess membrane channel"):
@@ -432,7 +593,6 @@ def main() -> None:
         )
         prep = preprocess_membrane_channel(membrane, prep_cfg)
 
-        stem = args.input.stem.replace(" ", "_")
         run_manifest_path = output_dir / f"{stem}_run.json"
         labels_path = output_dir / f"{stem}_cellpose_labels.tif"
         seg_manifest = {
@@ -613,6 +773,25 @@ def main() -> None:
             seed=args.bootstrap_seed,
         )
         qc_stats = qc_flags_from_fibers(fibers, qc_cfg)
+        postrun_qc_path = output_dir / f"{stem}_postrun_qc.json"
+        postrun_qc_stats = {**qc_stats, "n_labels": len(fibers)}
+        postrun_report = build_qc_report(
+            stage="postrun",
+            checks=postrun_checks(
+                postrun_qc_stats,
+                min_labels=qc_cfg.min_labels,
+                max_unknown_rate=qc_cfg.max_unknown_rate,
+                median_area_min=qc_cfg.median_area_min,
+                median_area_max=qc_cfg.median_area_max,
+                max_type_corr=qc_cfg.max_type_corr,
+            ),
+            context={
+                "input": str(args.input),
+                "fibers_path": str(fibers_path),
+                "review_required": bool(fibers.get("needs_review", pd.Series(dtype=bool)).any()),
+            },
+        )
+        write_qc_report(postrun_qc_path, postrun_report)
 
         summary = {
             "input": str(args.input),
@@ -625,6 +804,8 @@ def main() -> None:
                 str(semantic_predictions_path) if semantic_predictions_path is not None else ""
             ),
             "run_manifest_path": str(run_manifest_path),
+            "preflight_qc_path": str(preflight_qc_path),
+            "postrun_qc_path": str(postrun_qc_path),
             "runtime_s": round(float(runtime_s), 2),
             "membrane_channel": int(channel_cfg.membrane_channel),
             "dapi_channel": channel_cfg.dapi_channel,
@@ -722,6 +903,8 @@ def main() -> None:
     if nuclear_outputs:
         print("saved nuclear outputs:", output_dir / "nuclear")
     print("saved summary:", summary_path)
+    print("saved preflight QC:", preflight_qc_path)
+    print("saved post-run QC:", postrun_qc_path)
     if removed_outputs:
         print(
             "removed retained-mode outputs:",
