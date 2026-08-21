@@ -218,3 +218,13 @@ The Napari review UI writes:
 - `error`: failure message when applicable.
 - `fiber_count`: number of segmented fibers when successful.
 - `summary_path`: per-image summary CSV path.
+
+## Project Review QC Outputs
+
+The headless project-review QC command writes versioned `image_qc.csv`,
+`fiber_qc.csv`, `nucleus_qc.csv`, and `section_selection.csv` files. Their
+artifact contract, formulas, rule behavior, and schemas are documented in
+[`review_qc_phase2a.md`](review_qc_phase2a.md).
+
+The read-only cohort presentation and readiness definitions are documented in
+[`review_dashboard_phase2b.md`](review_dashboard_phase2b.md).
