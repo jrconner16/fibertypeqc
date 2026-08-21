@@ -6,6 +6,19 @@ import numpy as np
 import pandas as pd
 from scipy.ndimage import distance_transform_edt
 
+NUCLEI_TABLE_COLUMNS = (
+    "nucleus_id",
+    "area_px",
+    "centroid_y_px",
+    "centroid_x_px",
+    "assigned_fiber_id",
+    "assignment_status",
+    "association_category",
+    "overlap_fraction",
+    "distance_to_boundary_px",
+    "normalized_radial_position",
+)
+
 
 def associate_nuclei(
     nuclei_labels: np.ndarray,
@@ -105,7 +118,7 @@ def associate_nuclei(
             }
         )
 
-    nuclei_table = pd.DataFrame(nuclei_rows)
+    nuclei_table = pd.DataFrame(nuclei_rows, columns=NUCLEI_TABLE_COLUMNS)
     links_table = pd.DataFrame(links_rows)
     if links_table.empty:
         links_table = pd.DataFrame(

@@ -26,6 +26,35 @@ def test_associate_nuclei_marks_central_boundary_and_unassigned():
     assert set(links.fiber_id) == {1}
 
 
+def test_associate_nuclei_empty_result_preserves_table_schema():
+    nuclei = np.zeros((4, 4), dtype=np.int32)
+    fibers = np.zeros((4, 4), dtype=np.int32)
+
+    nuclei_table, links_table = associate_nuclei(nuclei, fibers)
+
+    assert nuclei_table.empty
+    assert nuclei_table.columns.tolist() == [
+        "nucleus_id",
+        "area_px",
+        "centroid_y_px",
+        "centroid_x_px",
+        "assigned_fiber_id",
+        "assignment_status",
+        "association_category",
+        "overlap_fraction",
+        "distance_to_boundary_px",
+        "normalized_radial_position",
+    ]
+    assert links_table.empty
+    assert links_table.columns.tolist() == [
+        "nucleus_id",
+        "fiber_id",
+        "assignment_status",
+        "association_category",
+        "overlap_fraction",
+    ]
+
+
 def test_summarize_fiber_nuclei_adds_zero_counts_for_empty_fibers():
     fibers = np.zeros((8, 12), dtype=np.int32)
     fibers[1:7, 1:5] = 1

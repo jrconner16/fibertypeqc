@@ -181,7 +181,9 @@ outputs/v0_run/image_name/
 └── image_name_weak_labels.csv              # Model confidence flags
 ```
 
-Column definitions are documented in [docs/output_schema.md](docs/output_schema.md).
+Column definitions are documented in [docs/output_schema.md](docs/output_schema.md). External
+analysis and visualization tools should start from the portable
+[result-bundle contract](docs/result_bundle_schema.md).
 
 ### Interactive Review
 
