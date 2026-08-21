@@ -65,6 +65,10 @@ uv run python -m scripts.run_pipeline \
 Use `--reuse-artifacts required` when reuse is mandatory. To re-quantify a manually corrected mask,
 use `--labels-path path/to/*_cellpose_labels_corrected.tif` without `--reuse-artifacts`.
 
+Every successful run also writes `*_result_report.html`. Open it locally to inspect QC checks,
+retained artifacts, and the recommended review or configuration action. It has no network or
+JavaScript dependency and does not display the source-image path.
+
 ## Run A Batch
 
 ```bash

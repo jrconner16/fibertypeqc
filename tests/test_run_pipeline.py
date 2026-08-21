@@ -74,11 +74,17 @@ def test_run_pipeline_export_diagnostics_flag_controls_output(tmp_path, monkeypa
     preflight = json.loads((tmp_path / "out" / f"{stem}_preflight_qc.json").read_text())
     assert preflight["schema_version"] == "fibertypeqc.qc.v1"
     assert preflight["overall_status"] == "warn"
-    assert preflight["recommended_next_action"] == (
-        "confirm_pixel_size_before_area_interpretation"
-    )
+    assert preflight["recommended_next_action"] == ("confirm_pixel_size_before_area_interpretation")
     postrun = json.loads((tmp_path / "out" / f"{stem}_postrun_qc.json").read_text())
     assert postrun["stage"] == "postrun"
+    result_bundle = json.loads((tmp_path / "out" / f"{stem}_result_bundle.json").read_text())
+    assert result_bundle["schema_version"] == "fibertypeqc.result_bundle.v1"
+    assert result_bundle["artifacts"]["fiber_table"]["path"] == f"{stem}_fibers.csv"
+    assert result_bundle["artifacts"]["run_provenance"]["path"] == f"{stem}_run.json"
+    assert result_bundle["artifacts"]["html_report"]["path"] == f"{stem}_result_report.html"
+    result_report = (tmp_path / "out" / f"{stem}_result_report.html").read_text()
+    assert "FiberTypeQC result report" in result_report
+    assert "confirm_pixel_size_before_area_interpretation" in result_report
 
     monkeypatch.setattr(
         run_pipeline.sys,
@@ -147,6 +153,16 @@ def test_run_pipeline_writes_summary_for_diagnostics_only_panel(tmp_path, monkey
     assert summary.loc[0, "nuclear_manifest_path"] == str(
         nuclear_dir / f"{input_path.stem}_nuclear_run.json"
     )
+    result_bundle = json.loads(
+        (tmp_path / "out" / f"{input_path.stem}_result_bundle.json").read_text()
+    )
+    assert result_bundle["artifacts"]["nuclei_table"]["path"] == (
+        f"nuclear/{input_path.stem}_nuclei.csv"
+    )
+    assert result_bundle["artifacts"]["nucleus_fiber_associations"]["join_keys"] == [
+        "nucleus_id",
+        "fiber_id",
+    ]
 
 
 def test_cleanup_outputs_for_retain_mode_tables_removes_labels_only(tmp_path):
