@@ -36,6 +36,35 @@ Advanced/model-development option:
 - it does not change the stable `*_fibers.csv`
 - it is intended for diagnostics/model-development, not routine biological output
 
+## Use a Semantic Panel
+
+Use a checked-in panel manifest instead of repeating channel indices:
+
+```bash
+uv run python -m scripts.run_pipeline \
+  --input path/to/image.czi \
+  --output-dir outputs/panel_run/image_name \
+  --panel-config manifests/vivienne_i_iia_dapi_panel.yaml \
+  --export-diagnostics
+```
+
+Configured Type I, direct IIx, and eMHC markers are measured in the semantic diagnostics table.
+A DAPI mapping also runs nuclear segmentation and fiber association under `nuclear/`. These opt-in
+outputs do not change the frozen baseline model's biological claims.
+
+To reuse compatible fiber segmentation from the same output directory while recomputing features:
+
+```bash
+uv run python -m scripts.run_pipeline \
+  --input path/to/image.czi \
+  --output-dir outputs/panel_run/image_name \
+  --panel-config manifests/vivienne_i_iia_dapi_panel.yaml \
+  --reuse-artifacts auto
+```
+
+Use `--reuse-artifacts required` when reuse is mandatory. To re-quantify a manually corrected mask,
+use `--labels-path path/to/*_cellpose_labels_corrected.tif` without `--reuse-artifacts`.
+
 ## Run A Batch
 
 ```bash
@@ -53,6 +82,10 @@ uv run python -m scripts.review_labels_napari \
   --fibers outputs/v0_run/image_name/image_name_fibers.csv \
   --output outputs/v0_run/image_name/image_name_fibers_manual_review.csv
 ```
+
+For a panel-aware run, pass the same mapping with `--channel-config`. Add
+`--nuclei-labels outputs/panel_run/image_name/nuclear/image_name_nuclei_labels.tif` to display the
+nuclear overlay. The review table stores Type I corrections and eMHC assessments separately.
 
 ## Merge Review
 

@@ -1,12 +1,13 @@
-# UV setup for the muscle IF pilot
+# UV setup for FiberTypeQC
 
-This project is intentionally set up as a small pilot, not a polished app. The goal is to get from raw IF image to segmentation candidate, per-fiber feature table, simple fiber-type model, and clean CSV export with as little setup pain as possible.
+FiberTypeQC uses `uv` to pin Python and synchronize its application and development dependencies.
 
 ## Project files
 
 - `.python-version` keeps Python pinned to 3.11
 - `pyproject.toml` defines the uv project and optional extras
-- `roadmap.md` is the build plan and decision guide
+- `docs/quickstart.md` documents the current command-line workflow
+- `docs/panel_schema.md` documents semantic panel configuration
 
 ## Recommended starting path
 
@@ -56,60 +57,18 @@ Open JupyterLab:
 uv run jupyter lab
 ```
 
-## Suggested first validation steps
+## Validate the environment
 
-1. Confirm napari launches.
-2. Load one representative raw image.
-3. Confirm channel order is readable and sensible.
-4. Try one segmentation backend on one image only.
-5. Save intermediate outputs before doing anything more ambitious.
+Run the deterministic public reference workflow, then the fast test suite:
 
-## First tasks for Codex
-
-Give Codex very small, concrete tasks in this order.
-
-### Task 1: repo scaffold
-Create the following folders if they do not exist:
-
-```text
-src/
-notebooks/
-data/raw/
-data/interim/
-data/processed/
-outputs/figures/
-outputs/tables/
+```bash
+uv run python -m scripts.run_reference
+uv run python -m pytest -m "not integration"
 ```
 
-### Task 2: image loader
-Write a small Python module that:
-- loads OME-TIFF, TIFF, or CZI if possible
-- prints image shape, dtype, and channel count
-- saves a quick preview PNG per channel for one test image
-
-### Task 3: ROI / mask reader
-Write a small module that can read either:
-- ImageJ ROI zip files using `roifile`, or
-- label masks exported from napari
-
-Then convert both into a common per-fiber mask representation.
-
-### Task 4: feature extraction
-Write a module that computes per-fiber:
-- area
-- centroid
-- mean and median intensity per channel
-- eroded-interior intensity per channel
-- optional local background ring intensity
-
-Save results as a tidy CSV.
-
-### Task 5: typing baseline
-Write a notebook that:
-- loads the feature CSV
-- trains a simple classifier
-- compares logistic regression, random forest, and gradient boosting
-- outputs class probabilities and an uncertainty flag
+Before processing private microscopy data, inspect `uv run python -m scripts.run_pipeline --help`,
+confirm channel order on one representative image, and use an explicit panel config or channel arguments. See
+[docs/quickstart.md](docs/quickstart.md) for the supported pipeline/review/merge flow.
 
 ## Stop conditions
 
