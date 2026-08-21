@@ -16,7 +16,8 @@ uv run python -m scripts.run_reference
 
 The command writes to `outputs/reference/` by default. It checks the fixture, config, correction,
 and model digests; runs the frozen classifier against the supplied labels; exercises review merging;
-and validates schemas, label IDs, model outputs within tolerance, QC status, and final merged labels.
+and validates schemas, label IDs, model outputs within tolerance, versioned preflight/post-run QC
+codes and next actions, and final merged labels.
 
 Regenerate the fixture bytes after an intentional fixture-design change with:
 

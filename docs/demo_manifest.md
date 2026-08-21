@@ -49,8 +49,8 @@ uv run python -m scripts.validate_reference_outputs \
 
 The synthetic reference uses a supplied exact label mask to keep golden tables independent of
 Cellpose device behavior. It therefore validates deterministic image loading, quantification,
-frozen-model prediction, QC summary, review merge, artifact schemas, and digests. It does not claim
-to validate segmentation or biology.
+frozen-model prediction, versioned preflight/post-run QC, review merge, artifact schemas, and
+digests. It does not claim to validate segmentation or biology.
 
 The review UI can be opened against the generated reference artifacts:
 

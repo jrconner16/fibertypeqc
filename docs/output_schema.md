@@ -9,9 +9,47 @@ FiberTypeQC writes one output folder per image.
 - `*_feature_diagnostics.csv`: optional model-development/debugging table written only when
   diagnostics export is enabled.
 - `*_summary.csv`: one row with image-level processing settings, counts, QC metrics, and summaries.
+- `*_preflight_qc.json`: versioned input/config/model compatibility checks written before expensive
+  processing whenever an output directory can be created.
+- `*_postrun_qc.json`: versioned segmentation/typing QC checks and recommended next action.
 - `*_fibers_manual_review.csv`: manual review table written by the Napari review UI.
 - `*_weak_labels.csv`: fibers prioritized for review.
 - `batch_summary.csv`: batch-level status table from `scripts.run_batch`.
+
+## QC Artifacts
+
+Both QC JSON files use schema version `fibertypeqc.qc.v1` and contain:
+
+- `stage`: `preflight` or `postrun`;
+- `overall_status`: `pass`, `warn`, or `fail`;
+- `recommended_next_action`: a stable machine-readable action name;
+- `checks`: ordered checks with stable `code`, `status`, explanatory `message`, `next_action`, and
+  optional measurements;
+- `context`: input, panel, model, or generated-artifact context relevant to the stage.
+
+Stable preflight codes are:
+
+- `preflight.arguments_valid`;
+- `preflight.channel_config_valid` and `preflight.channel_config_warning`;
+- `preflight.model_artifact_valid`;
+- `preflight.input_readable`;
+- `preflight.panel_compatible`;
+- `preflight.requested_domains_supported`;
+- `preflight.model_panel_compatible`;
+- `preflight.pixel_size_available`.
+
+Stable post-run codes are:
+
+- `postrun.fiber_count`;
+- `postrun.unknown_rate`;
+- `postrun.median_area`;
+- `postrun.marker_correlation`.
+
+The post-run report exposes the existing CLI QC thresholds; it does not introduce new exclusion or
+classification policy. A warning never silently removes fibers. Its next action directs the user to
+inspect segmentation, confirm channels/pixel scale, or proceed to manual review. Preflight failures
+are recorded before processing when the command supplies enough information to create the output
+directory; argument-parser failures and an unwritable output directory cannot produce an artifact.
 
 ## Fiber Table Columns
 
