@@ -1,6 +1,14 @@
 # QC and Manual Review System Plan
 
-Status: Phase 5 complete; mask-level review remains deferred.
+Status: Phase 6.2 complete and merged to `main`; Phases 7-9 remain pending.
+
+Last updated: 2026-08-21 (`abe7c0a`)
+
+The integrated workflow passed 213 fast tests and the deterministic reference
+workflow in GitHub Actions. Four integration tests passed locally. Headless tests
+cover the review controllers and widget-facing behavior; interactive Napari use
+remains a manual release check. Phase 7 fiber-mask editing is still deferred and
+must preserve stable IDs, lineage, invalidation, and immutable prediction inputs.
 
 This document is the controlling product and implementation plan for turning
 FiberTypeQC into a project-based, human-in-the-loop review system. It records the
