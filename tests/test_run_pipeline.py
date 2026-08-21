@@ -81,6 +81,10 @@ def test_run_pipeline_export_diagnostics_flag_controls_output(tmp_path, monkeypa
     assert result_bundle["schema_version"] == "fibertypeqc.result_bundle.v1"
     assert result_bundle["artifacts"]["fiber_table"]["path"] == f"{stem}_fibers.csv"
     assert result_bundle["artifacts"]["run_provenance"]["path"] == f"{stem}_run.json"
+    assert result_bundle["artifacts"]["html_report"]["path"] == f"{stem}_result_report.html"
+    result_report = (tmp_path / "out" / f"{stem}_result_report.html").read_text()
+    assert "FiberTypeQC result report" in result_report
+    assert "confirm_pixel_size_before_area_interpretation" in result_report
 
     monkeypatch.setattr(
         run_pipeline.sys,

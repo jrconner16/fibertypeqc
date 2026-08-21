@@ -37,8 +37,8 @@ Every entry in `artifacts` requires:
 | Field | Type | Meaning |
 |---|---|---|
 | `path` | string | POSIX path relative to the bundle directory. It must not be absolute or escape that directory. |
-| `kind` | string | `table`, `label_image`, `qc_report`, or `provenance`. |
-| `media_type` | string | Currently `text/csv`, `image/tiff`, or `application/json`. |
+| `kind` | string | `table`, `label_image`, `qc_report`, `provenance`, or `report`. |
+| `media_type` | string | Currently `text/csv`, `image/tiff`, `application/json`, or `text/html`. |
 | `cardinality` | string | Declared row/image/report grain. |
 | `join_keys` | array of strings | Columns or label-image values used to join the artifact. Empty for run-level artifacts. |
 | `domains` | array of strings | Output domains represented by the artifact. These describe content, not validated biological calls. |
@@ -54,6 +54,7 @@ outside the per-image output directory.
 | `preflight_qc` | Required for every successful bundle. | Quality control |
 | `postrun_qc` | Required for every successful bundle. | Quality control |
 | `run_provenance` | Required for every successful bundle. | Provenance |
+| `html_report` | Required for every successful pipeline bundle. | Summary and quality control |
 | `fiber_table` | Required for `full` and `tables`; removed by `summary`. | Fiber geometry and identity |
 | `fiber_labels` | Required for `full`; removed by `tables` and `summary`. | Fiber geometry |
 | `feature_diagnostics` | Optional; written with `--export-diagnostics` and retained by `full` or `tables`. | Fiber identity; also regeneration measurements when eMHC is configured |
@@ -66,6 +67,10 @@ outside the per-image output directory.
 
 The v1 bundle is created by `run_pipeline`; downstream manual-review and merged-review CSVs are not
 yet indexed. Tools must accept their absence rather than guessing filenames.
+
+`html_report` is a one-report-per-image, self-contained HTML summary. It links only to artifacts
+declared by the bundle, shows stable QC action codes with human-readable guidance, and omits the
+source-image path.
 
 ## Join Graph and Cardinality
 
