@@ -176,11 +176,15 @@ outputs/v0_run/image_name/
 ├── image_name_fibers.csv                   # Feature table (rows=fibers)
 ├── image_name_feature_diagnostics.csv      # Optional diagnostics table (advanced/debugging)
 ├── image_name_summary.csv                  # Class statistics + confidence intervals
+├── image_name_result_bundle.json            # Portable index of retained result artifacts
+├── image_name_result_report.html            # Self-contained results/QC report and next action
 ├── image_name_fibers_manual_review.csv     # Empty; filled by review UI
 └── image_name_weak_labels.csv              # Model confidence flags
 ```
 
-Column definitions are documented in [docs/output_schema.md](docs/output_schema.md).
+Column definitions are documented in [docs/output_schema.md](docs/output_schema.md). External
+analysis and visualization tools should start from the portable
+[result-bundle contract](docs/result_bundle_schema.md).
 
 ### Interactive Review
 

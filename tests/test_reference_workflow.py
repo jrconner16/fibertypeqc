@@ -25,3 +25,4 @@ def test_reference_workflow_runs_and_validates(tmp_path):
 
     assert (tmp_path / "synthetic_reference_fibers.csv").is_file()
     assert (tmp_path / "synthetic_reference_fibers_final.csv").is_file()
+    assert (tmp_path / "synthetic_reference_result_report.html").is_file()
