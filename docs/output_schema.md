@@ -61,6 +61,10 @@ When an eMHC channel is configured, retained semantic diagnostics advertise the 
 automatic regeneration call. Likewise, the `nuclei` and `association` domains describe structural
 outputs, not nuclear pathology.
 
+The complete external-consumer contract—including required fields, artifact presence rules,
+cardinalities, and joins—is documented in
+[Result Bundle Schema v1](result_bundle_schema.md).
+
 ## QC Artifacts
 
 Both QC JSON files use schema version `fibertypeqc.qc.v1` and contain:
