@@ -95,6 +95,10 @@ def build_batch_command(
     channel_overrides: BatchChannelOverrides,
     classifier_path: Path | None = None,
     downsample_factor: int | None = None,
+    crop_auto: bool = True,
+    crop_ds: int | None = None,
+    crop_pad: int | None = None,
+    crop_min_size: int | None = None,
     export_diagnostics: bool = False,
     retain_mode: str = "full",
     reuse_artifacts: str = "never",
@@ -138,6 +142,15 @@ def build_batch_command(
         "--reuse-artifacts",
         reuse_artifacts,
     ]
+    if not crop_auto:
+        cmd.append("--no-crop-auto")
+    for flag, value in (
+        ("--crop-ds", crop_ds),
+        ("--crop-pad", crop_pad),
+        ("--crop-min-size", crop_min_size),
+    ):
+        if value is not None:
+            cmd.extend([flag, str(value)])
     if export_diagnostics:
         cmd.append("--export-diagnostics")
 
@@ -235,6 +248,10 @@ def run_single_image(
     image_name: str | None = None,
     classifier_path: Path | None = None,
     downsample_factor: int | None = None,
+    crop_auto: bool = True,
+    crop_ds: int | None = None,
+    crop_pad: int | None = None,
+    crop_min_size: int | None = None,
     export_diagnostics: bool = False,
     retain_mode: str = "full",
     reuse_artifacts: str = "never",
@@ -271,6 +288,10 @@ def run_single_image(
         channel_overrides=channel_overrides,
         classifier_path=classifier_path,
         downsample_factor=downsample_factor,
+        crop_auto=crop_auto,
+        crop_ds=crop_ds,
+        crop_pad=crop_pad,
+        crop_min_size=crop_min_size,
         export_diagnostics=export_diagnostics,
         retain_mode=retain_mode,
         reuse_artifacts=reuse_artifacts,
@@ -389,6 +410,38 @@ def main() -> None:
         type=int,
         default=None,
         help="Override segmentation downsample factor for this batch.",
+    )
+    crop_group = parser.add_mutually_exclusive_group()
+    crop_group.add_argument(
+        "--crop-auto",
+        dest="crop_auto",
+        action="store_true",
+        default=True,
+        help="Automatically crop to the detected tissue field (default).",
+    )
+    crop_group.add_argument(
+        "--no-crop-auto",
+        dest="crop_auto",
+        action="store_false",
+        help="Segment each complete image without automatic tissue cropping.",
+    )
+    parser.add_argument(
+        "--crop-ds",
+        type=int,
+        default=None,
+        help="Optional automatic-crop downsampling factor forwarded to the pipeline.",
+    )
+    parser.add_argument(
+        "--crop-pad",
+        type=int,
+        default=None,
+        help="Optional automatic-crop padding in pixels forwarded to the pipeline.",
+    )
+    parser.add_argument(
+        "--crop-min-size",
+        type=int,
+        default=None,
+        help="Optional minimum tissue size for automatic cropping, forwarded to the pipeline.",
     )
     parser.add_argument(
         "--channel-config",
@@ -553,6 +606,12 @@ def main() -> None:
         logger.info(f"Override: classifier_path={args.classifier_path}")
     if args.downsample_factor is not None:
         logger.info(f"Override: downsample_factor={args.downsample_factor}")
+    if not args.crop_auto:
+        logger.warning("Override: automatic cropping disabled")
+    for key in ("crop_ds", "crop_pad", "crop_min_size"):
+        value = getattr(args, key)
+        if value is not None:
+            logger.info(f"Override: {key}={value}")
     if channel_overrides.uses_nonbaseline_channel_config():
         logger.warning(
             "This batch run is using channel/config overrides and is not "
@@ -586,6 +645,10 @@ def main() -> None:
             image_name=image_name,
             classifier_path=args.classifier_path,
             downsample_factor=args.downsample_factor,
+            crop_auto=args.crop_auto,
+            crop_ds=args.crop_ds,
+            crop_pad=args.crop_pad,
+            crop_min_size=args.crop_min_size,
             export_diagnostics=args.export_diagnostics,
             retain_mode=args.retain_mode,
             reuse_artifacts=args.reuse_artifacts,
