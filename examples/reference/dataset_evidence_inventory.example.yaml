@@ -1,0 +1,17 @@
+schema_version: 1
+inventory_id: synthetic_example_package_inventory
+cohort_id: example_ta
+source_root: private_source_package
+unit_of_independence: mouse
+label_authority: reviewed_myosight
+artifact_requirements:
+  - raw_image
+  - reviewed_results
+  - roi_archive
+eligibility_policy:
+  complete_package: An example group has every required artifact.
+  eligible_use: Synthetic schema validation only.
+complete_mouse_groups:
+  - group_id: example_mouse_a
+    age: example_age
+    genotype: example_genotype

@@ -7,6 +7,11 @@ import subprocess
 from pathlib import Path
 from urllib.parse import unquote
 
+from fibertypeqc.evidence_registry import (
+    validate_dataset_evidence_inventory,
+    validate_dataset_split_ledger,
+    validate_model_registry,
+)
 from scripts.validate_reference_outputs import validate_reference_inputs
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -65,9 +70,7 @@ def broken_documentation_links(repo_root: Path, tracked: set[str]) -> list[str]:
                     candidate.startswith(directory_prefix) for candidate in tracked
                 )
                 if not tracked_target and not tracked_directory:
-                    broken.append(
-                        f"{relative_path}:{line_number}: target is not tracked: {target}"
-                    )
+                    broken.append(f"{relative_path}:{line_number}: target is not tracked: {target}")
     return broken
 
 
@@ -90,6 +93,8 @@ def private_absolute_paths(repo_root: Path, tracked: set[str]) -> list[str]:
     patterns = (
         re.compile("/" + r"Users/[^\s`\"']+"),
         re.compile("/" + r"Volumes/[^\s`\"']+"),
+        re.compile("/" + r"home/[^\s`\"']+"),
+        re.compile("/" + r"temp_work/[^\s`\"']+"),
     )
     for relative_path in sorted(tracked):
         path = repo_root / relative_path
@@ -113,6 +118,13 @@ def check_repository(repo_root: Path = REPO_ROOT) -> None:
         details = "\n".join(f"- {problem}" for problem in problems)
         raise ValueError(f"Repository checks failed:\n{details}")
     validate_reference_inputs(repo_root / "examples/reference/reference_contract.json")
+    validate_model_registry(repo_root / "manifests/model_registry.v1.yaml", repo_root=repo_root)
+    validate_dataset_split_ledger(
+        repo_root / "examples/reference/dataset_split_ledger.example.yaml"
+    )
+    validate_dataset_evidence_inventory(
+        repo_root / "examples/reference/dataset_evidence_inventory.example.yaml"
+    )
 
 
 def main() -> None:
