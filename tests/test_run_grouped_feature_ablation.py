@@ -29,7 +29,18 @@ def _contract() -> dict:
         "feature_sets": {
             "F0": {"columns": ["type_iib.mean", "type_iia.mean"]},
             "F1": {"includes": ["F0"], "columns": ["type_iia.p90", "type_iib.p90"]},
+            "F2": {
+                "includes": ["F1"],
+                "families": {
+                    "relative": [
+                        "log1p_snr_mean_iia_minus_iib",
+                        "positive_snr_mean_difference_over_sum",
+                        "coverage_difference_over_sum",
+                    ]
+                },
+            },
         },
+        "numeric_contract": {"epsilon": 1.0e-6},
         "fixed_model_recipe": {
             "family": "multinomial_logistic_regression",
             "parameters": {
@@ -72,6 +83,12 @@ def _table() -> pd.DataFrame:
                     "type_iia.mean": iia + group_index * 0.1,
                     "type_iib.p90": iib + 1.0,
                     "type_iia.p90": iia + 1.0,
+                    "type_iib.snr_mean": iib - 2.0,
+                    "type_iia.snr_mean": iia - 2.0,
+                    "type_iib.snr_p90": iib,
+                    "type_iia.snr_p90": iia,
+                    "type_iib.coverage_high": min(iib / 10.0, 1.0),
+                    "type_iia.coverage_high": min(iia / 10.0, 1.0),
                 }
             )
     return pd.DataFrame(rows)
@@ -147,3 +164,14 @@ def test_run_ablation_refuses_to_overwrite_output(tmp_path):
 
     with pytest.raises(FileExistsError, match="already exists"):
         run_ablation(_table(), _contract(), ["F0"], output)
+
+
+def test_run_ablation_materializes_relative_features_for_f2(tmp_path):
+    output = tmp_path / "experiment"
+
+    predictions, metrics = run_ablation(_table(), _contract(), ["F2"], output)
+
+    assert len(predictions) == 9
+    assert len(metrics) == 3
+    model = joblib.load(output / "models" / "F2" / "fold_00.joblib")
+    assert "log1p_snr_mean_iia_minus_iib" in model["feature_columns"]
