@@ -1,0 +1,53 @@
+schema_version: 1
+# This is the authoritative inventory of active, tracked model artifacts. It is
+# intentionally narrower than historical files in data/models/; add retired
+# artifacts only when they are used as a named comparison or reproduction target.
+models:
+  - model_id: rebaseline_tile_v2_p75p90_iib_iia_iix
+    task: fiber_identity
+    status: released
+    required_markers: [laminin, type_iia, type_iib]
+    feature_schema: legacy_type1_type2.v1
+    artifact: data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib
+    artifact_sha256: 5a1042a31ad4d90be61a58fabf9204e52517e17b63baccf027c8d84db1d9f946
+    development_groups: Historical frozen-baseline development data; individual source groups are not public.
+    evaluation_groups: Synthetic mechanics reference only in the public repository; biological evaluation remains internal.
+    comparator: null
+    evidence: data/models/model_card.md
+    limitations: IIx is residual inference from direct IIa/IIb evidence; this is the released comparator, not a universal model.
+  - model_id: manual8_myo3_base0p1
+    task: fiber_identity
+    status: standing_candidate
+    required_markers: [laminin, type_iia, type_iib]
+    feature_schema: legacy_type1_type2.v1
+    artifact: null
+    artifact_sha256: null
+    development_groups: Historical TA candidate development groups; private split ledger.
+    evaluation_groups: Protected manually reviewed TA holdout; private split ledger.
+    comparator: rebaseline_tile_v2_p75p90_iib_iia_iix
+    evidence: docs/validation_summary.md
+    limitations: Internal candidate-pipeline only; its artifact and complete evaluation bundle are not tracked, so it cannot be independently reproduced from this repository.
+  - model_id: iix_review_risk_ranker_v1
+    task: review_risk
+    status: exploratory
+    required_markers: [laminin, type_iia, type_iib]
+    feature_schema: legacy_type1_type2.v1
+    artifact: null
+    artifact_sha256: null
+    development_groups: Historical TA candidate development groups; private ranked-review audit.
+    evaluation_groups: Internal validation subsets; no protected public evaluation artifact.
+    comparator: frozen needs_review policy
+    evidence: docs/validation_summary.md
+    limitations: Experimental triage aid for risky inferred IIx calls; it does not replace the released review policy or detect segmentation failures.
+  - model_id: emhc_policy_probe_v1
+    task: emhc_status
+    status: exploratory
+    required_markers: [laminin, emhc]
+    feature_schema: multiplanel_features.v1
+    artifact: null
+    artifact_sha256: null
+    development_groups: Private reviewed regeneration development groups; identifiers remain internal.
+    evaluation_groups: Private regeneration holdout group; identifiers remain internal.
+    comparator: null
+    evidence: roadmap_2026H3.md
+    limitations: Development-only threshold-policy probe with an unselected positive/negative/uncertain policy; it must not be reported as an adult fiber-type call.
