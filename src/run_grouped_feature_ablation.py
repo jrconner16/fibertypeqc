@@ -23,6 +23,11 @@ from sklearn.metrics import (
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from fibertypeqc.experimental_features import (
+    RELATIVE_CHANNEL_FEATURES,
+    add_relative_channel_features,
+)
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -344,6 +349,14 @@ def run_ablation(
     if output_dir.exists():
         raise FileExistsError(f"Output directory already exists: {output_dir}")
     development = prepare_development_table(table, contract)
+    requested_columns = {
+        column for feature_set in feature_sets for column in feature_columns(contract, feature_set)
+    }
+    if requested_columns.intersection(RELATIVE_CHANNEL_FEATURES):
+        development = add_relative_channel_features(
+            development,
+            epsilon=float(contract["numeric_contract"]["epsilon"]),
+        )
     output_dir.mkdir(parents=True)
     predictions: list[pd.DataFrame] = []
     metrics: list[pd.DataFrame] = []
