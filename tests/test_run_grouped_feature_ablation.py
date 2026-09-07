@@ -103,6 +103,31 @@ def test_feature_columns_resolves_includes_in_stable_order():
     ]
 
 
+def test_feature_columns_expands_f3_marker_suffixes_to_semantic_namespace():
+    contract = _contract()
+    contract["feature_sets"]["F3"] = {
+        "includes": ["F1"],
+        "per_marker_columns": {
+            "markers": ["iia", "iib"],
+            "suffixes": ["pixel_entropy_norm_32"],
+        },
+    }
+
+    assert feature_columns(contract, "F3")[-2:] == [
+        "type_iia.pixel_entropy_norm_32",
+        "type_iib.pixel_entropy_norm_32",
+    ]
+
+    contract["feature_sets"]["F3"]["per_marker_columns"]["markers"] = [
+        "type_iia",
+        "type_iib",
+    ]
+    assert feature_columns(contract, "F3")[-2:] == [
+        "type_iia.pixel_entropy_norm_32",
+        "type_iib.pixel_entropy_norm_32",
+    ]
+
+
 def test_prepare_development_table_rejects_group_in_multiple_folds():
     table = _table()
     table.loc[1, "development_cv_fold"] = "different_fold"

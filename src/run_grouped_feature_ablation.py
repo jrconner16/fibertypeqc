@@ -89,7 +89,14 @@ def feature_columns(contract: dict[str, Any], feature_set: str) -> list[str]:
         per_marker = entry.get("per_marker_columns", {})
         for marker in per_marker.get("markers", []):
             for suffix in per_marker.get("suffixes", []):
-                resolved.append(f"{marker}.{suffix}")
+                # The frozen semantic diagnostics namespace observed markers as
+                # ``type_iia.*`` and ``type_iib.*``. F3 declares compact marker
+                # names in some contracts and their full semantic names in others.
+                marker_name = str(marker)
+                namespace = (
+                    marker_name if marker_name.startswith("type_") else f"type_{marker_name}"
+                )
+                resolved.append(f"{namespace}.{suffix}")
         visiting.remove(name)
 
     add(feature_set)
