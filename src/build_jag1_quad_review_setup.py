@@ -450,6 +450,23 @@ def _legacy_supervision(manifest: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _require_legacy_sources(manifest: pd.DataFrame) -> None:
+    """Fail closed: frozen legacy development labels must not be silently reused."""
+    required_images = {"351545_R_section_01", "351545_L_section_01"}
+    indexed = manifest.set_index("image_id")
+    missing: list[str] = []
+    for image_id in sorted(required_images):
+        path = Path(str(indexed.loc[image_id, "legacy_review_path"])).expanduser()
+        if not path.is_file():
+            missing.append(f"{image_id}: {path}")
+    if missing:
+        joined = "; ".join(missing)
+        raise FileNotFoundError(
+            "Required legacy development-review CSVs are unavailable. "
+            "Copy the two small private files, update --processed-map, then rerun: " + joined
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-root", type=Path)
@@ -478,6 +495,7 @@ def main() -> int:
         if args.processed_root is not None
         else _manifest(args.raw_root.resolve(), private_map)
     )
+    _require_legacy_sources(manifest)
     split = _split()
     development, final = _queues(manifest)
     qc = _qc(manifest)
