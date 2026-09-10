@@ -39,6 +39,9 @@ roadmap.md
 notebooks/
 /data/labels/
 
+# Private cohort manifests, reviewer queues, and reviewer decisions.
+/private/
+
 # Private interview-study notes
 learning/
 
