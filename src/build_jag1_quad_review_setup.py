@@ -434,7 +434,20 @@ def _legacy_supervision(manifest: pd.DataFrame) -> pd.DataFrame:
                     "source_path": str(path),
                 }
             )
-    return pd.DataFrame(records)
+    return pd.DataFrame(
+        records,
+        columns=[
+            "mouse_id",
+            "cre_status",
+            "image_id",
+            "section_id",
+            "fiber_id",
+            "label",
+            "legacy_status",
+            "supervision_role",
+            "source_path",
+        ],
+    )
 
 
 def main() -> int:
