@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -130,6 +131,97 @@ def _manifest(raw_root: Path, processed_map: dict[str, dict[str, str]]) -> pd.Da
     if len(result) != 27:
         raise ValueError(f"Expected 27 sections from canonical raw containers; found {len(result)}")
     return result
+
+
+def _sort_source_token(value: str) -> tuple[int, ...]:
+    return tuple(int(piece) for piece in value.split("_"))
+
+
+def _manifest_from_processed_root(
+    processed_root: Path, private_map: dict[str, dict[str, str]]
+) -> pd.DataFrame:
+    """Recover the canonical section inventory from existing E3 pipeline outputs.
+
+    Each output ``*_run.json`` retains ``source_image``.  This avoids inferring
+    biological identity from a display filename and preserves the two separate
+    351545_L source containers, which both contain an internal section 01.
+    """
+    discovered: list[dict[str, object]] = []
+    for run_path in sorted(processed_root.rglob("*_run.json")):
+        try:
+            run = json.loads(run_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Unreadable run provenance: {run_path}: {exc}") from exc
+        source_path = str(run.get("source_image", "")).strip()
+        match = re.search(r"cre(POSITIVE|NEGATIVE)_(\d+_(?:LR|LL|L|R))_QUAD", source_path)
+        token = re.match(r"(\d+(?:_\d+)*)_mdxJAG_", Path(source_path).name)
+        section = re.search(r"_section-(\d+)_run\.json$", run_path.name)
+        if match is None or token is None or section is None:
+            raise ValueError(f"Cannot recover identity from E3 run provenance: {run_path}")
+        mouse_id = match.group(2)
+        if mouse_id not in {*NEGATIVE, *POSITIVE}:
+            continue
+        artifacts = {
+            "fiber_labels_path": next(run_path.parent.glob("*_cellpose_labels.tif"), None),
+            "fiber_table_path": next(run_path.parent.glob("*_fibers.csv"), None),
+            "summary_path": next(run_path.parent.glob("*_summary.csv"), None),
+        }
+        if any(value is None for value in artifacts.values()):
+            raise ValueError(f"Incomplete processed artifacts beside {run_path}")
+        discovered.append(
+            {
+                "mouse_id": mouse_id,
+                "cre_status": "cre_positive_mdxJAG"
+                if match.group(1) == "POSITIVE"
+                else "cre_negative_mdx",
+                "source_token": token.group(1),
+                "output_section": int(section.group(1)),
+                "raw_image_path": source_path,
+                **{key: str(value.resolve()) for key, value in artifacts.items()},
+            }
+        )
+    if len(discovered) != 27:
+        raise ValueError(f"Expected 27 processed Quad sections; found {len(discovered)}")
+    split = _split().set_index("mouse_id")
+    rows: list[dict[str, object]] = []
+    for mouse_id, group in pd.DataFrame(discovered).groupby("mouse_id", sort=True):
+        ordered = group.sort_values(
+            ["source_token", "output_section"],
+            key=lambda values: (
+                values.map(_sort_source_token) if values.name == "source_token" else values
+            ),
+            kind="stable",
+        )
+        for scene_index, (_, item) in enumerate(ordered.iterrows(), start=1):
+            image_id = f"{mouse_id}_section_{scene_index:02d}"
+            mapped = private_map.get(image_id, {})
+            rows.append(
+                {
+                    "image_id": image_id,
+                    "mouse_id": mouse_id,
+                    "section_id": f"section-{scene_index:02d}",
+                    "scene_index": scene_index,
+                    "cre_status": item.cre_status,
+                    "jag_status": "JAG_positive"
+                    if item.cre_status == "cre_positive_mdxJAG"
+                    else "JAG_negative",
+                    "muscle": "QUAD",
+                    "injury_status": "uninjured",
+                    "study_timepoint": "28dpi",
+                    "age": "approximately_18_months",
+                    "background": "mdx5cv",
+                    "panel": PANEL,
+                    "raw_image_path": item.raw_image_path,
+                    "fiber_labels_path": item.fiber_labels_path,
+                    "fiber_table_path": item.fiber_table_path,
+                    "summary_path": item.summary_path,
+                    "legacy_review_path": mapped.get("legacy_review_path", ""),
+                    "batch": mapped.get("batch", "unknown"),
+                    "split": split.loc[mouse_id, "split"],
+                    "source_provenance": "e3_quad_semantic_run_provenance",
+                }
+            )
+    return pd.DataFrame(rows).sort_values(["mouse_id", "scene_index"], kind="stable")
 
 
 def _read_rows(section: pd.Series) -> pd.DataFrame:
@@ -347,7 +439,12 @@ def _legacy_supervision(manifest: pd.DataFrame) -> pd.DataFrame:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--raw-root", type=Path, required=True)
+    parser.add_argument("--raw-root", type=Path)
+    parser.add_argument(
+        "--processed-root",
+        type=Path,
+        help="Existing E3 Quad output root; discovers artifacts from *_run.json provenance.",
+    )
     parser.add_argument("--private-dir", type=Path, default=Path("private/jag1_quad"))
     parser.add_argument(
         "--processed-map",
@@ -358,9 +455,16 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+    if args.raw_root is None and args.processed_root is None:
+        raise ValueError("Provide --raw-root or --processed-root")
     output = args.private_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    manifest = _manifest(args.raw_root.resolve(), _output_map(args.processed_map))
+    private_map = _output_map(args.processed_map)
+    manifest = (
+        _manifest_from_processed_root(args.processed_root.resolve(), private_map)
+        if args.processed_root is not None
+        else _manifest(args.raw_root.resolve(), private_map)
+    )
     split = _split()
     development, final = _queues(manifest)
     qc = _qc(manifest)
