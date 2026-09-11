@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import tifffile
+from skimage.segmentation import find_boundaries
 
 from src.io_utils import load_multichannel_image
 from src.review.storage import atomic_write_dataframe
@@ -29,6 +30,7 @@ REQUIRED = {
     "fiber_labels_path",
 }
 LABELS = {"1": "i", "2": "iia", "3": "iib", "4": "iix", "u": "uncertain", "x": "exclude"}
+OBSERVED_CHANNEL_NAMES = ("Type I", "Type IIa", "laminin", "Type IIb")
 
 
 def _review_path(queue: Path, reviewer: str) -> Path:
@@ -90,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
     layout.addWidget(context)
     layout.addWidget(
         QLabel(
+            "Observed assay channels are named in the Layers list. "
+            "Blinding hides candidate/model outputs only.\n"
             "Hotkeys: 1 I · 2 IIa · 3 IIb · 4 IIx · U uncertain · X exclude. "
             "Each key autosaves and advances."
         )
@@ -136,17 +140,31 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError(f"Raw/label shape mismatch for {row.image_id}")
             for layer in list(viewer.layers):
                 viewer.layers.remove(layer)
-            viewer.add_image(raw, channel_axis=0, name="stains", blending="additive")
+            if raw.shape[0] != len(OBSERVED_CHANNEL_NAMES):
+                raise ValueError(
+                    f"Expected {len(OBSERVED_CHANNEL_NAMES)} observed channels for "
+                    f"{row.image_id}; found {raw.shape[0]}"
+                )
+            viewer.add_image(
+                raw,
+                channel_axis=0,
+                name=list(OBSERVED_CHANNEL_NAMES),
+                blending="additive",
+            )
             viewer.add_labels(labels, name="fiber boundaries", opacity=0.20)
             viewer.add_labels(
-                np.zeros_like(labels, dtype=np.uint8), name="selected fiber", opacity=0.65
+                np.zeros_like(labels, dtype=np.uint8), name="selected fiber outline", opacity=0.85
             )
+            # Keep labels visible but prevent an editable labels layer being active by default.
+            viewer.layers.selection.active = viewer.layers[OBSERVED_CHANNEL_NAMES[0]]
             loaded_image = str(row.image_id)
         assert labels is not None
         mask = labels == int(row.fiber_id)
         if not mask.any():
             raise ValueError(f"Fiber {row.fiber_id} is absent from {row.image_id} labels")
-        viewer.layers["selected fiber"].data = mask.astype(np.uint8)
+        viewer.layers["selected fiber outline"].data = find_boundaries(
+            mask, mode="thick"
+        ).astype(np.uint8)
         y, x = np.argwhere(mask).mean(axis=0)
         viewer.camera.center = (float(y), float(x))
         viewer.camera.zoom = max(viewer.camera.zoom, 3)
