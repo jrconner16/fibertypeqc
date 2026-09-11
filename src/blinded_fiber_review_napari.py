@@ -105,20 +105,11 @@ def main(argv: list[str] | None = None) -> int:
     layout.setSpacing(4)
     layout.addWidget(context)
     layout.addWidget(
-        QLabel(
-            "Observed assay channels are named in the Layers list. "
-            "Blinding hides candidate/model outputs only.\n"
-            "Hotkeys: 1 I · 2 IIa · 3 IIb · 4 IIx · U uncertain · X exclude. "
-            "Each label key autosaves and advances.\n"
-            "Display: click a button below or use its key in brackets. "
-            "B shows segmentation boundaries; O shows the target outline; "
-            "0 restores the standard display; Z removes the last saved label."
-        )
+        QLabel("Known assay channels are named in Layers; candidate/model outputs are hidden.")
     )
-    reopen_hint = QLabel("Reopen these controls: Window → Blinded review controls")
-    reopen_hint.setWordWrap(True)
-    layout.addWidget(reopen_hint)
-    layout.addWidget(status)
+    classify_header = QLabel("Classify current fiber — saves and advances")
+    classify_header.setStyleSheet("font-weight: bold; margin-top: 6px;")
+    layout.addWidget(classify_header)
     buttons = QHBoxLayout()
     for key, label in (
         ("1", "I"),
@@ -132,6 +123,9 @@ def main(argv: list[str] | None = None) -> int:
         button.clicked.connect(lambda _=False, value=key: decide(value))
         buttons.addWidget(button)
     layout.addLayout(buttons)
+    display_header = QLabel("Display controls — no label is saved")
+    display_header.setStyleSheet("font-weight: bold; margin-top: 6px;")
+    layout.addWidget(display_header)
     display_controls = QVBoxLayout()
     channel_controls = QHBoxLayout()
     display_buttons: dict[str, QPushButton] = {}
@@ -157,13 +151,20 @@ def main(argv: list[str] | None = None) -> int:
         display_buttons[name] = button
         overlay_controls.addWidget(button)
     reset_button = QPushButton("reset [0]")
-    undo_button = QPushButton("undo [Z]")
     reset_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-    undo_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
     overlay_controls.addWidget(reset_button)
-    overlay_controls.addWidget(undo_button)
     display_controls.addLayout(overlay_controls)
     layout.addLayout(display_controls)
+    recovery_header = QLabel("Recovery")
+    recovery_header.setStyleSheet("font-weight: bold; margin-top: 6px;")
+    layout.addWidget(recovery_header)
+    undo_button = QPushButton("Undo last saved label [Z]")
+    undo_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+    layout.addWidget(undo_button)
+    reopen_hint = QLabel("Reopen controls: Window → Blinded review controls")
+    reopen_hint.setWordWrap(True)
+    layout.addWidget(reopen_hint)
+    layout.addWidget(status)
     controls_dock = viewer.window.add_dock_widget(
         widget, area="right", name="Blinded review controls"
     )
