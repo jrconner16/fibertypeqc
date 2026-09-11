@@ -53,12 +53,15 @@ def _review_path(manifest: Path, reviewer: str, review_name: str = DEFAULT_REVIE
     )
 
 
-def _load_development_manifest(path: Path) -> pd.DataFrame:
+def _load_development_manifest(path: Path, excluded_mice: set[str] | None = None) -> pd.DataFrame:
     manifest = pd.read_csv(path, dtype=str).fillna("")
     missing = sorted(REQUIRED - set(manifest.columns))
     if missing:
         raise ValueError(f"Manifest is missing columns: {missing}")
-    development = manifest[manifest.split.eq("development")].copy()
+    excluded_mice = excluded_mice or set()
+    development = manifest[
+        manifest.split.eq("development") & ~manifest.mouse_id.isin(excluded_mice)
+    ].copy()
     if development.empty:
         raise ValueError("Manifest contains no development sections")
     return development.sort_values(["mouse_id", "image_id"], kind="stable").reset_index(drop=True)
@@ -91,6 +94,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--review-name", default=DEFAULT_REVIEW_NAME)
     parser.add_argument("--sampling-stratum", default=DEFAULT_STRATUM)
     parser.add_argument(
+        "--exclude-mouse",
+        action="append",
+        default=[],
+        help="Development mouse to omit from this review; may be repeated.",
+    )
+    parser.add_argument(
         "--exclude-decisions",
         type=Path,
         action="append",
@@ -101,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.display_downsample < 1:
         raise ValueError("--display-downsample must be at least 1")
     manifest_path = args.manifest.resolve()
-    images = _load_development_manifest(manifest_path)
+    images = _load_development_manifest(manifest_path, set(args.exclude_mouse))
     output = _review_path(manifest_path, args.reviewer, args.review_name)
     existing = _load_existing(output)
     completed = _fiber_keys(output) if output.is_file() else set()

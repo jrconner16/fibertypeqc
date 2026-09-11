@@ -32,6 +32,8 @@ def test_visual_hunt_uses_development_sections_only(tmp_path: Path) -> None:
     ).to_csv(manifest, index=False)
     loaded = _load_development_manifest(manifest)
     assert loaded.image_id.tolist() == ["dev_section_01"]
+    with pytest.raises(ValueError, match="no development sections"):
+        _load_development_manifest(manifest, {"dev_mouse"})
     assert _review_path(manifest, "Jamie Reviewer").name == "development_visual_hunt_decisions.csv"
     assert _review_path(manifest, "Jamie", "development_visual_iix_hunt").name == (
         "development_visual_iix_hunt_decisions.csv"
