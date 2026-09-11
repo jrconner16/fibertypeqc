@@ -31,7 +31,12 @@ REQUIRED = {
 }
 LABELS = {"1": "i", "2": "iia", "3": "iib", "4": "iix", "u": "uncertain", "x": "exclude"}
 OBSERVED_CHANNEL_NAMES = ("Type I", "Type IIa", "laminin", "Type IIb")
-CHANNEL_TOGGLES = dict(zip(("q", "w", "e", "r"), OBSERVED_CHANNEL_NAMES, strict=True))
+CHANNEL_TOGGLES = {
+    "q": "Type I",
+    "w": "Type IIa",
+    "e": "Type IIb",
+    "r": "laminin",
+}
 
 
 def _review_path(queue: Path, reviewer: str) -> Path:
@@ -129,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     display_controls = QVBoxLayout()
     channel_controls = QHBoxLayout()
     display_buttons: dict[str, QPushButton] = {}
-    for name, key in (("Type I", "Q"), ("Type IIa", "W"), ("laminin", "E"), ("Type IIb", "R")):
+    for name, key in (("Type I", "Q"), ("Type IIa", "W"), ("Type IIb", "E"), ("laminin", "R")):
         short_name = {"Type I": "I", "Type IIa": "IIa", "laminin": "lam", "Type IIb": "IIb"}[name]
         button = QPushButton(f"{short_name} [{key}]")
         button.setCheckable(True)
