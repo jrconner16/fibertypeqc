@@ -33,14 +33,24 @@ REQUIRED = {
     "raw_image_path",
     "fiber_labels_path",
 }
-STRATUM = "development_visual_hunt"
+DEFAULT_REVIEW_NAME = "development_visual_hunt"
+DEFAULT_STRATUM = "development_visual_hunt"
 
 
-def _review_path(manifest: Path, reviewer: str) -> Path:
-    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", reviewer.strip())
+def _safe_name(value: str, argument: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip())
     if not safe:
-        raise ValueError("--reviewer must contain at least one letter or number")
-    return manifest.parent / "reviews" / safe / "development_visual_hunt_decisions.csv"
+        raise ValueError(f"{argument} must contain at least one letter or number")
+    return safe
+
+
+def _review_path(manifest: Path, reviewer: str, review_name: str = DEFAULT_REVIEW_NAME) -> Path:
+    return (
+        manifest.parent
+        / "reviews"
+        / _safe_name(reviewer, "--reviewer")
+        / f"{_safe_name(review_name, '--review-name')}_decisions.csv"
+    )
 
 
 def _load_development_manifest(path: Path) -> pd.DataFrame:
@@ -78,6 +88,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--reviewer", required=True)
     parser.add_argument("--display-downsample", type=int, default=2)
+    parser.add_argument("--review-name", default=DEFAULT_REVIEW_NAME)
+    parser.add_argument("--sampling-stratum", default=DEFAULT_STRATUM)
     parser.add_argument(
         "--exclude-decisions",
         type=Path,
@@ -90,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--display-downsample must be at least 1")
     manifest_path = args.manifest.resolve()
     images = _load_development_manifest(manifest_path)
-    output = _review_path(manifest_path, args.reviewer)
+    output = _review_path(manifest_path, args.reviewer, args.review_name)
     existing = _load_existing(output)
     completed = _fiber_keys(output) if output.is_file() else set()
     unavailable = set(completed)
@@ -128,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     layout.addWidget(
         QLabel("Choose a fiber by clicking it. Candidate/model outputs are not loaded.")
     )
+    layout.addWidget(QLabel(f"Review stratum: {args.sampling_stratum}"))
     navigation = QHBoxLayout()
     previous_button = QPushButton("previous image [,]")
     next_button = QPushButton("next image [.]")
@@ -178,6 +191,11 @@ def main(argv: list[str] | None = None) -> int:
     overlay_controls.addWidget(reset_button)
     overlay_controls.addWidget(center_button)
     layout.addLayout(overlay_controls)
+    recovery_header = QLabel("Recovery")
+    recovery_header.setStyleSheet("font-weight: bold; margin-top: 6px;")
+    layout.addWidget(recovery_header)
+    undo_button = QPushButton("Undo last saved label [Z]")
+    layout.addWidget(undo_button)
     layout.addWidget(QLabel("Reopen controls: Window → Blinded visual hunt controls"))
     layout.addWidget(status)
     controls_dock = viewer.window.add_dock_widget(
@@ -190,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     loaded_image = ""
     labels: np.ndarray | None = None
     selected_fiber_id: int | None = None
+    undo_history: list[tuple[str, int]] = []
 
     def center_selected() -> None:
         if labels is None or selected_fiber_id is None:
@@ -251,8 +270,17 @@ def main(argv: list[str] | None = None) -> int:
         update_context()
         clear_selection()
 
-    def select_at_position(_viewer: object, event: object) -> None:
+    def set_selected(fiber_id: int) -> None:
         nonlocal selected_fiber_id
+        selected_fiber_id = fiber_id
+        mask = labels == fiber_id
+        viewer.layers["selected fiber outline"].data = find_boundaries(mask, mode="thick").astype(
+            np.uint8
+        )
+        center_selected()
+        status.setText(f"Fiber {fiber_id} selected — press a label key or click a label button")
+
+    def select_at_position(_viewer: object, event: object) -> None:
         if labels is None or getattr(event, "type", "") != "mouse_press":
             return
         y, x = (int(round(value)) for value in event.position[-2:])
@@ -266,13 +294,7 @@ def main(argv: list[str] | None = None) -> int:
         if (str(row.image_id), fiber_id) in unavailable:
             status.setText("That fiber was already reviewed and is not in this follow-up")
             return
-        selected_fiber_id = fiber_id
-        mask = labels == fiber_id
-        viewer.layers["selected fiber outline"].data = find_boundaries(mask, mode="thick").astype(
-            np.uint8
-        )
-        center_selected()
-        status.setText(f"Fiber {fiber_id} selected — press a label key or click a label button")
+        set_selected(fiber_id)
 
     def decide(key: str) -> None:
         nonlocal existing
@@ -286,7 +308,7 @@ def main(argv: list[str] | None = None) -> int:
             "image_id": row.image_id,
             "section_id": row.section_id,
             "fiber_id": selected_fiber_id,
-            "sampling_stratum": STRATUM,
+            "sampling_stratum": args.sampling_stratum,
             "label": LABELS[key],
             "timestamp": datetime.now(UTC).isoformat(),
             "provenance": "blinded_visual_manual_selection; candidate/model outputs not loaded",
@@ -295,8 +317,24 @@ def main(argv: list[str] | None = None) -> int:
         atomic_write_dataframe(output, existing)
         completed.add((str(row.image_id), selected_fiber_id))
         unavailable.add((str(row.image_id), selected_fiber_id))
+        undo_history.append((str(row.image_id), selected_fiber_id))
         update_context()
         clear_selection("Saved. Click the next fiber to select it")
+
+    def undo_last_decision() -> None:
+        nonlocal existing, image_position
+        if not undo_history:
+            status.setText("No decision from this session is available to undo")
+            return
+        image_id, fiber_id = undo_history.pop()
+        existing = existing.iloc[:-1].reset_index(drop=True)
+        atomic_write_dataframe(output, existing)
+        completed.discard((image_id, fiber_id))
+        unavailable.discard((image_id, fiber_id))
+        image_position = int(images.index[images["image_id"].eq(image_id)][0])
+        load_image()
+        set_selected(fiber_id)
+        status.setText("Last decision removed; fiber restored")
 
     def change_image(delta: int) -> None:
         nonlocal image_position
@@ -335,6 +373,7 @@ def main(argv: list[str] | None = None) -> int:
     add_shortcut("O", lambda: toggle_layer("selected fiber outline"))
     add_shortcut("0", reset_display)
     add_shortcut("F", center_selected)
+    add_shortcut("Z", undo_last_decision)
     add_shortcut(",", lambda: change_image(-1))
     add_shortcut(".", lambda: change_image(1))
     for name, button in display_buttons.items():
@@ -343,6 +382,7 @@ def main(argv: list[str] | None = None) -> int:
     next_button.clicked.connect(lambda: change_image(1))
     reset_button.clicked.connect(reset_display)
     center_button.clicked.connect(center_selected)
+    undo_button.clicked.connect(undo_last_decision)
     viewer.mouse_drag_callbacks.append(select_at_position)
     load_image()
     napari.run()
