@@ -31,6 +31,7 @@ REQUIRED = {
 }
 LABELS = {"1": "i", "2": "iia", "3": "iib", "4": "iix", "u": "uncertain", "x": "exclude"}
 OBSERVED_CHANNEL_NAMES = ("Type I", "Type IIa", "laminin", "Type IIb")
+CHANNEL_TOGGLES = dict(zip(("q", "w", "e", "r"), OBSERVED_CHANNEL_NAMES, strict=True))
 
 
 def _review_path(queue: Path, reviewer: str) -> Path:
@@ -78,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     queue = queue[
         ~queue.apply(lambda row: (str(row.image_id), int(row.fiber_id)) in completed, axis=1)
     ].reset_index(drop=True)
+    total_queue_size = len(queue) + len(completed)
 
     import napari
     from qtpy.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
@@ -95,7 +97,8 @@ def main(argv: list[str] | None = None) -> int:
             "Observed assay channels are named in the Layers list. "
             "Blinding hides candidate/model outputs only.\n"
             "Hotkeys: 1 I · 2 IIa · 3 IIb · 4 IIx · U uncertain · X exclude. "
-            "Each key autosaves and advances."
+            "Q/W/E/R channels · B boundaries · O target outline · 0 reset display · Z undo.\n"
+            "Each label key autosaves and advances."
         )
     )
     layout.addWidget(status)
@@ -116,6 +119,8 @@ def main(argv: list[str] | None = None) -> int:
     position = 0
     loaded_image = ""
     labels: np.ndarray | None = None
+    last_decision_index: int | None = None
+    last_position: int | None = None
 
     def show_current() -> None:
         nonlocal loaded_image, labels
@@ -126,7 +131,9 @@ def main(argv: list[str] | None = None) -> int:
         row = queue.iloc[position]
         # Identity and stratum are intentional provenance; candidate/model fields are absent.
         context.setText(
-            f"{position + 1}/{len(queue)} · mouse {row.mouse_id} · {row.section_id} "
+            f"{len(completed) + position + 1}/{total_queue_size} "
+            f"({total_queue_size - len(completed) - position} remaining) · "
+            f"mouse {row.mouse_id} · {row.section_id} "
             f"· fiber {int(row.fiber_id)} · {row.sampling_stratum}"
         )
         if loaded_image != str(row.image_id):
@@ -151,27 +158,31 @@ def main(argv: list[str] | None = None) -> int:
                 name=list(OBSERVED_CHANNEL_NAMES),
                 blending="additive",
             )
-            viewer.add_labels(labels, name="fiber boundaries", opacity=0.20)
-            viewer.add_labels(
+            boundary_layer = viewer.add_labels(labels, name="fiber boundaries", opacity=0.20)
+            outline_layer = viewer.add_labels(
                 np.zeros_like(labels, dtype=np.uint8), name="selected fiber outline", opacity=0.85
             )
-            # Keep labels visible but prevent an editable labels layer being active by default.
+            # Segmentation is review context only in this workspace; do not permit edits.
+            boundary_layer.editable = False
+            outline_layer.editable = False
+            boundary_layer.visible = False
+            # Keep label layers unselected; choosing an image layer avoids edit-mode UI.
             viewer.layers.selection.active = viewer.layers[OBSERVED_CHANNEL_NAMES[0]]
             loaded_image = str(row.image_id)
         assert labels is not None
         mask = labels == int(row.fiber_id)
         if not mask.any():
             raise ValueError(f"Fiber {row.fiber_id} is absent from {row.image_id} labels")
-        viewer.layers["selected fiber outline"].data = find_boundaries(
-            mask, mode="thick"
-        ).astype(np.uint8)
+        viewer.layers["selected fiber outline"].data = find_boundaries(mask, mode="thick").astype(
+            np.uint8
+        )
         y, x = np.argwhere(mask).mean(axis=0)
         viewer.camera.center = (float(y), float(x))
         viewer.camera.zoom = max(viewer.camera.zoom, 3)
         status.setText("Ready")
 
     def decide(key: str) -> None:
-        nonlocal existing, position
+        nonlocal existing, last_decision_index, last_position, position
         if position >= len(queue):
             return
         row = queue.iloc[position]
@@ -188,11 +199,55 @@ def main(argv: list[str] | None = None) -> int:
         }
         existing = pd.concat([existing, pd.DataFrame([record])], ignore_index=True)
         atomic_write_dataframe(output, existing)
+        last_decision_index = len(existing) - 1
+        last_position = position
         position += 1
         show_current()
 
+    def toggle_layer(name: str) -> None:
+        try:
+            layer = viewer.layers[name]
+        except KeyError:
+            return
+        layer.visible = not layer.visible
+        status.setText(f"{name}: {'shown' if layer.visible else 'hidden'}")
+
+    def reset_display() -> None:
+        for name in OBSERVED_CHANNEL_NAMES:
+            layer = viewer.layers[name]
+            layer.visible = True
+            if hasattr(layer, "reset_contrast_limits"):
+                layer.reset_contrast_limits()
+        viewer.layers["fiber boundaries"].visible = False
+        viewer.layers["selected fiber outline"].visible = True
+        viewer.layers.selection.active = viewer.layers[OBSERVED_CHANNEL_NAMES[0]]
+        status.setText("Display reset: channels shown, boundaries hidden, target outline shown")
+
+    def undo_last_decision() -> None:
+        nonlocal existing, last_decision_index, last_position, position
+        if last_decision_index is None or last_position is None:
+            status.setText("No decision from this session is available to undo")
+            return
+        existing = existing.drop(index=last_decision_index).reset_index(drop=True)
+        atomic_write_dataframe(output, existing)
+        position = last_position
+        last_decision_index = None
+        last_position = None
+        show_current()
+        status.setText("Last decision removed; current fiber restored")
+
     for key in LABELS:
         viewer.bind_key(key, lambda event=None, value=key: decide(value), overwrite=True)
+    for key, layer_name in CHANNEL_TOGGLES.items():
+        viewer.bind_key(
+            key,
+            lambda event=None, value=layer_name: toggle_layer(value),
+            overwrite=True,
+        )
+    viewer.bind_key("b", lambda event=None: toggle_layer("fiber boundaries"), overwrite=True)
+    viewer.bind_key("o", lambda event=None: toggle_layer("selected fiber outline"), overwrite=True)
+    viewer.bind_key("0", lambda event=None: reset_display(), overwrite=True)
+    viewer.bind_key("z", lambda event=None: undo_last_decision(), overwrite=True)
     show_current()
     napari.run()
     return 0
