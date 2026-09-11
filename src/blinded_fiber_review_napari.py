@@ -97,8 +97,10 @@ def main(argv: list[str] | None = None) -> int:
             "Observed assay channels are named in the Layers list. "
             "Blinding hides candidate/model outputs only.\n"
             "Hotkeys: 1 I · 2 IIa · 3 IIb · 4 IIx · U uncertain · X exclude. "
-            "Q/W/E/R channels · B boundaries · O target outline · 0 reset display · Z undo.\n"
-            "Each label key autosaves and advances."
+            "Each label key autosaves and advances.\n"
+            "Display: click a button below or use its key in brackets. "
+            "B shows segmentation boundaries; O shows the target outline; "
+            "0 restores the standard display; Z removes the last saved label."
         )
     )
     layout.addWidget(status)
@@ -115,6 +117,32 @@ def main(argv: list[str] | None = None) -> int:
         button.clicked.connect(lambda _=False, value=key: decide(value))
         buttons.addWidget(button)
     layout.addLayout(buttons)
+    display_controls = QVBoxLayout()
+    channel_controls = QHBoxLayout()
+    display_buttons: dict[str, QPushButton] = {}
+    for name, key in (("Type I", "Q"), ("Type IIa", "W"), ("laminin", "E"), ("Type IIb", "R")):
+        button = QPushButton(f"{name} [{key}]")
+        button.setCheckable(True)
+        button.setChecked(True)
+        display_buttons[name] = button
+        channel_controls.addWidget(button)
+    display_controls.addLayout(channel_controls)
+    overlay_controls = QHBoxLayout()
+    for name, key, visible in (
+        ("fiber boundaries", "B", False),
+        ("selected fiber outline", "O", True),
+    ):
+        button = QPushButton(f"{name} [{key}]")
+        button.setCheckable(True)
+        button.setChecked(visible)
+        display_buttons[name] = button
+        overlay_controls.addWidget(button)
+    reset_button = QPushButton("Reset display [0]")
+    undo_button = QPushButton("Undo last label [Z]")
+    overlay_controls.addWidget(reset_button)
+    overlay_controls.addWidget(undo_button)
+    display_controls.addLayout(overlay_controls)
+    layout.addLayout(display_controls)
     viewer.window.add_dock_widget(widget, area="right", name="Blinded review")
     position = 0
     loaded_image = ""
@@ -156,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
                 raw,
                 channel_axis=0,
                 name=list(OBSERVED_CHANNEL_NAMES),
+                colormap=["magenta", "cyan", "gray", "yellow"],
                 blending="additive",
             )
             boundary_layer = viewer.add_labels(labels, name="fiber boundaries", opacity=0.20)
@@ -210,6 +239,7 @@ def main(argv: list[str] | None = None) -> int:
         except KeyError:
             return
         layer.visible = not layer.visible
+        display_buttons[name].setChecked(layer.visible)
         status.setText(f"{name}: {'shown' if layer.visible else 'hidden'}")
 
     def reset_display() -> None:
@@ -220,6 +250,10 @@ def main(argv: list[str] | None = None) -> int:
                 layer.reset_contrast_limits()
         viewer.layers["fiber boundaries"].visible = False
         viewer.layers["selected fiber outline"].visible = True
+        for name in OBSERVED_CHANNEL_NAMES:
+            display_buttons[name].setChecked(True)
+        display_buttons["fiber boundaries"].setChecked(False)
+        display_buttons["selected fiber outline"].setChecked(True)
         viewer.layers.selection.active = viewer.layers[OBSERVED_CHANNEL_NAMES[0]]
         status.setText("Display reset: channels shown, boundaries hidden, target outline shown")
 
@@ -248,6 +282,10 @@ def main(argv: list[str] | None = None) -> int:
     viewer.bind_key("o", lambda event=None: toggle_layer("selected fiber outline"), overwrite=True)
     viewer.bind_key("0", lambda event=None: reset_display(), overwrite=True)
     viewer.bind_key("z", lambda event=None: undo_last_decision(), overwrite=True)
+    for name, button in display_buttons.items():
+        button.clicked.connect(lambda _checked=False, value=name: toggle_layer(value))
+    reset_button.clicked.connect(reset_display)
+    undo_button.clicked.connect(undo_last_decision)
     show_current()
     napari.run()
     return 0
