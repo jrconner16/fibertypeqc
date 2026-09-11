@@ -375,9 +375,14 @@ def _queues(manifest: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
                 _queue_row(s, fid, "final_test_targeted_challenge", "blinded_final_test")
                 for s, fid in targeted[:100]
             ]
-    return pd.DataFrame(development, columns=QUEUE_COLUMNS), pd.DataFrame(
-        final, columns=QUEUE_COLUMNS
-    )
+
+    def ordered(records: list[dict[str, object]]) -> pd.DataFrame:
+        """Keep deterministic membership while avoiding repeated full-image reloads."""
+        return pd.DataFrame(records, columns=QUEUE_COLUMNS).sort_values(
+            ["mouse_id", "sampling_stratum", "image_id", "fiber_id"], kind="stable"
+        )
+
+    return ordered(development), ordered(final)
 
 
 def _qc(manifest: pd.DataFrame) -> pd.DataFrame:
