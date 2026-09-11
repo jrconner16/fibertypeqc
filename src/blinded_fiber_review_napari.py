@@ -159,8 +159,11 @@ def main(argv: list[str] | None = None) -> int:
         display_buttons[name] = button
         overlay_controls.addWidget(button)
     reset_button = QPushButton("reset [0]")
+    center_button = QPushButton("center target [F]")
     reset_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+    center_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
     overlay_controls.addWidget(reset_button)
+    overlay_controls.addWidget(center_button)
     display_controls.addLayout(overlay_controls)
     layout.addLayout(display_controls)
     recovery_header = QLabel("Recovery")
@@ -239,9 +242,7 @@ def main(argv: list[str] | None = None) -> int:
         viewer.layers["selected fiber outline"].data = find_boundaries(mask, mode="thick").astype(
             np.uint8
         )
-        y, x = np.argwhere(mask).mean(axis=0)
-        viewer.camera.center = (float(y), float(x))
-        viewer.camera.zoom = max(viewer.camera.zoom, 3)
+        center_current_fiber()
         status.setText("Ready")
 
     def decide(key: str) -> None:
@@ -291,6 +292,18 @@ def main(argv: list[str] | None = None) -> int:
         viewer.layers.selection.active = viewer.layers[OBSERVED_CHANNEL_NAMES[0]]
         status.setText("Display reset: channels shown, boundaries hidden, target outline shown")
 
+    def center_current_fiber() -> None:
+        if position >= len(queue) or labels is None:
+            return
+        row = queue.iloc[position]
+        mask = labels == int(row.fiber_id)
+        if not mask.any():
+            return
+        y, x = np.argwhere(mask).mean(axis=0)
+        viewer.camera.center = (float(y), float(x))
+        viewer.camera.zoom = max(viewer.camera.zoom, 3)
+        status.setText("Centered current fiber")
+
     def undo_last_decision() -> None:
         nonlocal existing, last_decision_index, last_position, position
         if last_decision_index is None or last_position is None:
@@ -319,10 +332,12 @@ def main(argv: list[str] | None = None) -> int:
     add_shortcut("B", lambda: toggle_layer("fiber boundaries"))
     add_shortcut("O", lambda: toggle_layer("selected fiber outline"))
     add_shortcut("0", reset_display)
+    add_shortcut("F", center_current_fiber)
     add_shortcut("Z", undo_last_decision)
     for name, button in display_buttons.items():
         button.clicked.connect(lambda _checked=False, value=name: toggle_layer(value))
     reset_button.clicked.connect(reset_display)
+    center_button.clicked.connect(center_current_fiber)
     undo_button.clicked.connect(undo_last_decision)
     show_current()
     napari.run()
