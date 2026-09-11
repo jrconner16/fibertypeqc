@@ -82,7 +82,14 @@ def main(argv: list[str] | None = None) -> int:
     total_queue_size = len(queue) + len(completed)
 
     import napari
-    from qtpy.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+    from qtpy.QtWidgets import (
+        QHBoxLayout,
+        QLabel,
+        QPushButton,
+        QSizePolicy,
+        QVBoxLayout,
+        QWidget,
+    )
 
     viewer = napari.Viewer(title="FiberTypeQC blinded fiber review")
     status = QLabel()
@@ -90,7 +97,12 @@ def main(argv: list[str] | None = None) -> int:
     context = QLabel()
     context.setWordWrap(True)
     widget = QWidget()
+    widget.setMinimumWidth(280)
+    widget.setMaximumWidth(440)
+    widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
     layout = QVBoxLayout(widget)
+    layout.setContentsMargins(6, 6, 6, 6)
+    layout.setSpacing(4)
     layout.addWidget(context)
     layout.addWidget(
         QLabel(
@@ -103,6 +115,9 @@ def main(argv: list[str] | None = None) -> int:
             "0 restores the standard display; Z removes the last saved label."
         )
     )
+    reopen_hint = QLabel("Reopen these controls: Window → Blinded review controls")
+    reopen_hint.setWordWrap(True)
+    layout.addWidget(reopen_hint)
     layout.addWidget(status)
     buttons = QHBoxLayout()
     for key, label in (
@@ -121,9 +136,11 @@ def main(argv: list[str] | None = None) -> int:
     channel_controls = QHBoxLayout()
     display_buttons: dict[str, QPushButton] = {}
     for name, key in (("Type I", "Q"), ("Type IIa", "W"), ("laminin", "E"), ("Type IIb", "R")):
-        button = QPushButton(f"{name} [{key}]")
+        short_name = {"Type I": "I", "Type IIa": "IIa", "laminin": "lam", "Type IIb": "IIb"}[name]
+        button = QPushButton(f"{short_name} [{key}]")
         button.setCheckable(True)
         button.setChecked(True)
+        button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         display_buttons[name] = button
         channel_controls.addWidget(button)
     display_controls.addLayout(channel_controls)
@@ -132,18 +149,26 @@ def main(argv: list[str] | None = None) -> int:
         ("fiber boundaries", "B", False),
         ("selected fiber outline", "O", True),
     ):
-        button = QPushButton(f"{name} [{key}]")
+        short_name = "bounds" if name == "fiber boundaries" else "outline"
+        button = QPushButton(f"{short_name} [{key}]")
         button.setCheckable(True)
         button.setChecked(visible)
+        button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         display_buttons[name] = button
         overlay_controls.addWidget(button)
-    reset_button = QPushButton("Reset display [0]")
-    undo_button = QPushButton("Undo last label [Z]")
+    reset_button = QPushButton("reset [0]")
+    undo_button = QPushButton("undo [Z]")
+    reset_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+    undo_button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
     overlay_controls.addWidget(reset_button)
     overlay_controls.addWidget(undo_button)
     display_controls.addLayout(overlay_controls)
     layout.addLayout(display_controls)
-    viewer.window.add_dock_widget(widget, area="right", name="Blinded review")
+    controls_dock = viewer.window.add_dock_widget(
+        widget, area="right", name="Blinded review controls"
+    )
+    controls_dock.setMinimumWidth(280)
+    controls_dock.setMaximumWidth(440)
     position = 0
     loaded_image = ""
     labels: np.ndarray | None = None
