@@ -87,10 +87,13 @@ def main(argv: list[str] | None = None) -> int:
     total_queue_size = len(queue) + len(completed)
 
     import napari
+    from qtpy.QtCore import Qt
+    from qtpy.QtGui import QKeySequence
     from qtpy.QtWidgets import (
         QHBoxLayout,
         QLabel,
         QPushButton,
+        QShortcut,
         QSizePolicy,
         QVBoxLayout,
         QWidget,
@@ -301,18 +304,22 @@ def main(argv: list[str] | None = None) -> int:
         show_current()
         status.setText("Last decision removed; current fiber restored")
 
+    shortcuts: list[QShortcut] = []
+
+    def add_shortcut(sequence: str, callback: object) -> None:
+        shortcut = QShortcut(QKeySequence(sequence), widget)
+        shortcut.setContext(Qt.WindowShortcut)
+        shortcut.activated.connect(callback)
+        shortcuts.append(shortcut)
+
     for key in LABELS:
-        viewer.bind_key(key, lambda event=None, value=key: decide(value), overwrite=True)
+        add_shortcut(key, lambda value=key: decide(value))
     for key, layer_name in CHANNEL_TOGGLES.items():
-        viewer.bind_key(
-            key,
-            lambda event=None, value=layer_name: toggle_layer(value),
-            overwrite=True,
-        )
-    viewer.bind_key("b", lambda event=None: toggle_layer("fiber boundaries"), overwrite=True)
-    viewer.bind_key("o", lambda event=None: toggle_layer("selected fiber outline"), overwrite=True)
-    viewer.bind_key("0", lambda event=None: reset_display(), overwrite=True)
-    viewer.bind_key("z", lambda event=None: undo_last_decision(), overwrite=True)
+        add_shortcut(key, lambda value=layer_name: toggle_layer(value))
+    add_shortcut("B", lambda: toggle_layer("fiber boundaries"))
+    add_shortcut("O", lambda: toggle_layer("selected fiber outline"))
+    add_shortcut("0", reset_display)
+    add_shortcut("Z", undo_last_decision)
     for name, button in display_buttons.items():
         button.clicked.connect(lambda _checked=False, value=name: toggle_layer(value))
     reset_button.clicked.connect(reset_display)
