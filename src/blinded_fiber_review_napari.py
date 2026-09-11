@@ -184,8 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     position = 0
     loaded_image = ""
     labels: np.ndarray | None = None
-    last_decision_index: int | None = None
-    last_position: int | None = None
+    undo_positions: list[int] = []
 
     def show_current() -> None:
         nonlocal loaded_image, labels
@@ -246,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
         status.setText("Ready")
 
     def decide(key: str) -> None:
-        nonlocal existing, last_decision_index, last_position, position
+        nonlocal existing, position
         if position >= len(queue):
             return
         row = queue.iloc[position]
@@ -263,8 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         }
         existing = pd.concat([existing, pd.DataFrame([record])], ignore_index=True)
         atomic_write_dataframe(output, existing)
-        last_decision_index = len(existing) - 1
-        last_position = position
+        undo_positions.append(position)
         position += 1
         show_current()
 
@@ -305,15 +303,15 @@ def main(argv: list[str] | None = None) -> int:
         status.setText("Centered current fiber")
 
     def undo_last_decision() -> None:
-        nonlocal existing, last_decision_index, last_position, position
-        if last_decision_index is None or last_position is None:
+        nonlocal existing, position
+        if not undo_positions:
             status.setText("No decision from this session is available to undo")
             return
-        existing = existing.drop(index=last_decision_index).reset_index(drop=True)
+        # Current-session decisions are appended in save order.  Never delete a
+        # decision that predated this launch.
+        existing = existing.iloc[:-1].reset_index(drop=True)
         atomic_write_dataframe(output, existing)
-        position = last_position
-        last_decision_index = None
-        last_position = None
+        position = undo_positions.pop()
         show_current()
         status.setText("Last decision removed; current fiber restored")
 
