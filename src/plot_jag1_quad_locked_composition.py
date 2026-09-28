@@ -15,7 +15,8 @@ GROUP_LABELS = {
     "cre_negative_mdx": "mdx\nCre-negative",
     "cre_positive_mdxJAG": "mdxJAG\nCre-positive",
 }
-GROUP_COLORS = {"cre_negative_mdx": "#4C78A8", "cre_positive_mdxJAG": "#E45756"}
+# Keep the study's established visual convention: mdx is red; mdxJAG is blue.
+GROUP_COLORS = {"cre_negative_mdx": "#E45756", "cre_positive_mdxJAG": "#4C78A8"}
 
 
 def eligible_mouse_composition(path: Path) -> pd.DataFrame:
