@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -66,6 +67,15 @@ def labels_under_points(labels: np.ndarray, points_xy: np.ndarray) -> np.ndarray
     )
     values[in_bounds] = labels[rounded[in_bounds, 1], rounded[in_bounds, 0]]
     return values
+
+
+def classify_match_candidates(candidates: pd.DataFrame, max_centroid_distance: float) -> pd.Series:
+    status = pd.Series("matched", index=candidates.index, dtype="object")
+    no_label = candidates["label_id"] <= 0
+    too_far = (~no_label) & (candidates["centroid_distance_px"] > float(max_centroid_distance))
+    status.loc[no_label] = "no_pipeline_label_at_centroid"
+    status.loc[too_far] = "centroid_distance_exceeds_threshold"
+    return status
 
 
 def select_quantile_matches(matches: pd.DataFrame, n: int) -> pd.DataFrame:
@@ -180,6 +190,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--name", type=str, default="roi_boundary_overlay")
     parser.add_argument("--n", type=int, default=9)
+    parser.add_argument(
+        "--no-panel",
+        action="store_true",
+        help="Skip loading the display image and rendering the diagnostic panel.",
+    )
     parser.add_argument("--max-centroid-distance", type=float, default=25.0)
     parser.add_argument("--crop-size", type=int, default=220)
     parser.add_argument(
@@ -201,7 +216,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
 
-    image = load_display_image(args.myosight_image, args.background_channel)
+    image = None
+    if not args.no_panel:
+        image = load_display_image(args.myosight_image, args.background_channel)
     labels = np.asarray(tifffile.imread(args.pipeline_labels))
     rois = roifile.roiread(args.myosight_results_dir / "ROISet.zip")
     results = pd.read_csv(args.myosight_results_dir / "Results.txt", sep="\t")
@@ -230,7 +247,6 @@ def main() -> None:
     centroid_label_ids = labels_under_points(labels, roi_centroids + label_offset_xy)
     label_centroids_by_id = dict(zip(label_ids, label_centroids, strict=True))
     label_areas_by_id = dict(zip(label_ids, label_areas_um2, strict=True))
-    matched = centroid_label_ids > 0
     centroid_distances = np.full(len(rois), np.nan)
     pipeline_areas_um2 = np.full(len(rois), np.nan)
     for i, label_id in enumerate(centroid_label_ids):
@@ -239,7 +255,7 @@ def main() -> None:
         adjusted_centroid = label_centroids_by_id[label_id] - label_offset_xy
         centroid_distances[i] = np.linalg.norm(adjusted_centroid - roi_centroids[i])
         pipeline_areas_um2[i] = label_areas_by_id[label_id]
-    matches = pd.DataFrame(
+    candidates = pd.DataFrame(
         {
             "roi_index": np.arange(len(rois)),
             "label_id": centroid_label_ids,
@@ -249,10 +265,15 @@ def main() -> None:
             "pipeline_area_um2": pipeline_areas_um2,
         }
     )
-    matches["area_ratio"] = matches["pipeline_area_um2"] / matches["myosight_area_um2"]
-    matches = matches[
-        matched & (matches["centroid_distance_px"] <= args.max_centroid_distance)
-    ].copy()
+    candidates["area_ratio"] = candidates["pipeline_area_um2"] / candidates["myosight_area_um2"]
+    candidates["candidate_status"] = classify_match_candidates(
+        candidates, args.max_centroid_distance
+    )
+    matches = (
+        candidates.loc[candidates["candidate_status"] == "matched"]
+        .drop(columns="candidate_status")
+        .copy()
+    )
 
     selected = select_quantile_matches(matches, args.n)
     sweep_rows = []
@@ -277,22 +298,40 @@ def main() -> None:
         )
     sweep = pd.DataFrame(sweep_rows)
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    candidates_path = args.output_dir / f"{args.name}_match_candidates.csv"
     matches_path = args.output_dir / f"{args.name}_matched_fibers.csv"
     selected_path = args.output_dir / f"{args.name}_selected_fibers.csv"
     sweep_path = args.output_dir / f"{args.name}_erosion_sweep.csv"
     panel_path = args.output_dir / f"{args.name}_panel.png"
+    metadata_path = args.output_dir / f"{args.name}_match_metadata.json"
+    candidates.to_csv(candidates_path, index=False)
     matches.to_csv(matches_path, index=False)
     selected.to_csv(selected_path, index=False)
     sweep.to_csv(sweep_path, index=False)
-    make_panel(
-        image=image,
-        labels=labels,
-        rois=rois,
-        matches=selected,
-        output_path=panel_path,
-        label_offset_xy=label_offset_xy,
-        crop_size=args.crop_size,
-    )
+    metadata = {
+        "name": args.name,
+        "total_myosight_rois": int(len(rois)),
+        "myosight_results_rows": int(len(results)),
+        "pipeline_label_count": int(len(label_ids)),
+        "max_centroid_distance_px": float(args.max_centroid_distance),
+        "label_offset_x": float(label_offset_xy[0]),
+        "label_offset_y": float(label_offset_xy[1]),
+        "candidate_status_counts": {
+            str(key): int(value)
+            for key, value in candidates["candidate_status"].value_counts().items()
+        },
+    }
+    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+    if image is not None:
+        make_panel(
+            image=image,
+            labels=labels,
+            rois=rois,
+            matches=selected,
+            output_path=panel_path,
+            label_offset_xy=label_offset_xy,
+            crop_size=args.crop_size,
+        )
 
     print(f"matched fibers: {len(matches)} / {len(rois)}")
     print(f"label offset x,y: {label_offset_xy.tolist()}")
@@ -302,7 +341,10 @@ def main() -> None:
         f"{matches['area_ratio'].quantile(0.25):.3f}-"
         f"{matches['area_ratio'].quantile(0.75):.3f}"
     )
-    print(f"saved panel: {panel_path}")
+    if image is not None:
+        print(f"saved panel: {panel_path}")
+    print(f"saved all candidates: {candidates_path}")
+    print(f"saved match metadata: {metadata_path}")
     print(f"saved selected fibers: {selected_path}")
     print(f"saved all matches: {matches_path}")
     print(f"saved erosion sweep: {sweep_path}")

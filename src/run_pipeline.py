@@ -194,7 +194,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Legacy alias for --iia-channel.",
     )
 
-    p.add_argument("--crop-auto", action="store_true", default=True)
+    crop_group = p.add_mutually_exclusive_group()
+    crop_group.add_argument(
+        "--crop-auto",
+        dest="crop_auto",
+        action="store_true",
+        default=True,
+        help="Automatically crop the membrane image to the detected tissue field (default).",
+    )
+    crop_group.add_argument(
+        "--no-crop-auto",
+        dest="crop_auto",
+        action="store_false",
+        help="Segment the complete membrane image without automatic tissue cropping.",
+    )
     p.add_argument("--crop-ds", type=int, default=8)
     p.add_argument("--crop-pad", type=int, default=128)
     p.add_argument("--crop-min-size", type=int, default=2000)

@@ -48,10 +48,20 @@ def test_forbidden_artifact_check_allows_only_declared_synthetic_tiffs():
     ]
 
 
-def test_private_absolute_path_check_reports_text_files(tmp_path):
-    private_path = "/" + "Users/researcher/private/image.czi"
-    (tmp_path / "notes.md").write_text(f"Input: {private_path}\n")
+def test_private_absolute_path_check_reports_local_and_hpc_paths(tmp_path):
+    paths = (
+        "/" + "Users/researcher/private/image.czi",
+        "/" + "Volumes/private/data.csv",
+        "/" + "home/researcher/private/labels.csv",
+        "/" + "temp_work/researcher/private/results.csv",
+    )
+    (tmp_path / "notes.md").write_text("\n".join(paths) + "\n")
 
     problems = private_absolute_paths(tmp_path, {"notes.md"})
 
-    assert problems == ["notes.md:1: private absolute path"]
+    assert problems == [
+        "notes.md:1: private absolute path",
+        "notes.md:2: private absolute path",
+        "notes.md:3: private absolute path",
+        "notes.md:4: private absolute path",
+    ]

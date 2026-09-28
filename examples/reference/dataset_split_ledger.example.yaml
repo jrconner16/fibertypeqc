@@ -1,0 +1,28 @@
+schema_version: 1
+ledger_id: synthetic_example_split_ledger.v1
+amendment_policy: append_only_new_version
+cohorts:
+  - cohort_id: example_ta
+    data_availability: synthetic
+    label_authority: manual_gold
+    description: Synthetic example used only to validate the public split-ledger schema.
+split_contracts:
+  - contract_id: example_ta_mouse_split.v1
+    cohort_id: example_ta
+    scope: synthetic_reference
+    unit_of_independence: mouse
+    assignment_group_prefix: example_mouse_
+    role_counts:
+      development: 1
+      evaluation: 1
+    private_artifact_sha256:
+      group_split_csv: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      image_split_csv: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      provenance_json: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+group_assignments:
+  - cohort_id: example_ta
+    group_id: example_mouse_development
+    role: development
+  - cohort_id: example_ta
+    group_id: example_mouse_evaluation
+    role: evaluation

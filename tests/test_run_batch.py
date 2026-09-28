@@ -14,6 +14,7 @@ from src.run_batch import (
     build_batch_command,
     run_single_image,
 )
+from src.run_pipeline import build_parser
 
 
 def test_pipeline_timing_lines_excludes_summary_payload():
@@ -126,6 +127,34 @@ def test_build_batch_command_can_set_retain_mode(tmp_path):
 
     assert "--retain-mode" in cmd
     assert cmd[cmd.index("--retain-mode") + 1] == "tables"
+
+
+def test_build_batch_command_forwards_crop_controls(tmp_path):
+    input_file = tmp_path / "image.czi"
+    output_dir = tmp_path / "out"
+
+    cmd = build_batch_command(
+        input_file,
+        output_dir,
+        channel_overrides=BatchChannelOverrides(),
+        crop_auto=False,
+        crop_ds=4,
+        crop_pad=12000,
+        crop_min_size=1000,
+    )
+
+    assert "--no-crop-auto" in cmd
+    assert cmd[cmd.index("--crop-ds") + 1] == "4"
+    assert cmd[cmd.index("--crop-pad") + 1] == "12000"
+    assert cmd[cmd.index("--crop-min-size") + 1] == "1000"
+
+
+def test_run_pipeline_parser_allows_disabling_auto_crop():
+    args = build_parser().parse_args(
+        ["--input", "image.czi", "--output-dir", "out", "--no-crop-auto"]
+    )
+
+    assert args.crop_auto is False
 
 
 def test_load_input_manifest_requires_image_id_and_input_path(tmp_path):
