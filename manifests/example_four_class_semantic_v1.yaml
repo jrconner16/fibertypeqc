@@ -1,0 +1,8 @@
+manifest_version: 1
+model_id: example_four_class_semantic_v1
+task: fiber_identity
+feature_schema_version: multiplanel_features.v1
+required_markers: [laminin, type_i, type_iia, type_iib]
+outputs: [i, iia, iib, iix]
+
+# This schema-only example does not reference or ship a trained model.
