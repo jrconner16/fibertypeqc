@@ -1257,7 +1257,7 @@ does not change scientific results until that step.
 - downstream invalidation; and
 - tests.
 
-### Phase 8:blinded primary review and model - auidit comparison 
+### Phase 8:blinded primary review and model - auidit comparison
 Add a blinded mode to the existing guided reviewer so the primary reviewer can make independent decisions without being biased by the model prediction or, when desired, sample identity.
 
 Support two review presets:
@@ -1430,7 +1430,7 @@ uv run ruff check <changed Python files and tests>
 - [x] Phase 6.1 add nuclei
 - [x] Phase 6.2 interactive nuclei review.
 - [ ] Phase 7 fiber segmentation review.
-- [ ] Phase 8 blinded review 
+- [ ] Phase 8 blinded review
 - [ ] Phase 9 finalization/reporting.
 
 ## 12. Decisions and deviations
