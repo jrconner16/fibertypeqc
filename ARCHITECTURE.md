@@ -72,7 +72,7 @@ be reused only when their recorded inputs and parameters are compatible.
 
 Include these materials in a GPT/Codex planning handoff:
 
-- `README.md`, `ARCHITECTURE.md`, `ROADMAP_2026H2.md`, and `roadmap_2026H3.md`;
+- `README.md`, `ARCHITECTURE.md`, and the current public roadmap when one is active;
 - `pyproject.toml`, `data/models/model_card.md`, and relevant documents under `docs/`;
 - `fibertypeqc/`, public `scripts/`, relevant `src/` modules, and their tests;
 - only the small manifests relevant to the planned change.

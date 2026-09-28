@@ -1,0 +1,3 @@
+image_id,input_relpath,panel_type,channel_schema,training_image,split,source_group_id,notes
+synthetic_dev_a,synthetic/dev_a.czi,four_marker_example,type_i=0;type_iia=1;laminin=2;type_iib=3,false,development,synthetic_group_a,Synthetic schema example only.
+synthetic_holdout_b,synthetic/holdout_b.czi,four_marker_example,type_i=0;type_iia=1;laminin=2;type_iib=3,false,heldout,synthetic_group_b,Synthetic schema example only.
