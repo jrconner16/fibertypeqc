@@ -101,4 +101,3 @@ def test_apply_policy_overrides_updates_only_reviewed_rows() -> None:
     assert changed["label_policy"] == "liberal_iib_iix_v1"
     assert unchanged["audit_final_label"] == "iib"
     assert not bool(unchanged["label_policy_changed"])
-
