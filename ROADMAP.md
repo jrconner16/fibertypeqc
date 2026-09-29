@@ -58,7 +58,7 @@ explained before editing and accompanied by a before/after comparison of referen
   `ARCHITECTURE.md`.
 - [x] **Stage 1 — Carve the core** (no behavior change). Declare the supported modules; move
   research modules behind a `research/` namespace with compatibility wrappers; fix README drift.
-- [ ] **Stage 2 — Core correctness** ⚗. Summary classes and QC residual rate from the model's class
+- [x] **Stage 2 — Core correctness** ⚗. Summary classes and QC residual rate from the model's class
   list; warn when `--sensitivity` overrides explicit typing flags; batch path/digest fixes; record
   device, library versions, and input digests; explicit image scene/axis handling; extend reference
   validation to summaries and QC.

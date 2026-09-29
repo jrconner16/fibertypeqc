@@ -49,6 +49,12 @@
   table's `classifier_path` are portable (no user-specific directories). The label-reuse
   fingerprint now includes the image digest, labels source, device, and Cellpose version; existing
   cached labels are recomputed once.
+- **Input change:** images are read using their axis metadata. Multi-scene CZIs now stop with
+  instructions to use the scene splitter; previously only the first scene was silently analyzed.
+  Z/T stacks and ambiguous unlabeled axes also stop instead of taking the first plane or guessing.
+- **Input change:** CZI mosaics are assembled single-threaded. Multi-threaded assembly wrote
+  overlapping tiles in nondeterministic order, so repeated reads of the same file could differ in
+  overlap pixels; reads are now repeatable and match the scene splitter's tile order.
 - README corrections: Python 3.11 only; per-image outputs match what the pipeline writes; removed
   the nonexistent low-coverage QC flag, the `--bsize` troubleshooting advice (Cellpose requires 256),
   and the reference to an untracked training script; documented `run_batch` v0 thresholds and the

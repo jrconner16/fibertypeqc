@@ -304,6 +304,10 @@ Key dependencies:
 
 ### Image fails to load
 - Check file format (.czi, .tif/.tiff supported)
+- Multi-scene CZIs (several sections on one slide) are not read implicitly: split them with
+  `run_batch --split-czi-scenes` or `python -m src.split_czi_scenes --input FILE --output-dir DIR`
+- Z/T stacks must be projected or split into single-plane multichannel images first; TIFFs without
+  channel metadata need ImageJ axes such as `CYX` when the channel count is ambiguous
 - Verify file is not corrupted: `python -c "import czifile; czifile.CziFile('image.czi')"`
 
 ### Out of memory

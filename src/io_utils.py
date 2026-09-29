@@ -26,41 +26,85 @@ def ensure_dir(path: Path) -> Path:
     return path
 
 
+MAX_CHANNELS = 8
+SCENE_SPLIT_HINT = (
+    "Split it first with `run_batch --split-czi-scenes` or "
+    "`python -m src.split_czi_scenes --input FILE --output-dir DIR`, then run each section."
+)
+
+
+def _to_chw(arr: np.ndarray, axes: str, path: Path, *, czi: bool) -> np.ndarray:
+    """Reduce a microscopy array with known axes to channel-first ``(C, Y, X)``.
+
+    Singleton axes are dropped. Anything that cannot be mapped unambiguously (several scenes,
+    Z/T stacks, mosaic tiles, or two channel-like axes) raises instead of silently selecting
+    a plane.
+    """
+    axes = axes.upper()
+    if len(axes) != arr.ndim:
+        raise ValueError(f"{path.name}: axes {axes!r} do not match array shape {arr.shape}")
+    keep = [i for i, size in enumerate(arr.shape) if size > 1 or axes[i] in "YX"]
+    arr = arr.reshape(tuple(arr.shape[i] for i in keep))
+    axes = "".join(axes[i] for i in keep)
+
+    if czi and "S" in axes:
+        n_scenes = arr.shape[axes.index("S")]
+        raise ValueError(f"{path.name} contains {n_scenes} scenes. {SCENE_SPLIT_HINT}")
+    # CZI stores RGB samples as '0'; TIFF stores them as 'S'.
+    channel_like = "C0" if czi else "CS"
+    channel_axes = [i for i, name in enumerate(axes) if name in channel_like]
+    unknown_axes = [i for i, name in enumerate(axes) if name not in channel_like + "YX"]
+    if "Y" not in axes or "X" not in axes:
+        raise ValueError(f"{path.name}: expected Y and X axes, found {axes!r}")
+    if len(channel_axes) > 1:
+        raise ValueError(f"{path.name}: more than one channel-like axis in {axes!r}")
+    if unknown_axes and not channel_axes and len(unknown_axes) == 1:
+        # An unlabeled third axis (for example plain TIFF 'Q'/'I') is the channel axis only when
+        # it is small enough to be one.
+        candidate = unknown_axes[0]
+        if arr.shape[candidate] > MAX_CHANNELS:
+            raise ValueError(
+                f"{path.name}: cannot tell whether axis {axes[candidate]!r} of size "
+                f"{arr.shape[candidate]} is channels or a stack; save the image with channel "
+                "metadata (e.g. ImageJ axes 'CYX')."
+            )
+        channel_axes, unknown_axes = [candidate], []
+    if unknown_axes:
+        described = ", ".join(f"{axes[i]}={arr.shape[i]}" for i in unknown_axes)
+        raise ValueError(
+            f"{path.name} has non-channel dimensions ({described}). Project or split the stack "
+            "into single-plane multichannel images before running."
+        )
+
+    order = channel_axes + [axes.index("Y"), axes.index("X")]
+    arr = np.transpose(arr, order)
+    if arr.ndim == 2:
+        arr = arr[np.newaxis, ...]
+    return arr
+
+
 def load_multichannel_image(path: Path) -> np.ndarray:
-    """Load CZI/TIFF into CHW array."""
+    """Load CZI/TIFF into a ``(C, Y, X)`` array using the file's axis metadata."""
     suffix = path.suffix.lower()
     # Some ImageJ exports retain a source-image `.czi` suffix even though their
     # bytes are TIFF. Detect their actual container without renaming raw data.
     if suffix in {".tif", ".tiff"} or _has_tiff_signature(path):
-        arr = np.asarray(tifffile.imread(path))
-    elif suffix == ".czi":
+        with tifffile.TiffFile(path) as tif:
+            series = tif.series[0]
+            arr = np.asarray(series.asarray())
+            axes = series.axes
+        return _to_chw(arr, axes, path, czi=False)
+    if suffix == ".czi":
         if czifile is None:
             raise ImportError("czifile is required for .czi input")
         with czifile.CziFile(str(path)) as czi:
-            arr = np.asarray(czi.asarray())
-        arr = np.squeeze(arr)
-    else:
-        raise ValueError(f"Unsupported input type: {path.suffix}")
-
-    while arr.ndim > 3:
-        arr = arr[0]
-
-    if arr.ndim == 2:
-        arr = arr[np.newaxis, ...]
-    elif arr.ndim == 3:
-        # Infer channel axis for microscopy-ish arrays.
-        if arr.shape[0] <= 8:
-            pass
-        elif arr.shape[-1] <= 8:
-            arr = np.moveaxis(arr, -1, 0)
-        elif arr.shape[1] <= 8:
-            arr = np.moveaxis(arr, 1, 0)
-        else:
-            raise ValueError(f"Could not infer channel axis for shape {arr.shape}")
-    else:
-        raise ValueError(f"Expected 2D/3D image, got shape {arr.shape}")
-
-    return arr
+            # Multi-threaded assembly writes overlapping mosaic tiles in nondeterministic order,
+            # so repeated reads of the same file can differ. One worker assembles tiles in
+            # subblock-directory order, matching the scene splitter.
+            arr = np.asarray(czi.asarray(max_workers=1))
+            axes = czi.axes
+        return _to_chw(arr, axes, path, czi=True)
+    raise ValueError(f"Unsupported input type: {path.suffix}")
 
 
 def extract_pixel_size_um(path: Path) -> tuple[float | None, float | None]:
