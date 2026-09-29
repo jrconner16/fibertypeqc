@@ -5,7 +5,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.sweep_candidate_weights_on_cohort import _aggregate_gap_metrics, _summarize_pair_frames
+from research.sweep_candidate_weights_on_cohort import (
+    _aggregate_gap_metrics,
+    _summarize_pair_frames,
+)
 
 
 def test_aggregate_gap_metrics() -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.run_quad_type_i_smoke import (
+from research.run_quad_type_i_smoke import (
     CLASSIFIER_FEATURES,
     GATE_FEATURES,
     _manual_training_table,

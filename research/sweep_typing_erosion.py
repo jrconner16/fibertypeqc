@@ -8,7 +8,7 @@ import pandas as pd
 import seaborn as sns
 import tifffile
 
-from src.biology_metadata import (
+from research.biology_metadata import (
     AGE_ORDER,
     GENOTYPE_ORDER,
     TYPE_COLORS,

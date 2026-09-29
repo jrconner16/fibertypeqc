@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.build_blinded_disagreement_audit import STRATUM, build_queue
+from research.build_blinded_disagreement_audit import STRATUM, build_queue
 
 
 def test_disagreement_queue_is_blinded_and_development_only() -> None:

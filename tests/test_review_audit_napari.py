@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.review_audit_napari import (
+from research.review_audit_napari import (
     _load_or_create_review_table,
     _save_review_table,
     _scaled_display_data,

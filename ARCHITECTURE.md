@@ -40,17 +40,16 @@ thresholds, feature contract, QC flags, and merge behavior are baseline-sensitiv
 | `src/preprocess_membrane.py`, `src/segment_cellpose.py` | Membrane preprocessing and Cellpose fiber segmentation | Supported implementation |
 | `src/quantify_classify.py`, `src/label_masks.py`, `src/fiber_type_labels.py` | Feature extraction, typing, labels, and QC | Supported implementation; frozen path is baseline-sensitive |
 | `src/review_labels_napari.py`, `src/merge_reviewed_labels.py` | Manual review and merge workflow | Supported implementation |
-| `validation/` and most validation-oriented `src/` modules | Candidate models, manual audits, MyoSight comparisons, calibration, and plots | Experimental; not public default behavior |
-| `src/ui_napari.py` | Earlier prototype UI | Experimental and intentionally excluded from lint/release surface |
-| `src/*jag1*`, `src/merge_batch_fiber_tables.py` | Cohort-specific Jag1 regeneration summaries and reporting | Analysis tooling; requires private outputs |
+| `research/` | Candidate models, manual audits, MyoSight comparisons, calibration, cohort evaluation, and plots | Research tooling; not part of the release surface |
+| `validation/` | Thin command wrappers over `research/` validation tools | Research tooling |
 
-Experimental code is documented in place to avoid disruptive moves. A future `experiments/` namespace
-may be introduced only through incremental moves with wrapper/import compatibility tests.
+Research modules live in `research/` and may import the supported core. The core (`src/`,
+`fibertypeqc/`, `scripts/`) must never import `research/`; `tests/test_core_boundary.py` enforces this.
 
 ## Supported release surface
 
 The overhaul in [ROADMAP.md](ROADMAP.md) narrows the supported product to the modules below. Anything
-else under `src/`, `validation/`, or `analysis/` is research tooling: it may change or move without
+else (`research/`, `validation/`, `analysis/`) is research tooling: it may change or move without
 notice and is not part of the release contract.
 
 | Layer | Supported modules |

@@ -33,7 +33,7 @@ def main() -> None:
     command = [
         sys.executable,
         "-m",
-        "src.compare_roi_boundaries",
+        "research.compare_roi_boundaries",
         "--myosight-results-dir",
         str(row["myosight_results_dir"]),
         "--myosight-image",

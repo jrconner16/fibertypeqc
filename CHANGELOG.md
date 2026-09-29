@@ -19,6 +19,18 @@
   identifier denylist kept outside Git.
 - `.pre-commit-config.yaml` running repository checks and ruff before each commit.
 
+### Changed
+
+- Research and study-evaluation modules moved from `src/` to `research/` (76 modules). Run them as
+  `python -m research.<module>`; `validation/` wrappers and cluster scripts were updated. The
+  supported core in `src/`, `fibertypeqc/`, and `scripts/` is unchanged, and a test now prevents it
+  from importing `research/`.
+- `pytest` works without setting `PYTHONPATH`.
+- README corrections: Python 3.11 only; per-image outputs match what the pipeline writes; removed
+  the nonexistent low-coverage QC flag, the `--bsize` troubleshooting advice (Cellpose requires 256),
+  and the reference to an untracked training script; documented `run_batch` v0 thresholds and the
+  `--sensitivity` override of explicit typing flags.
+
 ## v0.2.0
 
 ### Release Title

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.build_hybrid_candidate_summary import main
+from research.build_hybrid_candidate_summary import main
 
 
 def test_placeholder() -> None:

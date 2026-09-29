@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.analyze_iix_iib_boundary import (
+from research.analyze_iix_iib_boundary import (
     build_iix_iib_summary,
     sample_suspicious_iix_rows,
     score_iix_iib_boundary,

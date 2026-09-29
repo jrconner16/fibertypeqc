@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.run_locked_protected_evaluation import prepare_protected_table
+from research.run_locked_protected_evaluation import prepare_protected_table
 
 
 def _contract() -> dict:

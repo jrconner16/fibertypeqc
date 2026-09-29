@@ -22,7 +22,7 @@ set -euo pipefail
 
 cd "$FIBERTYPEQC_ROOT"
 
-uv run --frozen python -m src.run_quad_semantic_array_task \
+uv run --frozen python -m research.run_quad_semantic_array_task \
   --manifest "$QUAD_MANIFEST" \
   --input-root "$QUAD_INPUT_ROOT" \
   --output-root "$QUAD_OUTPUT_ROOT" \

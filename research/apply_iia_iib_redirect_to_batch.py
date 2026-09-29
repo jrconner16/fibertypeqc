@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.analyze_iia_gate import (
+from research.analyze_iia_gate import (
     _apply_iia_gate_with_iib_redirect,
     _gate_mask,
     _iib_redirect_mask,

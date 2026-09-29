@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.reclassify_batch_with_iia_gate import reclassify_and_gate
+from research.reclassify_batch_with_iia_gate import reclassify_and_gate
 
 
 class _AlwaysIIaModel:

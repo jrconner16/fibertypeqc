@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.freeze_candidate import freeze_candidate
+from research.freeze_candidate import freeze_candidate
 
 
 def test_freeze_copies_candidate_and_records_no_final_test_input(tmp_path: Path) -> None:

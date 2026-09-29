@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.train_panel_baselines import _manual_table, semantic_feature_columns
+from research.train_panel_baselines import _manual_table, semantic_feature_columns
 
 
 def test_manual_table_uses_only_manual_gold_allowed_classes():

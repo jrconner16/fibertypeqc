@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.sample_combined_audit_set import sample_combined_audit_set
+from research.sample_combined_audit_set import sample_combined_audit_set
 
 
 def test_sample_combined_audit_set_respects_image_cap_and_bucket_sampling():

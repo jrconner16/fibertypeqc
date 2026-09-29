@@ -5,17 +5,17 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.analyze_iia_gate import _apply_iia_gate, _gate_mask, derive_iia_gate_thresholds
-from src.compare_supervision_recipes import (
+from research.analyze_iia_gate import _apply_iia_gate, _gate_mask, derive_iia_gate_thresholds
+from research.compare_supervision_recipes import (
     _assemble_recipe_training_rows,
     _load_matched_myosight,
     _load_true_iia_reviewed,
     _metric_row,
     _prepare_base_table,
 )
+from research.train_candidate_from_feature_table import _boosting_model, _load_feature_table
+from research.train_weighted_candidate_from_audit import _load_manual_split
 from src.quantify_classify import FROZEN_ALPHA_BASELINE_FEATURES
-from src.train_candidate_from_feature_table import _boosting_model, _load_feature_table
-from src.train_weighted_candidate_from_audit import _load_manual_split
 
 
 def build_parser() -> argparse.ArgumentParser:

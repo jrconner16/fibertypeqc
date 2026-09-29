@@ -52,11 +52,11 @@ The release validates the workflow, not a universal classifier.
 Each stage is one branch and pull request. Stages marked ⚗ change scientific outputs: each change is
 explained before editing and accompanied by a before/after comparison of reference outputs.
 
-- [ ] **Stage 0 — Guardrails and plan.** Private-data checks in `scripts.check_repository`
+- [x] **Stage 0 — Guardrails and plan.** Private-data checks in `scripts.check_repository`
   (unapproved model artifacts, per-fiber tables outside fixtures, private paths, optional private
   identifier denylist), pre-commit hook, this roadmap, tracked `AGENTS.md`, supported-surface map in
   `ARCHITECTURE.md`.
-- [ ] **Stage 1 — Carve the core** (no behavior change). Declare the supported modules; move
+- [x] **Stage 1 — Carve the core** (no behavior change). Declare the supported modules; move
   research modules behind a `research/` namespace with compatibility wrappers; fix README drift.
 - [ ] **Stage 2 — Core correctness** ⚗. Summary classes and QC residual rate from the model's class
   list; warn when `--sensitivity` overrides explicit typing flags; batch path/digest fixes; record

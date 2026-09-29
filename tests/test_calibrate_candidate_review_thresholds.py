@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.calibrate_candidate_review_thresholds import (
+from research.calibrate_candidate_review_thresholds import (
     _choose_recommended_threshold,
     _review_metrics,
 )

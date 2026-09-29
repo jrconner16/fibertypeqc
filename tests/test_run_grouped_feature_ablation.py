@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.run_grouped_feature_ablation import (
+from research.run_grouped_feature_ablation import (
     expected_calibration_error,
     feature_columns,
     numeric_feature_table,

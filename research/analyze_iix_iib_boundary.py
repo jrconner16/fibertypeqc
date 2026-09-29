@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.build_candidate_feature_table import (
+from research.build_candidate_feature_table import (
     _load_manifest,
     assemble_candidate_feature_table,
     discover_diagnostics_files,

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.apply_iib_iix_label_policy_review import apply_policy_overrides
-from src.prepare_iib_iix_label_policy_review import (
+from research.apply_iib_iix_label_policy_review import apply_policy_overrides
+from research.prepare_iib_iix_label_policy_review import (
     annotate_conservative_snapshot,
     build_liberal_review_queue,
 )

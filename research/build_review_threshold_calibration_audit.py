@@ -7,8 +7,8 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
-from src.build_candidate_split_manifest import _infer_genotype, _infer_timepoint
-from src.sweep_candidate_weights_on_cohort import (
+from research.build_candidate_split_manifest import _infer_genotype, _infer_timepoint
+from research.sweep_candidate_weights_on_cohort import (
     _discover_section_ids,
     _load_cohort_cache,
     _reclassify_fibers,

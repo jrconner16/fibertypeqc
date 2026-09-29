@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from src.biology_metadata import (
+from research.biology_metadata import (
     AGE_ORDER,
     GENOTYPE_COLORS,
     GENOTYPE_ORDER,

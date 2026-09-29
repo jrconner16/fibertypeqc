@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.compare_supervision_recipes import compare_supervision_recipes
+from research.compare_supervision_recipes import compare_supervision_recipes
 from src.quantify_classify import FROZEN_ALPHA_BASELINE_FEATURES
 
 

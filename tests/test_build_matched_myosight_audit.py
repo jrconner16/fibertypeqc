@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.build_matched_myosight_audit import (
+from research.build_matched_myosight_audit import (
     _discover_best_matched_files,
     _load_manifest,
     build_matched_myosight_audit,

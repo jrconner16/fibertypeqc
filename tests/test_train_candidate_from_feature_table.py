@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from research.train_candidate_from_feature_table import train_and_compare
 from src.quantify_classify import FROZEN_ALPHA_BASELINE_FEATURES
-from src.train_candidate_from_feature_table import train_and_compare
 
 
 def _row(

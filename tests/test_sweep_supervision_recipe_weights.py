@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from research.sweep_supervision_recipe_weights import sweep_weights
 from src.quantify_classify import FROZEN_ALPHA_BASELINE_FEATURES
-from src.sweep_supervision_recipe_weights import sweep_weights
 
 
 def _row(

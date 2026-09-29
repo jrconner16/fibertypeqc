@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.build_review_threshold_calibration_audit import (
+from research.build_review_threshold_calibration_audit import (
     _label_band,
     _parse_class_quotas,
     _quota_rows,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from research.run_candidate_batch_with_iia_gate import _build_pipeline_command
 from src.run_batch import BatchChannelOverrides
-from src.run_candidate_batch_with_iia_gate import _build_pipeline_command
 
 
 def test_build_pipeline_command_uses_frozen_v0_channel_flags_by_default(tmp_path):

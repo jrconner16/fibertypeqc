@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.run_fixed_mask_transfer_task import (
+from research.run_fixed_mask_transfer_task import (
     REQUIRED_SEMANTIC_FEATURES,
     _canonicalize_diagnostics,
     build_diagnostics_command,

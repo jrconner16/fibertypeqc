@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.build_fixed_mask_transfer_features import (
+from research.build_fixed_mask_transfer_features import (
     REQUIRED_F1_FEATURES,
     build_transfer_features,
 )

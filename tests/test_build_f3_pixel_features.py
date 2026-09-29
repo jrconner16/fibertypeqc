@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.build_f3_pixel_features import extract_image_f3, f3_columns, resolve_source_image
+from research.build_f3_pixel_features import extract_image_f3, f3_columns, resolve_source_image
 
 
 def test_extract_image_f3_is_finite_and_uses_requested_labels():

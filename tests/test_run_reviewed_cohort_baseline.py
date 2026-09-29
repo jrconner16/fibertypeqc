@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.run_reviewed_cohort_baseline import (
+from research.run_reviewed_cohort_baseline import (
     FEATURES,
     _load_manifest,
     _load_reviewed,

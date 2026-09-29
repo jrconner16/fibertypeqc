@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.run_grouped_model_family_comparison import (
+from research.run_grouped_model_family_comparison import (
     build_shortlist_decision,
     paired_model_comparisons,
     prepare_development_table,
