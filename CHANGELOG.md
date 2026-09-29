@@ -34,6 +34,9 @@
   `postrun.residual_rate` (share of the inferred-by-absence class, informational until
   `--qc-max-residual-rate` is calibrated). `--qc-max-unknown-rate` remains as an alias for
   `--qc-max-uncertainty-rate`. The reference validator now checks summary proportions and QC rates.
+- Explicit typing flags that `--sensitivity`/`--mixed-strictness` override now produce a warning
+  and a `preflight.typing_flags_overridden` QC check with the effective values. Effective values
+  are unchanged.
 - README corrections: Python 3.11 only; per-image outputs match what the pipeline writes; removed
   the nonexistent low-coverage QC flag, the `--bsize` troubleshooting advice (Cellpose requires 256),
   and the reference to an untracked training script; documented `run_batch` v0 thresholds and the

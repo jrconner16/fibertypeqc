@@ -115,8 +115,9 @@ uv run python -m scripts.run_pipeline \
   and `--downsample-factor 2`; the single-image command above uses the `run_pipeline` defaults for
   those options. Print the full frozen set with `uv run python -m scripts.run_batch --show-v0-params`.
 - `--sensitivity` and `--mixed-strictness` derive several typing parameters (`--quantile`,
-  `--typing-bg-sigma`, `--typing-smooth-sigma`, `--min-coverage`, and review thresholds); values
-  passed explicitly for those options are currently overridden.
+  `--typing-bg-sigma`, `--typing-smooth-sigma`, `--min-coverage`, and review thresholds). Values
+  passed explicitly for those options are overridden; the run prints a warning and records a
+  `preflight.typing_flags_overridden` QC check listing the effective values.
 
 The frozen baseline channel schema is intentionally narrow: IIx is inferred as the unstained class
 relative to the IIb and IIa channels. Panel-aware configuration is available as an explicit opt-in,

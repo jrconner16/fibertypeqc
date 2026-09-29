@@ -109,6 +109,7 @@ Stable preflight codes are:
 
 - `preflight.arguments_valid`;
 - `preflight.channel_config_valid` and `preflight.channel_config_warning`;
+- `preflight.typing_flags_overridden` (warning; typing flags replaced by the `--sensitivity` profile);
 - `preflight.model_artifact_valid`;
 - `preflight.input_readable`;
 - `preflight.panel_compatible`;

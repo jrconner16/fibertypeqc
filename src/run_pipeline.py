@@ -405,6 +405,26 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+# CLI flags whose values apply_auto_profile() derives from --sensitivity/--mixed-strictness.
+# Explicit values for these flags are currently overridden; see auto_profile_overridden_flags().
+AUTO_PROFILE_FLAG_FIELDS = {
+    "--quantile": "quantile",
+    "--no-percentile-gate": "use_percentile_gate",
+    "--typing-bg-sigma": "typing_bg_sigma",
+    "--typing-smooth-sigma": "typing_smooth_sigma",
+    "--coverage-quantile": "coverage_quantile",
+    "--min-coverage": "min_coverage",
+    "--review-confidence-threshold": "review_confidence_threshold",
+    "--review-margin": "review_margin",
+}
+
+
+def auto_profile_overridden_flags(argv: list[str]) -> list[str]:
+    """Return explicitly passed flags whose values the auto profile replaces."""
+    passed = {token.split("=", 1)[0] for token in argv if token.startswith("--")}
+    return [flag for flag in AUTO_PROFILE_FLAG_FIELDS if flag in passed]
+
+
 def main() -> None:
     args = build_parser().parse_args()
     output_dir = ensure_dir(args.output_dir)
@@ -476,6 +496,32 @@ def main() -> None:
                 "warn",
                 warning,
                 "confirm_channel_mapping",
+            )
+        )
+    overridden_flags = auto_profile_overridden_flags(sys.argv[1:])
+    if overridden_flags:
+        profile = apply_auto_profile(
+            QuantifyConfig(),
+            sensitivity=float(args.sensitivity),
+            mixed_strictness=float(args.mixed_strictness),
+        )
+        effective = ", ".join(
+            f"{AUTO_PROFILE_FLAG_FIELDS[flag]}={getattr(profile, AUTO_PROFILE_FLAG_FIELDS[flag])!r}"
+            for flag in overridden_flags
+        )
+        warning = (
+            f"{', '.join(overridden_flags)} were set explicitly but are derived from "
+            f"--sensitivity={args.sensitivity} and --mixed-strictness={args.mixed_strictness}; "
+            f"the explicit values are ignored (effective: {effective})."
+        )
+        print(f"Warning: {warning}", file=sys.stderr, flush=True)
+        preflight_checks.append(
+            qc_check(
+                "preflight.typing_flags_overridden",
+                "warn",
+                warning,
+                "adjust_sensitivity_or_omit_overridden_flags",
+                metrics={"overridden_flags": overridden_flags},
             )
         )
     try:
