@@ -14,7 +14,19 @@ from typing import Any
 
 from fibertypeqc import __version__
 
-RUN_MANIFEST_SCHEMA_VERSION = 1
+RUN_MANIFEST_SCHEMA_VERSION = 2
+REPO_ROOT = Path(__file__).resolve().parents[1]
+RECORDED_DISTRIBUTIONS = (
+    "cellpose",
+    "torch",
+    "numpy",
+    "scipy",
+    "scikit-image",
+    "scikit-learn",
+    "pandas",
+    "tifffile",
+    "czifile",
+)
 LEGACY_OUTPUT_SCHEMA_VERSION = "legacy_fibers.v1"
 
 
@@ -47,6 +59,34 @@ def decide_artifact_reuse(
     }
 
 
+def file_sha256(path: Path, chunk_size: int = 8 * 1024 * 1024) -> str:
+    """Stream a file's SHA-256 so large microscopy inputs are not read into memory twice."""
+    digest = sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def portable_path(path: Path | str | None, base: Path | None = None) -> str:
+    """Return a path safe to record in shareable outputs.
+
+    Relative paths are kept. Absolute paths become relative to ``base`` (or the working
+    directory) when they are inside it; otherwise only the file name is kept, so user-specific
+    directories never reach result files. Inputs are identified by digest, not location.
+    """
+    if path is None or str(path) == "":
+        return ""
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        return candidate.as_posix()
+    root = (base or Path.cwd()).resolve()
+    try:
+        return candidate.resolve().relative_to(root).as_posix()
+    except ValueError:
+        return candidate.name
+
+
 def fingerprint(value: Mapping[str, Any]) -> str:
     encoded = json.dumps(value, sort_keys=True, default=str, separators=(",", ":")).encode()
     return sha256(encoded).hexdigest()
@@ -55,7 +95,7 @@ def fingerprint(value: Mapping[str, Any]) -> str:
 def git_commit() -> str | None:
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL, cwd=REPO_ROOT
         ).strip()
     except (OSError, subprocess.CalledProcessError):
         return None
@@ -71,6 +111,7 @@ def package_version(distribution: str) -> str | None:
 def build_run_manifest(
     *,
     input_path: Path,
+    input_sha256: str,
     image_shape: tuple[int, ...],
     pixel_size_um: tuple[float | None, float | None],
     panel_fingerprint: str,
@@ -79,15 +120,21 @@ def build_run_manifest(
     preprocessing: Mapping[str, Any],
     classifier_path: str | None,
     model_manifest_path: Path | None,
+    classifier_sha256: str | None = None,
 ) -> dict[str, Any]:
+    dependency_versions = {name: package_version(name) for name in RECORDED_DISTRIBUTIONS}
+    # Segmentation is reusable only for the same image content, labels source, device, and
+    # Cellpose version as well as the same parameters and panel.
     segmentation_fingerprint_input = {
         **dict(segmentation),
         **dict(preprocessing),
         "panel": panel_fingerprint,
+        "input_sha256": input_sha256,
+        "cellpose_version": dependency_versions["cellpose"],
     }
     classification_fingerprint_input = {
-        "classifier_path": classifier_path,
-        "model_manifest_path": str(model_manifest_path) if model_manifest_path else None,
+        "classifier_sha256": classifier_sha256,
+        "model_manifest_path": portable_path(model_manifest_path),
         "panel": panel_fingerprint,
     }
     return {
@@ -96,20 +143,19 @@ def build_run_manifest(
         "application_version": __version__,
         "git_commit": git_commit(),
         "python_version": platform.python_version(),
-        "dependency_versions": {
-            "cellpose": package_version("cellpose"),
-            "torch": package_version("torch"),
-        },
+        "dependency_versions": dependency_versions,
         "output_schema_version": LEGACY_OUTPUT_SCHEMA_VERSION,
-        "source_image": str(input_path),
+        "source_image": portable_path(input_path),
+        "source_image_sha256": input_sha256,
         "image_shape": list(image_shape),
         "image_channel_count": image_shape[0],
         "pixel_size_um": {"x": pixel_size_um[0], "y": pixel_size_um[1]},
         "panel": {"channels": dict(panel_channels), "fingerprint": panel_fingerprint},
         "segmentation": dict(segmentation),
         "preprocessing": dict(preprocessing),
-        "classifier_path": classifier_path,
-        "model_manifest_path": str(model_manifest_path) if model_manifest_path else None,
+        "classifier_path": portable_path(classifier_path) or None,
+        "classifier_sha256": classifier_sha256,
+        "model_manifest_path": portable_path(model_manifest_path) or None,
         "stage_fingerprints": {
             "fiber_segmentation": fingerprint(segmentation_fingerprint_input),
             "classification": fingerprint(classification_fingerprint_input),

@@ -83,14 +83,15 @@ ACTION_GUIDANCE = {
 SUMMARY_METRICS = (
     ("n_labels", "Segmented fibers"),
     ("n_fibers", "Typed fibers"),
-    ("unknown_rate", "Unknown rate"),
+    ("uncertainty_rate", "Uncertain-fiber rate"),
+    ("residual_rate", "Residual-class rate"),
     ("area_median", "Median area (px²)"),
     ("area_um2_median", "Median area (µm²)"),
     ("type_corr", "Marker correlation"),
+    ("prop_i", "Type I proportion"),
     ("prop_iib", "IIb proportion"),
     ("prop_iia", "IIa proportion"),
     ("prop_iix", "IIx proportion"),
-    ("prop_unknown", "Unknown proportion"),
 )
 
 

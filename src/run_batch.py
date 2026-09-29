@@ -11,6 +11,7 @@ import argparse
 import logging
 import subprocess
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +28,7 @@ V0_PARAMS = {
     "typing_tile_size": 256,
     "typing_erode_px": 2,
     "classifier_path": "data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib",
+    "model_manifest": "data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.yaml",
     "model_confidence_threshold": 0.55,
     "model_margin_threshold": 0.15,
     "downsample_factor": 2,
@@ -102,6 +104,8 @@ def build_batch_command(
     export_diagnostics: bool = False,
     retain_mode: str = "full",
     reuse_artifacts: str = "never",
+    image_id: str | None = None,
+    model_manifest: Path | None = None,
 ) -> list[str]:
     """
     Build the frozen v0 pipeline command for a single image.
@@ -123,6 +127,8 @@ def build_batch_command(
         str(input_file.resolve()),
         "--output-dir",
         str(output_dir.resolve()),
+        "--image-id",
+        image_id if image_id is not None else input_file.stem,
         "--typing-preprocess",
         V0_PARAMS["typing_preprocess"],
         "--typing-tile-size",
@@ -142,6 +148,12 @@ def build_batch_command(
         "--reuse-artifacts",
         reuse_artifacts,
     ]
+    # The frozen model's manifest pins its artifact digest and required markers. A custom
+    # classifier is only verified when its own manifest is supplied.
+    if model_manifest is None and classifier_path is None:
+        model_manifest = PROJECT_ROOT / V0_PARAMS["model_manifest"]
+    if model_manifest is not None:
+        cmd.extend(["--model-manifest", str(model_manifest.resolve())])
     if not crop_auto:
         cmd.append("--no-crop-auto")
     for flag, value in (
@@ -188,9 +200,15 @@ def build_batch_command(
     return cmd
 
 
-def output_stem(input_file: Path) -> str:
-    """Match src.run_pipeline output filename normalization."""
-    return input_file.resolve().stem.replace(" ", "_")
+def output_stem(image_id: str) -> str:
+    """Match src.run_pipeline output filename normalization for --image-id."""
+    return image_id.strip().replace(" ", "_")
+
+
+def _error_tail(stderr: str | None, max_lines: int = 8, max_chars: int = 1500) -> str:
+    """Keep the end of a child traceback, where the actual error is reported."""
+    lines = (stderr or "").strip().splitlines()
+    return "\n".join(lines[-max_lines:])[-max_chars:]
 
 
 def _pipeline_timing_lines(stdout: str) -> list[str]:
@@ -230,17 +248,6 @@ def _load_input_manifest(
     return rows
 
 
-def _canonicalize_output_names(image_output_dir: Path, stem: str, canonical_image_id: str) -> None:
-    if stem == canonical_image_id:
-        return
-    for path in sorted(image_output_dir.glob(f"{stem}*")):
-        suffix = path.name[len(stem) :]
-        target = image_output_dir / f"{canonical_image_id}{suffix}"
-        if target.exists():
-            target.unlink()
-        path.rename(target)
-
-
 def run_single_image(
     input_file: Path,
     output_dir: Path,
@@ -255,6 +262,7 @@ def run_single_image(
     export_diagnostics: bool = False,
     retain_mode: str = "full",
     reuse_artifacts: str = "never",
+    model_manifest: Path | None = None,
 ) -> dict:
     """
     Process a single image through the v0 pipeline.
@@ -295,6 +303,8 @@ def run_single_image(
         export_diagnostics=export_diagnostics,
         retain_mode=retain_mode,
         reuse_artifacts=reuse_artifacts,
+        image_id=str(result["image_name"]),
+        model_manifest=model_manifest,
     )
 
     try:
@@ -310,10 +320,8 @@ def run_single_image(
         for line in _pipeline_timing_lines(completed.stdout):
             logger.info(f"  pipeline: {line}")
 
-        # Try to read fiber count from output CSV
-        stem = output_stem(input_file)
-        _canonicalize_output_names(image_output_dir, stem, str(result["image_name"]))
-        stem = str(result["image_name"])
+        # Outputs are named from --image-id, so no post-run renaming is needed.
+        stem = output_stem(str(result["image_name"]))
         fibers_csv = image_output_dir / f"{stem}_fibers.csv"
         if fibers_csv.exists():
             df = pd.read_csv(fibers_csv)
@@ -330,7 +338,7 @@ def run_single_image(
 
     except subprocess.CalledProcessError as e:
         result["status"] = "failed"
-        result["error"] = f"Exit code {e.returncode}: {e.stderr[:200]}"
+        result["error"] = f"Exit code {e.returncode}: {_error_tail(e.stderr)}"
         logger.error(f"✗ Failed: {input_file.name} — {result['error']}")
 
     except Exception as e:
@@ -403,6 +411,15 @@ def main() -> None:
         default=None,
         help=(
             "Optional classifier override. When omitted, the frozen v0 alpha classifier is used."
+        ),
+    )
+    parser.add_argument(
+        "--model-manifest",
+        type=Path,
+        default=None,
+        help=(
+            "Model manifest verifying the classifier digest and panel requirements. Defaults to "
+            "the frozen v0 manifest when --classifier-path is omitted."
         ),
     )
     parser.add_argument(
@@ -572,6 +589,7 @@ def main() -> None:
             sys.exit(1)
         image_rows = [(path.stem, path) for path in image_files]
 
+    scene_failures: list[dict] = []
     if args.split_czi_scenes:
         expanded_rows: list[tuple[str, Path]] = []
         scene_export_root = output_dir / "raw_scene_exports"
@@ -580,23 +598,43 @@ def main() -> None:
                 expanded_rows.append((image_name, image_path))
                 continue
             scene_dir = scene_export_root / image_name
-            expected_scene_count = len(discover_czi_scenes(image_path))
-            if expected_scene_count == 0:
-                expanded_rows.append((image_name, image_path))
+            try:
+                expected_scene_count = len(discover_czi_scenes(image_path))
+                if expected_scene_count == 0:
+                    expanded_rows.append((image_name, image_path))
+                    continue
+                existing_scenes = sorted(scene_dir.glob("*_section-*.tif"))
+                if existing_scenes:
+                    if len(existing_scenes) != expected_scene_count:
+                        raise ValueError(
+                            f"Existing scene export is incomplete for {image_path}: expected "
+                            f"{expected_scene_count}, found {len(existing_scenes)}."
+                        )
+                    scenes = existing_scenes
+                else:
+                    scenes = export_czi_scenes(image_path, scene_dir)
+            except Exception as exc:  # one unreadable CZI must not abort the whole batch
+                logger.error(f"✗ Scene export failed: {image_path.name} — {exc}")
+                scene_failures.append(
+                    {
+                        "image_name": image_name,
+                        "status": "scene_export_failed",
+                        "error": str(exc),
+                        "fiber_count": None,
+                        "summary_path": None,
+                        "feature_diagnostics_path": None,
+                    }
+                )
                 continue
-            existing_scenes = sorted(scene_dir.glob("*_section-*.tif"))
-            if existing_scenes:
-                if len(existing_scenes) != expected_scene_count:
-                    raise ValueError(
-                        f"Existing scene export is incomplete for {image_path}: expected "
-                        f"{expected_scene_count}, found {len(existing_scenes)}."
-                    )
-                scenes = existing_scenes
-            else:
-                scenes = export_czi_scenes(image_path, scene_dir)
             for section_number, scene_path in enumerate(scenes, start=1):
                 expanded_rows.append((f"{image_name}_section-{section_number:02d}", scene_path))
         image_rows = expanded_rows
+
+    id_counts = Counter(name for name, _ in image_rows)
+    duplicate_ids = sorted(name for name, count in id_counts.items() if count > 1)
+    if duplicate_ids:
+        logger.error(f"Duplicate image IDs would overwrite outputs: {', '.join(duplicate_ids)}")
+        sys.exit(1)
 
     logger.info(f"Found {len(image_rows)} image(s) to process")
     logger.info("V0 Parameters:")
@@ -652,8 +690,10 @@ def main() -> None:
             export_diagnostics=args.export_diagnostics,
             retain_mode=args.retain_mode,
             reuse_artifacts=args.reuse_artifacts,
+            model_manifest=args.model_manifest,
         )
         results.append(result)
+    results.extend(scene_failures)
 
     # Save batch summary
     summary_df = pd.DataFrame(results)

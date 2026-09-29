@@ -9,6 +9,7 @@ import pytest
 from src.run_batch import (
     V0_PARAMS,
     BatchChannelOverrides,
+    _error_tail,
     _load_input_manifest,
     _pipeline_timing_lines,
     build_batch_command,
@@ -183,20 +184,22 @@ def test_load_input_manifest_requires_root_for_relative_paths(tmp_path):
         _load_input_manifest(manifest)
 
 
-def test_run_single_image_uses_manifest_image_name_for_outputs(tmp_path, monkeypatch):
+def test_run_single_image_names_outputs_from_manifest_image_id(tmp_path, monkeypatch):
     input_file = tmp_path / "raw name.czi"
     input_file.write_text("", encoding="utf-8")
     output_dir = tmp_path / "batch"
+    seen_cmds = []
 
     def fake_run(cmd, capture_output, text, timeout, check, cwd):
+        seen_cmds.append(cmd)
+        image_id = cmd[cmd.index("--image-id") + 1]
         image_output_dir = output_dir / "manifest_image"
-        source_stem = "raw_name"
         pd.DataFrame({"label": [1, 2]}).to_csv(
-            image_output_dir / f"{source_stem}_fibers.csv",
+            image_output_dir / f"{image_id}_fibers.csv",
             index=False,
         )
         pd.DataFrame({"summary": [1]}).to_csv(
-            image_output_dir / f"{source_stem}_summary.csv",
+            image_output_dir / f"{image_id}_summary.csv",
             index=False,
         )
         return subprocess.CompletedProcess(cmd, 0, "", "")
@@ -210,8 +213,46 @@ def test_run_single_image_uses_manifest_image_name_for_outputs(tmp_path, monkeyp
         image_name="manifest_image",
     )
 
+    assert seen_cmds[0][seen_cmds[0].index("--image-id") + 1] == "manifest_image"
     assert result["image_name"] == "manifest_image"
     assert result["fiber_count"] == 2
     assert result["summary_path"].endswith("manifest_image/manifest_image_summary.csv")
-    assert (output_dir / "manifest_image" / "manifest_image_fibers.csv").exists()
-    assert (output_dir / "manifest_image" / "manifest_image_summary.csv").exists()
+    assert not list((output_dir / "manifest_image").glob("raw*"))
+
+
+def test_build_batch_command_verifies_frozen_model_manifest_by_default(tmp_path):
+    cmd = build_batch_command(
+        tmp_path / "image.czi", tmp_path / "out", channel_overrides=BatchChannelOverrides()
+    )
+
+    manifest = Path(cmd[cmd.index("--model-manifest") + 1])
+    assert manifest.name == "rebaseline_tile_v2_p75p90_iib_iia_iix.yaml"
+
+
+def test_build_batch_command_only_verifies_custom_classifier_with_its_manifest(tmp_path):
+    custom = tmp_path / "custom.joblib"
+    without_manifest = build_batch_command(
+        tmp_path / "image.czi",
+        tmp_path / "out",
+        channel_overrides=BatchChannelOverrides(),
+        classifier_path=custom,
+    )
+    with_manifest = build_batch_command(
+        tmp_path / "image.czi",
+        tmp_path / "out",
+        channel_overrides=BatchChannelOverrides(),
+        classifier_path=custom,
+        model_manifest=tmp_path / "custom.yaml",
+    )
+
+    assert "--model-manifest" not in without_manifest
+    assert with_manifest[with_manifest.index("--model-manifest") + 1].endswith("custom.yaml")
+
+
+def test_error_tail_keeps_the_end_of_child_tracebacks():
+    stderr = "\n".join(["noise"] * 50 + ["Traceback (most recent call last):", "ValueError: bad"])
+
+    tail = _error_tail(stderr)
+
+    assert tail.endswith("ValueError: bad")
+    assert len(tail.splitlines()) == 8

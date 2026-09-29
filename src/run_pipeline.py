@@ -13,7 +13,9 @@ import tifffile
 from fibertypeqc.artifacts import (
     build_run_manifest,
     can_reuse_fiber_labels,
+    file_sha256,
     load_run_manifest,
+    portable_path,
     write_run_manifest,
 )
 from fibertypeqc.config import resolve_channel_config
@@ -54,9 +56,10 @@ from src.quantify_classify import (
     class_stats_with_ci,
     qc_flags_from_fibers,
     quantify_labels,
+    summary_classes,
 )
 from src.run_nuclear_stage import run_nuclear_analysis
-from src.segment_cellpose import CellposeConfig, run_cellpose
+from src.segment_cellpose import CellposeConfig, resolve_device, run_cellpose
 
 
 @contextmanager
@@ -105,6 +108,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Membrane preprocess -> Cellpose -> quantify/classify")
     p.add_argument("--input", type=Path, required=True, help="Input CZI/TIFF")
     p.add_argument("--output-dir", type=Path, required=True, help="Output directory")
+    p.add_argument(
+        "--image-id",
+        type=str,
+        default=None,
+        help=(
+            "Identifier used to name outputs (default: input file stem). Spaces become "
+            "underscores; path separators are not allowed."
+        ),
+    )
     p.add_argument(
         "--labels-path",
         type=Path,
@@ -343,7 +355,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bootstrap-seed", type=int, default=0)
 
     p.add_argument("--qc-min-labels", type=int, default=300)
-    p.add_argument("--qc-max-unknown-rate", type=float, default=0.35)
+    p.add_argument(
+        "--qc-max-uncertainty-rate",
+        "--qc-max-unknown-rate",
+        dest="qc_max_uncertainty_rate",
+        type=float,
+        default=0.35,
+        help=(
+            "Warn when more than this fraction of fibers is low-confidence or unresolved. "
+            "--qc-max-unknown-rate is a deprecated alias."
+        ),
+    )
+    p.add_argument(
+        "--qc-max-residual-rate",
+        type=float,
+        default=None,
+        help=(
+            "Warn when more than this fraction of fibers is assigned the panel's residual "
+            "(inferred-by-absence) class. Off by default until calibrated for the panel."
+        ),
+    )
     p.add_argument("--qc-median-area-min", type=float, default=200.0)
     p.add_argument("--qc-median-area-max", type=float, default=15000.0)
     p.add_argument("--qc-max-type-corr", type=float, default=0.92)
@@ -385,13 +416,36 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+# CLI flags whose values apply_auto_profile() derives from --sensitivity/--mixed-strictness.
+# Explicit values for these flags are currently overridden; see auto_profile_overridden_flags().
+AUTO_PROFILE_FLAG_FIELDS = {
+    "--quantile": "quantile",
+    "--no-percentile-gate": "use_percentile_gate",
+    "--typing-bg-sigma": "typing_bg_sigma",
+    "--typing-smooth-sigma": "typing_smooth_sigma",
+    "--coverage-quantile": "coverage_quantile",
+    "--min-coverage": "min_coverage",
+    "--review-confidence-threshold": "review_confidence_threshold",
+    "--review-margin": "review_margin",
+}
+
+
+def auto_profile_overridden_flags(argv: list[str]) -> list[str]:
+    """Return explicitly passed flags whose values the auto profile replaces."""
+    passed = {token.split("=", 1)[0] for token in argv if token.startswith("--")}
+    return [flag for flag in AUTO_PROFILE_FLAG_FIELDS if flag in passed]
+
+
 def main() -> None:
     args = build_parser().parse_args()
     output_dir = ensure_dir(args.output_dir)
-    stem = args.input.stem.replace(" ", "_")
+    image_id = args.image_id if args.image_id is not None else args.input.stem
+    if not image_id.strip() or "/" in image_id or "\\" in image_id or image_id in {".", ".."}:
+        raise SystemExit(f"Invalid --image-id: {image_id!r}")
+    stem = image_id.strip().replace(" ", "_")
     preflight_qc_path = output_dir / f"{stem}_preflight_qc.json"
     preflight_checks: list[dict[str, object]] = []
-    preflight_context: dict[str, object] = {"input": str(args.input)}
+    preflight_context: dict[str, object] = {"input": portable_path(args.input)}
 
     def fail_preflight(code: str, error: Exception, next_action: str) -> None:
         preflight_checks.append(qc_check(code, "fail", str(error), next_action))
@@ -456,6 +510,32 @@ def main() -> None:
                 "warn",
                 warning,
                 "confirm_channel_mapping",
+            )
+        )
+    overridden_flags = auto_profile_overridden_flags(sys.argv[1:])
+    if overridden_flags:
+        profile = apply_auto_profile(
+            QuantifyConfig(),
+            sensitivity=float(args.sensitivity),
+            mixed_strictness=float(args.mixed_strictness),
+        )
+        effective = ", ".join(
+            f"{AUTO_PROFILE_FLAG_FIELDS[flag]}={getattr(profile, AUTO_PROFILE_FLAG_FIELDS[flag])!r}"
+            for flag in overridden_flags
+        )
+        warning = (
+            f"{', '.join(overridden_flags)} were set explicitly but are derived from "
+            f"--sensitivity={args.sensitivity} and --mixed-strictness={args.mixed_strictness}; "
+            f"the explicit values are ignored (effective: {effective})."
+        )
+        print(f"Warning: {warning}", file=sys.stderr, flush=True)
+        preflight_checks.append(
+            qc_check(
+                "preflight.typing_flags_overridden",
+                "warn",
+                warning,
+                "adjust_sensitivity_or_omit_overridden_flags",
+                metrics={"overridden_flags": overridden_flags},
             )
         )
     try:
@@ -610,13 +690,20 @@ def main() -> None:
 
         run_manifest_path = output_dir / f"{stem}_run.json"
         labels_path = output_dir / f"{stem}_cellpose_labels.tif"
+        if args.labels_path is not None:
+            labels_source = f"provided:{file_sha256(args.labels_path)}"
+            segmentation_device = "not_used"
+        else:
+            labels_source = "cellpose"
+            segmentation_device = resolve_device(not args.cpu)
         seg_manifest = {
             "model": args.cellpose_model,
             "diameter": None if args.diameter <= 0 else args.diameter,
             "bsize": args.bsize,
             "resample": bool(args.resample),
-            "requested_device": "cpu" if args.cpu else "mps_or_cpu",
+            "device": segmentation_device,
             "normalize": bool(args.cellpose_normalize),
+            "labels_source": labels_source,
         }
         preprocessing_manifest = {
             "crop_auto": bool(args.crop_auto),
@@ -630,16 +717,21 @@ def main() -> None:
             "p_high": args.p_high,
             "noise_floor": args.noise_floor,
         }
+        manifest_classifier = None if semantic_candidate else args.classifier_path
         run_manifest = build_run_manifest(
             input_path=args.input,
+            input_sha256=file_sha256(args.input),
             image_shape=tuple(image.shape),
             pixel_size_um=(pixel_size_x_um, pixel_size_y_um),
             panel_fingerprint=panel.fingerprint,
             panel_channels=panel.channels,
             segmentation=seg_manifest,
             preprocessing=preprocessing_manifest,
-            classifier_path=None if semantic_candidate else args.classifier_path,
+            classifier_path=manifest_classifier,
             model_manifest_path=args.model_manifest,
+            classifier_sha256=(
+                file_sha256(Path(manifest_classifier)) if manifest_classifier else None
+            ),
         )
         reused_labels = False
         labels = None
@@ -777,17 +869,26 @@ def main() -> None:
     with stage(6, total_stages, "compute summary + QC"):
         qc_cfg = QCConfig(
             min_labels=args.qc_min_labels,
-            max_unknown_rate=args.qc_max_unknown_rate,
+            max_uncertainty_rate=args.qc_max_uncertainty_rate,
             median_area_min=args.qc_median_area_min,
             median_area_max=args.qc_median_area_max,
             max_type_corr=args.qc_max_type_corr,
+            max_residual_rate=args.qc_max_residual_rate,
         )
+        classes, canonicalize_labels = summary_classes(fibers)
         class_stats = class_stats_with_ci(
             fibers,
+            classes=classes,
             bootstrap_reps=args.bootstrap_reps,
             seed=args.bootstrap_seed,
+            canonicalize_labels=canonicalize_labels,
         )
-        qc_stats = qc_flags_from_fibers(fibers, qc_cfg)
+        residual_target_class = (
+            channel_cfg.residual_target_class if channel_cfg.residual_inference_enabled else None
+        )
+        qc_stats = qc_flags_from_fibers(
+            fibers, qc_cfg, residual_target_class=residual_target_class
+        )
         postrun_qc_path = output_dir / f"{stem}_postrun_qc.json"
         postrun_qc_stats = {**qc_stats, "n_labels": len(fibers)}
         postrun_report = build_qc_report(
@@ -795,32 +896,36 @@ def main() -> None:
             checks=postrun_checks(
                 postrun_qc_stats,
                 min_labels=qc_cfg.min_labels,
-                max_unknown_rate=qc_cfg.max_unknown_rate,
+                max_uncertainty_rate=qc_cfg.max_uncertainty_rate,
                 median_area_min=qc_cfg.median_area_min,
                 median_area_max=qc_cfg.median_area_max,
                 max_type_corr=qc_cfg.max_type_corr,
+                max_residual_rate=qc_cfg.max_residual_rate,
             ),
             context={
-                "input": str(args.input),
-                "fibers_path": str(fibers_path),
+                "input": portable_path(args.input),
+                "fibers_path": fibers_path.name,
                 "review_required": bool(fibers.get("needs_review", pd.Series(dtype=bool)).any()),
             },
         )
         write_qc_report(postrun_qc_path, postrun_report)
 
         summary = {
-            "input": str(args.input),
-            "labels_path": str(labels_path),
-            "fibers_path": str(fibers_path),
+            # Paths are portable: the input as given (or its file name) and output files
+            # relative to this image's output directory.
+            "input": portable_path(args.input),
+            "input_sha256": run_manifest["source_image_sha256"],
+            "labels_path": labels_path.name,
+            "fibers_path": fibers_path.name,
             "feature_diagnostics_path": (
-                str(diagnostics_path) if diagnostics_path is not None else ""
+                diagnostics_path.name if diagnostics_path is not None else ""
             ),
             "semantic_predictions_path": (
-                str(semantic_predictions_path) if semantic_predictions_path is not None else ""
+                semantic_predictions_path.name if semantic_predictions_path is not None else ""
             ),
-            "run_manifest_path": str(run_manifest_path),
-            "preflight_qc_path": str(preflight_qc_path),
-            "postrun_qc_path": str(postrun_qc_path),
+            "run_manifest_path": run_manifest_path.name,
+            "preflight_qc_path": preflight_qc_path.name,
+            "postrun_qc_path": postrun_qc_path.name,
             "runtime_s": round(float(runtime_s), 2),
             "membrane_channel": int(channel_cfg.membrane_channel),
             "dapi_channel": channel_cfg.dapi_channel,

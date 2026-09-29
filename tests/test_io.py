@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 import tifffile
 
 from src.io_utils import (
@@ -81,3 +82,41 @@ def test_label_summary_counts_nonzero_labels():
     assert summary["area_min"] == 2
     assert summary["area_median"] == 2
     assert summary["area_max"] == 3
+
+
+def test_czi_axes_with_multiple_scenes_stop_with_split_instructions(tmp_path):
+    from src.io_utils import _to_chw
+
+    arr = np.zeros((1, 3, 4, 5, 6, 1), dtype=np.uint16)
+
+    with pytest.raises(ValueError, match="contains 3 scenes.*split-czi-scenes"):
+        _to_chw(arr, "BSCYX0", tmp_path / "slide.czi", czi=True)
+
+
+def test_single_scene_czi_axes_reduce_to_channel_first(tmp_path):
+    from src.io_utils import _to_chw
+
+    arr = np.arange(1 * 1 * 4 * 5 * 6 * 1, dtype=np.uint16).reshape(1, 1, 4, 5, 6, 1)
+
+    image = _to_chw(arr, "HSCYX0", tmp_path / "section.czi", czi=True)
+
+    assert image.shape == (4, 5, 6)
+    assert np.array_equal(image, arr.reshape(4, 5, 6))
+
+
+def test_tiff_z_stack_is_rejected_instead_of_taking_first_plane(tmp_path):
+    path = tmp_path / "stack.tif"
+    tifffile.imwrite(
+        path, np.zeros((3, 2, 16, 16), dtype=np.uint16), imagej=True, metadata={"axes": "ZCYX"}
+    )
+
+    with pytest.raises(ValueError, match="non-channel dimensions \\(Z=3\\)"):
+        load_multichannel_image(path)
+
+
+def test_unlabeled_large_third_axis_is_ambiguous(tmp_path):
+    path = tmp_path / "unknown.tif"
+    tifffile.imwrite(path, np.zeros((12, 16, 16), dtype=np.uint16))
+
+    with pytest.raises(ValueError, match="cannot tell whether axis"):
+        load_multichannel_image(path)

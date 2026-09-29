@@ -12,6 +12,10 @@ FiberTypeQC writes one output folder per image.
 - `*_model_predictions.csv`: predictions from a compatible `multiplanel_features.v1` candidate
   bundle. This sidecar never overwrites stable fiber calls.
 - `*_summary.csv`: one row with image-level processing settings, counts, QC metrics, and summaries.
+  Class proportions are reported as `prop_<class>`, `ci95_low_<class>`, and `ci95_high_<class>` for
+  each class the model outputs (e.g. `iia`, `iib`, `iix`); rule-only runs keep the legacy
+  `type1`/`type2`/`mixed`/`unknown` classes. QC metrics include `uncertainty_rate`,
+  `residual_rate`, and `residual_target_class`.
 - `*_run.json`: versioned run provenance and stage fingerprints used for compatible fiber-label
   reuse.
 - `*_result_bundle.json`: portable, versioned index of the artifacts retained for the image.
@@ -92,7 +96,7 @@ preserves those links.
 
 ## QC Artifacts
 
-Both QC JSON files use schema version `fibertypeqc.qc.v1` and contain:
+Both QC JSON files use schema version `fibertypeqc.qc.v2` and contain:
 
 - `stage`: `preflight` or `postrun`;
 - `overall_status`: `pass`, `warn`, or `fail`;
@@ -105,6 +109,7 @@ Stable preflight codes are:
 
 - `preflight.arguments_valid`;
 - `preflight.channel_config_valid` and `preflight.channel_config_warning`;
+- `preflight.typing_flags_overridden` (warning; typing flags replaced by the `--sensitivity` profile);
 - `preflight.model_artifact_valid`;
 - `preflight.input_readable`;
 - `preflight.panel_compatible`;
@@ -115,7 +120,12 @@ Stable preflight codes are:
 Stable post-run codes are:
 
 - `postrun.fiber_count`;
-- `postrun.unknown_rate`;
+- `postrun.uncertainty_rate`: fraction of fibers flagged `needs_review` (below the model
+  confidence/margin thresholds) or called `uncertain`/`unresolved`, regardless of class;
+- `postrun.residual_rate`: present only when the panel enables residual inference. Fraction of fibers
+  assigned the residual (inferred-by-absence) class, e.g. IIx when I/IIa/IIb are all negative. A high
+  value can indicate weak or failed marker staining. It is informational (`pass`) unless
+  `--qc-max-residual-rate` is set for a calibrated panel;
 - `postrun.median_area`;
 - `postrun.marker_correlation`.
 
@@ -213,8 +223,8 @@ The Napari review UI writes:
 
 `batch_summary.csv` includes:
 
-- `image_name`: image stem.
-- `status`: `success` or `failed`.
+- `image_name`: image ID (manifest `image_id`, or the file stem); per-image outputs use this name.
+- `status`: `success`, `failed`, `timeout`, `error`, or `scene_export_failed`.
 - `error`: failure message when applicable.
 - `fiber_count`: number of segmented fibers when successful.
 - `summary_path`: per-image summary CSV path.

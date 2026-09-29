@@ -16,6 +16,7 @@ from src.quantify_classify import (
     class_stats_with_ci,
     qc_flags_from_fibers,
     quantify_labels,
+    summary_classes,
 )
 
 
@@ -235,7 +236,7 @@ def test_qc_flags_can_resolve_marker_columns_from_specs():
         fibers,
         QCConfig(
             min_labels=1,
-            max_unknown_rate=1.0,
+            max_uncertainty_rate=1.0,
             median_area_min=0.0,
             median_area_max=100.0,
             max_type_corr=1.1,
@@ -388,3 +389,60 @@ def test_legacy_rule_path_snapshot_for_frozen_alpha_regression():
     )
 
     pd.testing.assert_frame_equal(observed, expected, check_dtype=False)
+
+
+def _typed_fibers(labels, needs_review):
+    return pd.DataFrame(
+        {
+            "area": [500.0] * len(labels),
+            "fiber_type": labels,
+            "needs_review": needs_review,
+        }
+    )
+
+
+def test_uncertainty_rate_counts_unsure_fibers_regardless_of_class():
+    fibers = _typed_fibers(
+        ["iix", "iix", "iia", "uncertain"], [False, False, True, False]
+    )
+
+    qc = qc_flags_from_fibers(fibers, QCConfig(min_labels=1, max_uncertainty_rate=0.4))
+
+    # Confident IIx calls are not uncertain; needs_review and explicit uncertain labels are.
+    assert qc["uncertainty_rate"] == 0.5
+    assert qc["flag_high_uncertainty_rate"]
+    assert "high_uncertainty_rate" in qc["qc_reasons"]
+
+
+def test_residual_rate_applies_only_to_panels_with_residual_inference():
+    fibers = _typed_fibers(["iix", "iix", "iix", "iia"], [False] * 4)
+    cfg = QCConfig(min_labels=1, max_residual_rate=0.5)
+
+    residual_panel = qc_flags_from_fibers(fibers, cfg, residual_target_class="iix")
+    no_residual_panel = qc_flags_from_fibers(fibers, cfg, residual_target_class=None)
+
+    assert residual_panel["residual_rate"] == 0.75
+    assert residual_panel["flag_high_residual_rate"]
+    assert "high_residual_rate" in residual_panel["qc_reasons"]
+    assert np.isnan(no_residual_panel["residual_rate"])
+    assert not no_residual_panel["flag_high_residual_rate"]
+
+
+def test_residual_rate_is_not_flagged_without_calibrated_threshold():
+    fibers = _typed_fibers(["iix", "iix"], [False, False])
+
+    qc = qc_flags_from_fibers(fibers, QCConfig(min_labels=1), residual_target_class="iix")
+
+    assert qc["residual_rate"] == 1.0
+    assert not qc["flag_high_residual_rate"]
+    assert qc["qc_status"] == "pass"
+
+
+def test_summary_classes_follow_model_probability_columns():
+    model_fibers = pd.DataFrame(
+        {"fiber_type": ["iia"], "prob_i": [0.1], "prob_iia": [0.9], "prob_iib": [0.0]}
+    )
+    rule_fibers = pd.DataFrame({"fiber_type": ["type1"], "prob_iia": [np.nan]})
+
+    assert summary_classes(model_fibers) == (("i", "iia", "iib"), True)
+    assert summary_classes(rule_fibers) == (("type1", "type2", "mixed", "unknown"), False)

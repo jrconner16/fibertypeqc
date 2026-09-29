@@ -115,8 +115,9 @@ uv run python -m scripts.run_pipeline \
   and `--downsample-factor 2`; the single-image command above uses the `run_pipeline` defaults for
   those options. Print the full frozen set with `uv run python -m scripts.run_batch --show-v0-params`.
 - `--sensitivity` and `--mixed-strictness` derive several typing parameters (`--quantile`,
-  `--typing-bg-sigma`, `--typing-smooth-sigma`, `--min-coverage`, and review thresholds); values
-  passed explicitly for those options are currently overridden.
+  `--typing-bg-sigma`, `--typing-smooth-sigma`, `--min-coverage`, and review thresholds). Values
+  passed explicitly for those options are overridden; the run prints a warning and records a
+  `preflight.typing_flags_overridden` QC check listing the effective values.
 
 The frozen baseline channel schema is intentionally narrow: IIx is inferred as the unstained class
 relative to the IIb and IIa channels. Panel-aware configuration is available as an explicit opt-in,
@@ -155,8 +156,12 @@ The batch runner:
 - Finds all `.czi`, `.tif`, `.tiff` files in the input directory
 - Applies v0 pipeline to each
 - Collects results in `batch_summary.csv` with fiber counts and status
-- Logs failures without crashing the batch
-- Creates organized per-image output folders
+- Logs failures (including unreadable multi-scene CZIs) without crashing the batch
+- Creates organized per-image output folders whose files are named by image ID
+  (`--image-id`), so result bundles and reports reference the files that exist
+- Verifies the frozen model's digest and panel requirements through its model manifest; pass
+  `--model-manifest` to verify a custom `--classifier-path`
+- Refuses manifests with duplicate image IDs
 
 By default, `scripts.run_batch` preserves the frozen v0 alpha behavior. If you pass
 `--channel-config` or explicit channel overrides, the batch run will log that it is no longer a
@@ -299,6 +304,10 @@ Key dependencies:
 
 ### Image fails to load
 - Check file format (.czi, .tif/.tiff supported)
+- Multi-scene CZIs (several sections on one slide) are not read implicitly: split them with
+  `run_batch --split-czi-scenes` or `python -m src.split_czi_scenes --input FILE --output-dir DIR`
+- Z/T stacks must be projected or split into single-plane multichannel images first; TIFFs without
+  channel metadata need ImageJ axes such as `CYX` when the channel count is ambiguous
 - Verify file is not corrupted: `python -c "import czifile; czifile.CziFile('image.czi')"`
 
 ### Out of memory

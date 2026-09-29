@@ -25,6 +25,11 @@ class CellposeConfig:
 _CACHED_MODELS: dict[tuple[str, str], models.CellposeModel] = {}
 
 
+def resolve_device(use_mps: bool) -> str:
+    """Return the device Cellpose will actually use: cuda, mps, or cpu."""
+    return _device_name(use_mps)
+
+
 def _device_name(use_mps: bool) -> str:
     if not use_mps:
         return "cpu"

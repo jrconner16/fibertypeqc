@@ -54,8 +54,6 @@ def test_run_pipeline_export_diagnostics_flag_controls_output(tmp_path, monkeypa
         "2",
         "--typing-preprocess",
         "raw",
-        "--typing-smooth-sigma",
-        "0",
         "--typing-erode-px",
         "0",
         "--classifier-path",
@@ -72,7 +70,7 @@ def test_run_pipeline_export_diagnostics_flag_controls_output(tmp_path, monkeypa
     diagnostics_path = tmp_path / "out" / f"{stem}_feature_diagnostics.csv"
     assert not diagnostics_path.exists()
     preflight = json.loads((tmp_path / "out" / f"{stem}_preflight_qc.json").read_text())
-    assert preflight["schema_version"] == "fibertypeqc.qc.v1"
+    assert preflight["schema_version"] == "fibertypeqc.qc.v2"
     assert preflight["overall_status"] == "warn"
     assert preflight["recommended_next_action"] == ("confirm_pixel_size_before_area_interpretation")
     postrun = json.loads((tmp_path / "out" / f"{stem}_postrun_qc.json").read_text())
@@ -242,3 +240,25 @@ def test_run_pipeline_writes_failed_preflight_before_processing(tmp_path, monkey
     assert report["overall_status"] == "fail"
     assert report["recommended_next_action"] == "correct_channel_mapping"
     assert report["checks"][-1]["code"] == "preflight.panel_compatible"
+
+
+def test_auto_profile_overridden_flags_reports_explicit_typing_flags():
+    from src.run_pipeline import auto_profile_overridden_flags
+
+    argv = [
+        "--input",
+        "image.tif",
+        "--quantile",
+        "0.5",
+        "--typing-smooth-sigma=0.8",
+        "--sensitivity",
+        "0.4",
+        "--no-percentile-gate",
+    ]
+
+    assert auto_profile_overridden_flags(argv) == [
+        "--quantile",
+        "--no-percentile-gate",
+        "--typing-smooth-sigma",
+    ]
+    assert auto_profile_overridden_flags(["--input", "image.tif", "--sensitivity", "0.4"]) == []

@@ -26,6 +26,35 @@
   supported core in `src/`, `fibertypeqc/`, and `scripts/` is unchanged, and a test now prevents it
   from importing `research/`.
 - `pytest` works without setting `PYTHONPATH`.
+- **Output change:** image summaries now report `prop_*` and confidence intervals for the classes
+  the model outputs (e.g. `iia`, `iib`, `iix`). Previously model runs reported legacy
+  `type1`/`type2`/`mixed`/`unknown` columns that were always 0. Fiber calls are unchanged.
+- **QC change (schema `fibertypeqc.qc.v2`):** `postrun.unknown_rate` is replaced by
+  `postrun.uncertainty_rate` (low-confidence or unresolved fibers of any class) and a panel-aware
+  `postrun.residual_rate` (share of the inferred-by-absence class, informational until
+  `--qc-max-residual-rate` is calibrated). `--qc-max-unknown-rate` remains as an alias for
+  `--qc-max-uncertainty-rate`. The reference validator now checks summary proportions and QC rates.
+- Explicit typing flags that `--sensitivity`/`--mixed-strictness` override now produce a warning
+  and a `preflight.typing_flags_overridden` QC check with the effective values. Effective values
+  are unchanged.
+- `run_pipeline --image-id` names outputs explicitly. `run_batch` uses it instead of renaming files
+  after each run, which left result bundles, summaries, and reports pointing at old file names.
+- `run_batch` passes the frozen model manifest (or `--model-manifest`) so the classifier digest and
+  panel requirements are verified in batch runs; failure messages keep the end of the child error;
+  a failed scene export is recorded as `scene_export_failed` instead of aborting the batch; duplicate
+  image IDs are rejected.
+- Run provenance (run-manifest schema 2) records the input image, provided-labels, and classifier
+  SHA-256 digests; the Cellpose device actually used; and numpy/scipy/scikit-image/scikit-learn/
+  pandas/tifffile/czifile versions. Paths in run records, summaries, QC context, and the fiber
+  table's `classifier_path` are portable (no user-specific directories). The label-reuse
+  fingerprint now includes the image digest, labels source, device, and Cellpose version; existing
+  cached labels are recomputed once.
+- **Input change:** images are read using their axis metadata. Multi-scene CZIs now stop with
+  instructions to use the scene splitter; previously only the first scene was silently analyzed.
+  Z/T stacks and ambiguous unlabeled axes also stop instead of taking the first plane or guessing.
+- **Input change:** CZI mosaics are assembled single-threaded. Multi-threaded assembly wrote
+  overlapping tiles in nondeterministic order, so repeated reads of the same file could differ in
+  overlap pixels; reads are now repeatable and match the scene splitter's tile order.
 - README corrections: Python 3.11 only; per-image outputs match what the pipeline writes; removed
   the nonexistent low-coverage QC flag, the `--bsize` troubleshooting advice (Cellpose requires 256),
   and the reference to an untracked training script; documented `run_batch` v0 thresholds and the

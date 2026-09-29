@@ -23,7 +23,17 @@
     "reviewed_fibers": "synthetic_reference_fibers_final.csv"
   },
   "expected": {
-    "label_ids": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "label_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
     "required_fiber_columns": [
       "label",
       "area",
@@ -58,9 +68,18 @@
       "8": 0.77936316,
       "9": 0.77936316
     },
-    "numeric_absolute_tolerance": 0.000001,
+    "numeric_absolute_tolerance": 1e-06,
     "qc_status": "pass",
     "qc_reasons": "",
+    "summary_values": {
+      "n_fibers": 9,
+      "prop_iia": 0.7777777777777778,
+      "prop_iib": 0.2222222222222222,
+      "prop_iix": 0.0,
+      "uncertainty_rate": 0.3333333333333333,
+      "residual_rate": 0.0
+    },
+    "summary_residual_target_class": "iix",
     "preflight_qc_codes": [
       "preflight.arguments_valid",
       "preflight.channel_config_valid",
@@ -73,7 +92,8 @@
     ],
     "postrun_qc_codes": [
       "postrun.fiber_count",
-      "postrun.unknown_rate",
+      "postrun.uncertainty_rate",
+      "postrun.residual_rate",
       "postrun.median_area",
       "postrun.marker_correlation"
     ],
