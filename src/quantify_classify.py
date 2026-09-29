@@ -59,10 +59,36 @@ class QuantifyConfig:
 @dataclass
 class QCConfig:
     min_labels: int = 300
-    max_unknown_rate: float = 0.35
+    # Fraction of fibers the model or rule path was unsure about (needs_review or an explicit
+    # uncertain/unresolved call). Independent of which class the fiber received.
+    max_uncertainty_rate: float = 0.35
     median_area_min: float = 200.0
     median_area_max: float = 15000.0
     max_type_corr: float = 0.92
+    # Fraction of fibers assigned the panel's residual (inferred-by-absence) class. A high value
+    # can indicate weak or failed marker staining. None disables the flag until calibrated.
+    max_residual_rate: float | None = None
+
+
+LEGACY_SUMMARY_CLASSES = ("type1", "type2", "mixed", "unknown")
+UNCERTAIN_FIBER_LABELS = frozenset(("uncertain", "unresolved"))
+
+
+def summary_classes(fibers: pd.DataFrame) -> tuple[tuple[str, ...], bool]:
+    """Return the classes to summarize and whether labels need canonicalization.
+
+    Model outputs expose one ``prob_<class>`` column per model class; those classes are
+    summarized directly. Rule-only outputs have no usable probabilities and keep the legacy
+    internal class names.
+    """
+    prob_classes = tuple(
+        column[len("prob_") :]
+        for column in fibers.columns
+        if column.startswith("prob_") and fibers[column].notna().any()
+    )
+    if prob_classes:
+        return prob_classes, True
+    return LEGACY_SUMMARY_CLASSES, False
 
 
 @dataclass(frozen=True)
@@ -1301,23 +1327,42 @@ def qc_flags_from_fibers(
     fibers: pd.DataFrame,
     cfg: QCConfig,
     marker_specs: tuple[MarkerSpec, MarkerSpec] | None = None,
+    residual_target_class: str | None = None,
 ) -> dict[str, str | float | int | bool]:
+    """Image-level QC flags.
+
+    ``residual_target_class`` is the panel's inferred-by-absence class (for example ``iix`` when
+    IIx is called from missing I/IIa/IIb signal). Pass ``None`` for panels without residual
+    inference; the residual-rate metric is then not applicable.
+    """
     n = int(len(fibers))
     if n == 0:
         return {
             "qc_status": "warn",
             "qc_reasons": "no_fibers",
-            "unknown_rate": np.nan,
+            "uncertainty_rate": np.nan,
+            "residual_rate": np.nan,
+            "residual_target_class": residual_target_class or "",
             "type_corr": np.nan,
             "median_area": np.nan,
             "flag_low_labels": True,
-            "flag_high_unknown_rate": True,
+            "flag_high_uncertainty_rate": True,
+            "flag_high_residual_rate": False,
             "flag_median_area_outlier": True,
             "flag_high_type_corr": False,
         }
 
     median_area = float(np.median(fibers["area"]))
-    unknown_rate = float((fibers["fiber_type"] == "unknown").mean())
+    labels = fibers["fiber_type"].astype(str).str.strip().str.lower()
+    uncertain = labels.isin(UNCERTAIN_FIBER_LABELS).to_numpy()
+    if "needs_review" in fibers.columns:
+        uncertain = uncertain | fibers["needs_review"].fillna(False).astype(bool).to_numpy()
+    uncertainty_rate = float(np.mean(uncertain))
+    if residual_target_class:
+        canonical = labels.map(_canonical_fiber_type_label)
+        residual_rate = float((canonical == residual_target_class).mean())
+    else:
+        residual_rate = np.nan
 
     if marker_specs is None:
         marker_specs = (
@@ -1336,15 +1381,22 @@ def qc_flags_from_fibers(
         type_corr = np.nan
 
     flag_low_labels = n < cfg.min_labels
-    flag_high_unknown = unknown_rate > cfg.max_unknown_rate
+    flag_high_uncertainty = uncertainty_rate > cfg.max_uncertainty_rate
+    flag_high_residual = bool(
+        residual_target_class
+        and cfg.max_residual_rate is not None
+        and residual_rate > cfg.max_residual_rate
+    )
     flag_area = not (cfg.median_area_min <= median_area <= cfg.median_area_max)
     flag_corr = bool(np.isfinite(type_corr) and type_corr > cfg.max_type_corr)
 
     reasons = []
     if flag_low_labels:
         reasons.append("low_labels")
-    if flag_high_unknown:
-        reasons.append("high_unknown_rate")
+    if flag_high_uncertainty:
+        reasons.append("high_uncertainty_rate")
+    if flag_high_residual:
+        reasons.append("high_residual_rate")
     if flag_area:
         reasons.append("median_area_outlier")
     if flag_corr:
@@ -1353,11 +1405,14 @@ def qc_flags_from_fibers(
     return {
         "qc_status": "pass" if len(reasons) == 0 else "warn",
         "qc_reasons": "|".join(reasons),
-        "unknown_rate": unknown_rate,
+        "uncertainty_rate": uncertainty_rate,
+        "residual_rate": residual_rate,
+        "residual_target_class": residual_target_class or "",
         "type_corr": type_corr,
         "median_area": median_area,
         "flag_low_labels": bool(flag_low_labels),
-        "flag_high_unknown_rate": bool(flag_high_unknown),
+        "flag_high_uncertainty_rate": bool(flag_high_uncertainty),
+        "flag_high_residual_rate": flag_high_residual,
         "flag_median_area_outlier": bool(flag_area),
         "flag_high_type_corr": bool(flag_corr),
     }

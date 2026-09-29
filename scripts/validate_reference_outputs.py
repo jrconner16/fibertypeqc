@@ -108,6 +108,17 @@ def validate_reference_outputs(output_dir: Path, contract_path: Path = DEFAULT_C
             f"got {summary['qc_reasons']!r}."
         )
 
+    for column, expected_value in expected["summary_values"].items():
+        if column not in summary.index:
+            raise ValueError(f"Reference summary is missing column {column!r}.")
+        actual = float(summary[column])
+        if abs(actual - float(expected_value)) > tolerance:
+            raise ValueError(
+                f"Reference summary {column} differs: expected {expected_value}, got {actual}."
+            )
+    if str(summary["residual_target_class"]) != expected["summary_residual_target_class"]:
+        raise ValueError("Reference summary recorded an unexpected residual class.")
+
     run_manifest = json.loads(outputs["run_manifest"].read_text())
     panel = run_manifest.get("panel", {}).get("channels", {})
     expected_panel = {

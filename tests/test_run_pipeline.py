@@ -72,7 +72,7 @@ def test_run_pipeline_export_diagnostics_flag_controls_output(tmp_path, monkeypa
     diagnostics_path = tmp_path / "out" / f"{stem}_feature_diagnostics.csv"
     assert not diagnostics_path.exists()
     preflight = json.loads((tmp_path / "out" / f"{stem}_preflight_qc.json").read_text())
-    assert preflight["schema_version"] == "fibertypeqc.qc.v1"
+    assert preflight["schema_version"] == "fibertypeqc.qc.v2"
     assert preflight["overall_status"] == "warn"
     assert preflight["recommended_next_action"] == ("confirm_pixel_size_before_area_interpretation")
     postrun = json.loads((tmp_path / "out" / f"{stem}_postrun_qc.json").read_text())

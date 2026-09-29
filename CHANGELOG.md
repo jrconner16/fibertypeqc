@@ -26,6 +26,14 @@
   supported core in `src/`, `fibertypeqc/`, and `scripts/` is unchanged, and a test now prevents it
   from importing `research/`.
 - `pytest` works without setting `PYTHONPATH`.
+- **Output change:** image summaries now report `prop_*` and confidence intervals for the classes
+  the model outputs (e.g. `iia`, `iib`, `iix`). Previously model runs reported legacy
+  `type1`/`type2`/`mixed`/`unknown` columns that were always 0. Fiber calls are unchanged.
+- **QC change (schema `fibertypeqc.qc.v2`):** `postrun.unknown_rate` is replaced by
+  `postrun.uncertainty_rate` (low-confidence or unresolved fibers of any class) and a panel-aware
+  `postrun.residual_rate` (share of the inferred-by-absence class, informational until
+  `--qc-max-residual-rate` is calibrated). `--qc-max-unknown-rate` remains as an alias for
+  `--qc-max-uncertainty-rate`. The reference validator now checks summary proportions and QC rates.
 - README corrections: Python 3.11 only; per-image outputs match what the pipeline writes; removed
   the nonexistent low-coverage QC flag, the `--bsize` troubleshooting advice (Cellpose requires 256),
   and the reference to an untracked training script; documented `run_batch` v0 thresholds and the

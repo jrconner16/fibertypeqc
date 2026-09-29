@@ -54,6 +54,7 @@ from src.quantify_classify import (
     class_stats_with_ci,
     qc_flags_from_fibers,
     quantify_labels,
+    summary_classes,
 )
 from src.run_nuclear_stage import run_nuclear_analysis
 from src.segment_cellpose import CellposeConfig, run_cellpose
@@ -343,7 +344,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bootstrap-seed", type=int, default=0)
 
     p.add_argument("--qc-min-labels", type=int, default=300)
-    p.add_argument("--qc-max-unknown-rate", type=float, default=0.35)
+    p.add_argument(
+        "--qc-max-uncertainty-rate",
+        "--qc-max-unknown-rate",
+        dest="qc_max_uncertainty_rate",
+        type=float,
+        default=0.35,
+        help=(
+            "Warn when more than this fraction of fibers is low-confidence or unresolved. "
+            "--qc-max-unknown-rate is a deprecated alias."
+        ),
+    )
+    p.add_argument(
+        "--qc-max-residual-rate",
+        type=float,
+        default=None,
+        help=(
+            "Warn when more than this fraction of fibers is assigned the panel's residual "
+            "(inferred-by-absence) class. Off by default until calibrated for the panel."
+        ),
+    )
     p.add_argument("--qc-median-area-min", type=float, default=200.0)
     p.add_argument("--qc-median-area-max", type=float, default=15000.0)
     p.add_argument("--qc-max-type-corr", type=float, default=0.92)
@@ -777,17 +797,26 @@ def main() -> None:
     with stage(6, total_stages, "compute summary + QC"):
         qc_cfg = QCConfig(
             min_labels=args.qc_min_labels,
-            max_unknown_rate=args.qc_max_unknown_rate,
+            max_uncertainty_rate=args.qc_max_uncertainty_rate,
             median_area_min=args.qc_median_area_min,
             median_area_max=args.qc_median_area_max,
             max_type_corr=args.qc_max_type_corr,
+            max_residual_rate=args.qc_max_residual_rate,
         )
+        classes, canonicalize_labels = summary_classes(fibers)
         class_stats = class_stats_with_ci(
             fibers,
+            classes=classes,
             bootstrap_reps=args.bootstrap_reps,
             seed=args.bootstrap_seed,
+            canonicalize_labels=canonicalize_labels,
         )
-        qc_stats = qc_flags_from_fibers(fibers, qc_cfg)
+        residual_target_class = (
+            channel_cfg.residual_target_class if channel_cfg.residual_inference_enabled else None
+        )
+        qc_stats = qc_flags_from_fibers(
+            fibers, qc_cfg, residual_target_class=residual_target_class
+        )
         postrun_qc_path = output_dir / f"{stem}_postrun_qc.json"
         postrun_qc_stats = {**qc_stats, "n_labels": len(fibers)}
         postrun_report = build_qc_report(
@@ -795,10 +824,11 @@ def main() -> None:
             checks=postrun_checks(
                 postrun_qc_stats,
                 min_labels=qc_cfg.min_labels,
-                max_unknown_rate=qc_cfg.max_unknown_rate,
+                max_uncertainty_rate=qc_cfg.max_uncertainty_rate,
                 median_area_min=qc_cfg.median_area_min,
                 median_area_max=qc_cfg.median_area_max,
                 max_type_corr=qc_cfg.max_type_corr,
+                max_residual_rate=qc_cfg.max_residual_rate,
             ),
             context={
                 "input": str(args.input),

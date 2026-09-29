@@ -12,6 +12,10 @@ FiberTypeQC writes one output folder per image.
 - `*_model_predictions.csv`: predictions from a compatible `multiplanel_features.v1` candidate
   bundle. This sidecar never overwrites stable fiber calls.
 - `*_summary.csv`: one row with image-level processing settings, counts, QC metrics, and summaries.
+  Class proportions are reported as `prop_<class>`, `ci95_low_<class>`, and `ci95_high_<class>` for
+  each class the model outputs (e.g. `iia`, `iib`, `iix`); rule-only runs keep the legacy
+  `type1`/`type2`/`mixed`/`unknown` classes. QC metrics include `uncertainty_rate`,
+  `residual_rate`, and `residual_target_class`.
 - `*_run.json`: versioned run provenance and stage fingerprints used for compatible fiber-label
   reuse.
 - `*_result_bundle.json`: portable, versioned index of the artifacts retained for the image.
@@ -92,7 +96,7 @@ preserves those links.
 
 ## QC Artifacts
 
-Both QC JSON files use schema version `fibertypeqc.qc.v1` and contain:
+Both QC JSON files use schema version `fibertypeqc.qc.v2` and contain:
 
 - `stage`: `preflight` or `postrun`;
 - `overall_status`: `pass`, `warn`, or `fail`;
@@ -115,7 +119,12 @@ Stable preflight codes are:
 Stable post-run codes are:
 
 - `postrun.fiber_count`;
-- `postrun.unknown_rate`;
+- `postrun.uncertainty_rate`: fraction of fibers flagged `needs_review` (below the model
+  confidence/margin thresholds) or called `uncertain`/`unresolved`, regardless of class;
+- `postrun.residual_rate`: present only when the panel enables residual inference. Fraction of fibers
+  assigned the residual (inferred-by-absence) class, e.g. IIx when I/IIa/IIb are all negative. A high
+  value can indicate weak or failed marker staining. It is informational (`pass`) unless
+  `--qc-max-residual-rate` is set for a calibrated panel;
 - `postrun.median_area`;
 - `postrun.marker_correlation`.
 

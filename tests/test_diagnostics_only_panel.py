@@ -34,6 +34,6 @@ def test_quantify_labels_supports_type_i_iia_diagnostics_without_legacy_calls():
         QuantifyConfig(type1_channel=None, type2_channel=1, i_channel=0),
     )
     assert {"type_i.mean", "type_iia.mean"}.issubset(diagnostics.columns)
-    qc = qc_flags_from_fibers(fibers, QCConfig(min_labels=1, max_unknown_rate=1.0))
+    qc = qc_flags_from_fibers(fibers, QCConfig(min_labels=1, max_uncertainty_rate=1.0))
     assert np.isnan(qc["type_corr"])
     assert not qc["flag_high_type_corr"]

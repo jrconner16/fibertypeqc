@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-QC_SCHEMA_VERSION = "fibertypeqc.qc.v1"
+QC_SCHEMA_VERSION = "fibertypeqc.qc.v2"
 QC_STATUSES = frozenset(("pass", "warn", "fail"))
 
 
@@ -97,10 +97,11 @@ def postrun_checks(
     qc_stats: Mapping[str, Any],
     *,
     min_labels: int,
-    max_unknown_rate: float,
+    max_uncertainty_rate: float,
     median_area_min: float,
     median_area_max: float,
     max_type_corr: float,
+    max_residual_rate: float | None = None,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     checks.append(
@@ -116,22 +117,53 @@ def postrun_checks(
             metrics={"observed": int(qc_stats.get("n_labels", 0)), "minimum": min_labels},
         )
     )
+    high_uncertainty = bool(qc_stats["flag_high_uncertainty_rate"])
     checks.append(
         qc_check(
-            "postrun.unknown_rate",
-            "warn" if bool(qc_stats["flag_high_unknown_rate"]) else "pass",
-            "Unknown-call rate exceeds the configured maximum."
-            if bool(qc_stats["flag_high_unknown_rate"])
-            else "Unknown-call rate is within the configured maximum.",
+            "postrun.uncertainty_rate",
+            "warn" if high_uncertainty else "pass",
+            "Uncertain-fiber rate exceeds the configured maximum."
+            if high_uncertainty
+            else "Uncertain-fiber rate is within the configured maximum.",
             "confirm_channels_then_review_uncertain_fibers"
-            if bool(qc_stats["flag_high_unknown_rate"])
+            if high_uncertainty
             else "proceed_to_next_check",
             metrics={
-                "observed": qc_stats.get("unknown_rate"),
-                "maximum": max_unknown_rate,
+                "observed": qc_stats.get("uncertainty_rate"),
+                "maximum": max_uncertainty_rate,
             },
         )
     )
+    residual_class = str(qc_stats.get("residual_target_class") or "")
+    if residual_class:
+        high_residual = bool(qc_stats.get("flag_high_residual_rate"))
+        if max_residual_rate is None:
+            message = (
+                f"Residual-class ({residual_class}) rate recorded; no threshold is configured "
+                "for this panel."
+            )
+        elif high_residual:
+            message = (
+                f"Residual-class ({residual_class}) rate exceeds the configured maximum; "
+                "marker staining may be weak or missing."
+            )
+        else:
+            message = f"Residual-class ({residual_class}) rate is within the configured maximum."
+        checks.append(
+            qc_check(
+                "postrun.residual_rate",
+                "warn" if high_residual else "pass",
+                message,
+                "inspect_marker_staining_then_review_residual_calls"
+                if high_residual
+                else "proceed_to_next_check",
+                metrics={
+                    "observed": qc_stats.get("residual_rate"),
+                    "maximum": max_residual_rate,
+                    "residual_class": residual_class,
+                },
+            )
+        )
     checks.append(
         qc_check(
             "postrun.median_area",
