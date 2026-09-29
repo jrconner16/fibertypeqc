@@ -37,6 +37,12 @@
 - Explicit typing flags that `--sensitivity`/`--mixed-strictness` override now produce a warning
   and a `preflight.typing_flags_overridden` QC check with the effective values. Effective values
   are unchanged.
+- `run_pipeline --image-id` names outputs explicitly. `run_batch` uses it instead of renaming files
+  after each run, which left result bundles, summaries, and reports pointing at old file names.
+- `run_batch` passes the frozen model manifest (or `--model-manifest`) so the classifier digest and
+  panel requirements are verified in batch runs; failure messages keep the end of the child error;
+  a failed scene export is recorded as `scene_export_failed` instead of aborting the batch; duplicate
+  image IDs are rejected.
 - README corrections: Python 3.11 only; per-image outputs match what the pipeline writes; removed
   the nonexistent low-coverage QC flag, the `--bsize` troubleshooting advice (Cellpose requires 256),
   and the reference to an untracked training script; documented `run_batch` v0 thresholds and the

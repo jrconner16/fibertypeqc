@@ -107,6 +107,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--input", type=Path, required=True, help="Input CZI/TIFF")
     p.add_argument("--output-dir", type=Path, required=True, help="Output directory")
     p.add_argument(
+        "--image-id",
+        type=str,
+        default=None,
+        help=(
+            "Identifier used to name outputs (default: input file stem). Spaces become "
+            "underscores; path separators are not allowed."
+        ),
+    )
+    p.add_argument(
         "--labels-path",
         type=Path,
         default=None,
@@ -428,7 +437,10 @@ def auto_profile_overridden_flags(argv: list[str]) -> list[str]:
 def main() -> None:
     args = build_parser().parse_args()
     output_dir = ensure_dir(args.output_dir)
-    stem = args.input.stem.replace(" ", "_")
+    image_id = args.image_id if args.image_id is not None else args.input.stem
+    if not image_id.strip() or "/" in image_id or "\\" in image_id or image_id in {".", ".."}:
+        raise SystemExit(f"Invalid --image-id: {image_id!r}")
+    stem = image_id.strip().replace(" ", "_")
     preflight_qc_path = output_dir / f"{stem}_preflight_qc.json"
     preflight_checks: list[dict[str, object]] = []
     preflight_context: dict[str, object] = {"input": str(args.input)}

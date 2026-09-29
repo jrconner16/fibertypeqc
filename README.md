@@ -156,8 +156,12 @@ The batch runner:
 - Finds all `.czi`, `.tif`, `.tiff` files in the input directory
 - Applies v0 pipeline to each
 - Collects results in `batch_summary.csv` with fiber counts and status
-- Logs failures without crashing the batch
-- Creates organized per-image output folders
+- Logs failures (including unreadable multi-scene CZIs) without crashing the batch
+- Creates organized per-image output folders whose files are named by image ID
+  (`--image-id`), so result bundles and reports reference the files that exist
+- Verifies the frozen model's digest and panel requirements through its model manifest; pass
+  `--model-manifest` to verify a custom `--classifier-path`
+- Refuses manifests with duplicate image IDs
 
 By default, `scripts.run_batch` preserves the frozen v0 alpha behavior. If you pass
 `--channel-config` or explicit channel overrides, the batch run will log that it is no longer a

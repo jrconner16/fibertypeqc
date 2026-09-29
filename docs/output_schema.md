@@ -223,8 +223,8 @@ The Napari review UI writes:
 
 `batch_summary.csv` includes:
 
-- `image_name`: image stem.
-- `status`: `success` or `failed`.
+- `image_name`: image ID (manifest `image_id`, or the file stem); per-image outputs use this name.
+- `status`: `success`, `failed`, `timeout`, `error`, or `scene_export_failed`.
 - `error`: failure message when applicable.
 - `fiber_count`: number of segmented fibers when successful.
 - `summary_path`: per-image summary CSV path.
