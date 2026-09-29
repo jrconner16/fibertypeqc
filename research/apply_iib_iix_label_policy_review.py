@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.consolidate_reviewed_audit import _final_audit_label
+from research.consolidate_reviewed_audit import _final_audit_label
 
 
 def build_parser() -> argparse.ArgumentParser:

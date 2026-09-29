@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_recall_fscore_support
 
-from src.compare_myosight_pipeline import (
+from research.compare_myosight_pipeline import (
     counts_by_type,
     discover_myosight,
     image_id_from_myosight_path,
@@ -17,19 +17,19 @@ from src.compare_myosight_pipeline import (
     numeric_summary,
     pct,
 )
-from src.compare_supervision_recipes import (
+from research.compare_supervision_recipes import (
     _assemble_recipe_training_rows,
     _load_matched_myosight,
     _prepare_base_table,
 )
+from research.train_candidate_from_feature_table import _boosting_model, _load_feature_table
+from research.train_weighted_candidate_from_audit import _load_manual_split
 from src.quantify_classify import (
     FROZEN_ALPHA_BASELINE_FEATURES,
     QuantifyConfig,
     _add_model_signal_qc,
 )
 from src.run_batch import V0_PARAMS
-from src.train_candidate_from_feature_table import _boosting_model, _load_feature_table
-from src.train_weighted_candidate_from_audit import _load_manual_split
 
 COHORT_FIBER_COLUMNS = [
     "label",

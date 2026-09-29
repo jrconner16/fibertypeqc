@@ -6,8 +6,8 @@ from pathlib import Path
 import pandas as pd
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_recall_fscore_support
 
-from src.evaluate_against_audit_benchmark import CANONICAL_CLASSES
-from src.train_candidate_from_feature_table import _load_feature_table
+from research.evaluate_against_audit_benchmark import CANONICAL_CLASSES
+from research.train_candidate_from_feature_table import _load_feature_table
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -14,7 +14,7 @@ from sklearn.metrics import balanced_accuracy_score, f1_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.build_existing_ta_audit_f1_features import F1_COLUMNS
+from research.build_existing_ta_audit_f1_features import F1_COLUMNS
 
 CLASSES = ["iia", "iix", "iib"]
 REVIEW_CONFIDENCE = 0.70

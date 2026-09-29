@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from research.train_weighted_candidate_from_audit import train_weighted_candidates
 from src.quantify_classify import FROZEN_ALPHA_BASELINE_FEATURES
-from src.train_weighted_candidate_from_audit import train_weighted_candidates
 
 
 def _row(

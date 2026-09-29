@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.build_existing_ta_audit_f1_features import F1_COLUMNS
+from research.build_existing_ta_audit_f1_features import F1_COLUMNS
 
 TARGET_CLASSES = {"iia", "iib", "iix"}
 

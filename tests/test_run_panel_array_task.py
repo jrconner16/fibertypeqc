@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from src.run_panel_array_task import _load_manifest
+from research.run_panel_array_task import _load_manifest
 
 
 def test_load_manifest_requires_safe_relative_inputs(tmp_path: Path) -> None:

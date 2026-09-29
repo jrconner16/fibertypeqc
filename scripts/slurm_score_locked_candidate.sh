@@ -11,6 +11,6 @@ set -euo pipefail
 : "${INPUT_MANIFEST:?}"
 : "${SCORED_DIR:?}"
 cd "$FIBERTYPEQC_ROOT"
-uv run --frozen python -m src.score_locked_candidate \
+uv run --frozen python -m research.score_locked_candidate \
   --lock-dir "$LOCK_DIR" --manifest "$INPUT_MANIFEST" --output-dir "$SCORED_DIR" \
   --task-index "${SLURM_ARRAY_TASK_ID:?}"

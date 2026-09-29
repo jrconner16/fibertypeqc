@@ -5,10 +5,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.build_existing_ta_audit_f1_features import F1_COLUMNS
-from src.build_notch3_protected_all_rois import build_all_rois
-from src.build_notch3_protected_f1_features import build_features
-from src.build_notch3_protected_match_manifest import build_manifest
+from research.build_existing_ta_audit_f1_features import F1_COLUMNS
+from research.build_notch3_protected_all_rois import build_all_rois
+from research.build_notch3_protected_f1_features import build_features
+from research.build_notch3_protected_match_manifest import build_manifest
 
 
 def test_build_protected_manifest_resolves_only_protected_rows(tmp_path):

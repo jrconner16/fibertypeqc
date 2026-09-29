@@ -17,7 +17,7 @@ import pandas as pd
 import tifffile
 from skimage.segmentation import find_boundaries
 
-from src.blinded_fiber_review_napari import (
+from research.blinded_fiber_review_napari import (
     CHANNEL_TOGGLES,
     LABELS,
     OBSERVED_CHANNEL_NAMES,

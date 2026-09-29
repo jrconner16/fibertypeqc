@@ -7,15 +7,15 @@ import joblib
 import pandas as pd
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, classification_report
 
-from src.analyze_iia_gate import (
+from research.analyze_iia_gate import (
     _apply_iia_gate,
     _gate_mask,
     derive_iia_gate_thresholds,
 )
-from src.evaluate_against_audit_benchmark import CANONICAL_CLASSES
+from research.evaluate_against_audit_benchmark import CANONICAL_CLASSES
+from research.train_candidate_from_feature_table import _boosting_model, _load_feature_table
+from research.train_weighted_candidate_from_audit import _load_manual_split
 from src.quantify_classify import FROZEN_ALPHA_BASELINE_FEATURES
-from src.train_candidate_from_feature_table import _boosting_model, _load_feature_table
-from src.train_weighted_candidate_from_audit import _load_manual_split
 
 RECIPE_ORDER = (
     "manual_only_high",

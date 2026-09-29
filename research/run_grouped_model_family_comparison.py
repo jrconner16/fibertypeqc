@@ -19,7 +19,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
-from src.run_grouped_feature_ablation import _fold_metrics, _git_state, numeric_feature_table
+from research.run_grouped_feature_ablation import _fold_metrics, _git_state, numeric_feature_table
 
 COMPARISON_METRICS = (
     "macro_f1",

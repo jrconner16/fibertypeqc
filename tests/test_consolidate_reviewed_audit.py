@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.consolidate_reviewed_audit import consolidate_reviewed_audit
+from research.consolidate_reviewed_audit import consolidate_reviewed_audit
 
 
 def test_consolidate_reviewed_audit_builds_final_labels(tmp_path):

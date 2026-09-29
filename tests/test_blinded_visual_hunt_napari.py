@@ -5,7 +5,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.blinded_visual_hunt_napari import _fiber_keys, _load_development_manifest, _review_path
+from research.blinded_visual_hunt_napari import (
+    _fiber_keys,
+    _load_development_manifest,
+    _review_path,
+)
 
 
 def test_visual_hunt_uses_development_sections_only(tmp_path: Path) -> None:

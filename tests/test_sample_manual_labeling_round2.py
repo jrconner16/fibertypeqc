@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.sample_manual_labeling_round2 import sample_manual_labeling_round2
+from research.sample_manual_labeling_round2 import sample_manual_labeling_round2
 
 
 def test_round2_sampler_creates_eval_and_train_pools_with_distinct_rows():

@@ -1,7 +1,7 @@
 import pandas as pd
 
-from src.build_existing_ta_audit_f1_features import F1_COLUMNS
-from src.run_p1_supervision_source_comparison import run_comparison
+from research.build_existing_ta_audit_f1_features import F1_COLUMNS
+from research.run_p1_supervision_source_comparison import run_comparison
 
 
 def _table(prefix: str, authority: str, groups: list[str]) -> pd.DataFrame:

@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import src.score_locked_candidate as scorer
-from src.run_reviewed_cohort_baseline import FEATURES
+import research.score_locked_candidate as scorer
+from research.run_reviewed_cohort_baseline import FEATURES
 
 
 class _Model:

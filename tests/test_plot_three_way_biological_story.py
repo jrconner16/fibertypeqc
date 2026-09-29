@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.plot_three_way_biological_story import build_long_table
+from research.plot_three_way_biological_story import build_long_table
 
 
 def test_build_long_table_contains_three_methods() -> None:

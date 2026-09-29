@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.run_p1_iia_gate_ablation import evaluate
+from research.run_p1_iia_gate_ablation import evaluate
 
 
 def _features() -> pd.DataFrame:

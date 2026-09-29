@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.build_true_iia_hunt import build_true_iia_hunt
+from research.build_true_iia_hunt import build_true_iia_hunt
 
 
 def test_build_true_iia_hunt_prefers_high_type2_low_type1_candidates():

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.build_combined_audit_set import build_combined_audit_set
+from research.build_combined_audit_set import build_combined_audit_set
 
 
 def test_build_combined_audit_set_combines_buckets():

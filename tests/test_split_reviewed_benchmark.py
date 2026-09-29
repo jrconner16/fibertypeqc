@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.split_reviewed_benchmark import split_reviewed_benchmark
+from research.split_reviewed_benchmark import split_reviewed_benchmark
 
 
 def test_split_reviewed_benchmark_holds_out_per_class_when_possible():

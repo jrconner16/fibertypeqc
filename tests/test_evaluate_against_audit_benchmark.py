@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.evaluate_against_audit_benchmark import evaluate_against_audit_benchmark
+from research.evaluate_against_audit_benchmark import evaluate_against_audit_benchmark
 
 
 def test_evaluate_against_audit_benchmark_reports_pipeline_comparator():

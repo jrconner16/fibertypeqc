@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.build_candidate_split_manifest import build_candidate_split_manifest
+from research.build_candidate_split_manifest import build_candidate_split_manifest
 
 
 def test_build_candidate_split_manifest_populates_filename_and_summary_fields():

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.analyze_iia_gate import analyze_iia_gate
+from research.analyze_iia_gate import analyze_iia_gate
 
 
 def test_analyze_iia_gate_adds_gated_strategies():

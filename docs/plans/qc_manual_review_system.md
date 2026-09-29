@@ -299,7 +299,7 @@ From `src/review_labels_napari.py`:
 - add-by-polygon, add-by-brush, delete, and boundary paint/erase behaviors; and
 - compatibility loading and saving of the existing manual-review CSV.
 
-From `src/review_audit_napari.py`:
+From `research/review_audit_napari.py`:
 
 - audit-subset and manifest-row loading;
 - queue-style next/previous navigation;
@@ -326,7 +326,7 @@ From other repository modules:
 
 1. Both reviewers are large, independent Napari applications
    (`src/review_labels_napari.py`, 1,076 lines;
-   `src/review_audit_napari.py`, 722 lines) with no shared session.
+   `research/review_audit_napari.py`, 722 lines) with no shared session.
 2. Both import Napari/Qt at module import time, so shared logic extracted from
    them would not remain safely headless.
 3. Image-channel selection, display downsampling, review-table merging, and CSV
@@ -1358,7 +1358,7 @@ uv run ruff check <changed Python files and tests>
 - [x] Read repository `AGENTS.md`.
 - [x] Inspected repository structure and current CLI/module conventions.
 - [x] Audited `src/review_labels_napari.py`.
-- [x] Audited `src/review_audit_napari.py`.
+- [x] Audited `research/review_audit_napari.py`.
 - [x] Identified reusable loaders, selection, zoom, shortcuts, colors,
   probability display, and CSV compatibility behavior.
 - [x] Recorded architectural conflicts and decisions.

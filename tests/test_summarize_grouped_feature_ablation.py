@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.summarize_grouped_feature_ablation import (
+from research.summarize_grouped_feature_ablation import (
     build_decision_record,
     paired_bootstrap_summary,
 )

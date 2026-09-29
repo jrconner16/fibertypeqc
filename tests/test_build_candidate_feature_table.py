@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.build_candidate_feature_table import (
+from research.build_candidate_feature_table import (
     assemble_candidate_feature_table,
     discover_diagnostics_files,
 )

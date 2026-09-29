@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.analyze_iia_gate import _apply_iia_gate, _gate_mask, derive_iia_gate_thresholds
+from research.analyze_iia_gate import _apply_iia_gate, _gate_mask, derive_iia_gate_thresholds
 from src.run_batch import (
     PROJECT_ROOT,
     V0_PARAMS,

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.train_panel_baselines import (
+from research.train_panel_baselines import (
     _fit,
     _manual_table,
     _metrics,

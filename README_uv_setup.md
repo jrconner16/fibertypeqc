@@ -4,7 +4,7 @@ FiberTypeQC uses `uv` to pin Python and synchronize its application and developm
 
 ## Project files
 
-- `.python-version` keeps Python pinned to 3.11
+- `pyproject.toml` (`requires-python`) and `uv.lock` pin Python to 3.11
 - `pyproject.toml` defines the uv project and optional extras
 - `docs/quickstart.md` documents the current command-line workflow
 - `docs/panel_schema.md` documents semantic panel configuration

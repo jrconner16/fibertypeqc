@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.summarize_roi_matching_qc import audit_match_rows, summarize_image
+from research.summarize_roi_matching_qc import audit_match_rows, summarize_image
 
 
 def test_audit_match_rows_excludes_all_sides_of_ambiguous_assignments():

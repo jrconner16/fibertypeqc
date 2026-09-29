@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from src.run_quad_semantic_array_task import _load_manifest, build_pipeline_command
+from research.run_quad_semantic_array_task import _load_manifest, build_pipeline_command
 
 
 def test_load_manifest_accepts_only_unique_raw_czi_paths(tmp_path: Path) -> None:

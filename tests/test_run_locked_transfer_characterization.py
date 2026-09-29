@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from src.run_locked_transfer_characterization import (
+from research.run_locked_transfer_characterization import (
     characterize_feature_set,
     prepare_transfer_table,
 )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.build_next_supervision_pools import build_next_supervision_pools
+from research.build_next_supervision_pools import build_next_supervision_pools
 
 
 def test_build_next_supervision_pools_creates_benchmark_and_supervision_rows():

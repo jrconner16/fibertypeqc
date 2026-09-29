@@ -106,12 +106,17 @@ uv run python -m scripts.run_pipeline \
 
 **Parameters:**
 - `--input`: Path to .czi or .tiff image
-- `--output-dir`: Where to save results (creates subdirectory per image)
+- `--output-dir`: Where to save this image's results (`run_batch` creates one subdirectory per image)
 - `--iib-channel`: Channel for IIb marker signal (default: 0)
 - `--iia-channel`: Channel for IIa marker signal (default: 1)
 - `--membrane-channel`: Structural membrane/laminin channel for segmentation (default: 2)
 - `--classifier-path`: Path to sklearn classifier (.joblib)
-- All other parameters use frozen v0 defaults (see `src/run_batch.py` for the full set)
+- `run_batch` additionally applies `--model-confidence-threshold 0.55 --model-margin-threshold 0.15`
+  and `--downsample-factor 2`; the single-image command above uses the `run_pipeline` defaults for
+  those options. Print the full frozen set with `uv run python -m scripts.run_batch --show-v0-params`.
+- `--sensitivity` and `--mixed-strictness` derive several typing parameters (`--quantile`,
+  `--typing-bg-sigma`, `--typing-smooth-sigma`, `--min-coverage`, and review thresholds); values
+  passed explicitly for those options are currently overridden.
 
 The frozen baseline channel schema is intentionally narrow: IIx is inferred as the unstained class
 relative to the IIb and IIa channels. Panel-aware configuration is available as an explicit opt-in,
@@ -175,11 +180,15 @@ outputs/v0_run/image_name/
 ├── image_name_cellpose_labels.tif          # Segmentation masks
 ├── image_name_fibers.csv                   # Feature table (rows=fibers)
 ├── image_name_feature_diagnostics.csv      # Optional diagnostics table (advanced/debugging)
-├── image_name_summary.csv                  # Class statistics + confidence intervals
-├── image_name_result_bundle.json            # Portable index of retained result artifacts
-├── image_name_result_report.html            # Self-contained results/QC report and next action
-├── image_name_fibers_manual_review.csv     # Empty; filled by review UI
-└── image_name_weak_labels.csv              # Model confidence flags
+├── image_name_summary.csv                  # Image-level statistics and QC flags
+├── image_name_run.json                     # Run manifest: parameters, versions, fingerprints
+├── image_name_preflight_qc.json            # Input/configuration QC
+├── image_name_postrun_qc.json              # Output QC checks and next action
+├── image_name_result_bundle.json           # Portable index of retained result artifacts
+└── image_name_result_report.html           # Self-contained results/QC report and next action
+
+The review step writes `image_name_fibers_manual_review.csv`; merging writes
+`image_name_fibers_final.csv`.
 ```
 
 Column definitions are documented in [docs/output_schema.md](docs/output_schema.md). External
@@ -250,7 +259,9 @@ analysis/                        # Private-data-dependent case studies/placehold
 
 data/models/                     # Frozen baseline classifier
 
-src/                             # Internal implementation modules during alpha
+src/                             # Supported pipeline and review implementation
+
+research/                        # Research/study tooling; not part of the release surface
 
 tests/                           # Basic synthetic unit tests
 ```
@@ -265,7 +276,6 @@ The pipeline includes automatic QC flags:
 - **High unknown rate** (> 35%)
 - **Aberrant fiber sizes** (median area outside 200–15,000 px²)
 - **Suspicious type correlation** (inter-type correlation > 0.92)
-- **Low coverage** (< 6% of image)
 
 See `--qc-*` parameters in `run_pipeline.py` for customization.
 
@@ -273,7 +283,7 @@ See `--qc-*` parameters in `run_pipeline.py` for customization.
 
 ## Requirements
 
-- Python 3.11–3.12
+- Python 3.11 (pinned by `pyproject.toml` and `uv.lock`)
 - `uv` package manager
 - macOS/Linux (GPU optional but recommended for Cellpose)
 
@@ -292,7 +302,6 @@ Key dependencies:
 - Verify file is not corrupted: `python -c "import czifile; czifile.CziFile('image.czi')"`
 
 ### Out of memory
-- Reduce `--bsize` (Cellpose batch size, default: 256)
 - Reduce `--crop-ds` (preprocessing downsample, default: 8)
 - Enable CPU-only mode: `--cpu`
 
@@ -304,7 +313,7 @@ Key dependencies:
 ### Classification errors
 - Verify type marker channels are correct (`--iib-channel`, `--iia-channel`)
 - Review confidence flags in `*_weak_labels.csv`
-- Check model performance on similar images in training data
+- Use a model whose panel matches your channel configuration
 
 For detailed validation metrics, see [docs/validation_summary.md](docs/validation_summary.md)
 and the scripts under `validation/`.
@@ -316,7 +325,8 @@ and the scripts under `validation/`.
 To extend or modify the pipeline:
 
 1. **New preprocessing**: Add to `src/preprocess_membrane.py`
-2. **New classifiers**: Train with `src/train_gold_classifier.py`, save to `data/models/`
+2. **New classifiers**: Register them with a model manifest; models trained on private data stay
+   out of Git (see [ROADMAP.md](ROADMAP.md) and [docs/model_registry.md](docs/model_registry.md))
 3. **Custom parameters**: Create preset configs in `run_batch.py`
 4. **Unit tests**: Run `uv run python -m pytest`
 

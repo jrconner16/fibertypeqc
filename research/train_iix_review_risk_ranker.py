@@ -12,13 +12,13 @@ from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
-from src.analyze_iia_gate import (
+from research.analyze_iia_gate import (
     _apply_iia_gate,
     _gate_mask,
     derive_iia_gate_thresholds,
 )
-from src.sweep_candidate_weights_on_cohort import _discover_cohort_ids, _discover_section_ids
-from src.train_candidate_from_feature_table import _load_feature_table
+from research.sweep_candidate_weights_on_cohort import _discover_cohort_ids, _discover_section_ids
+from research.train_candidate_from_feature_table import _load_feature_table
 
 NUMERIC_FEATURES = [
     "candidate_model_confidence",

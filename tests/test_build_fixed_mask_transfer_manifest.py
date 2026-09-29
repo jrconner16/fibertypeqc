@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.build_fixed_mask_transfer_manifest import build_fixed_mask_manifest
+from research.build_fixed_mask_transfer_manifest import build_fixed_mask_manifest
 
 
 def _source_tree(tmp_path: Path) -> tuple[pd.DataFrame, Path, Path]:

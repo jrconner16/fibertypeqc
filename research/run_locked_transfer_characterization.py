@@ -15,7 +15,7 @@ from fibertypeqc.experimental_features import (
     RELATIVE_CHANNEL_FEATURES,
     add_relative_channel_features,
 )
-from src.run_grouped_feature_ablation import (
+from research.run_grouped_feature_ablation import (
     _build_model,
     _fold_metrics,
     _load_yaml,

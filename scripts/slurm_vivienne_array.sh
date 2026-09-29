@@ -19,7 +19,7 @@ set -euo pipefail
 
 cd "$FIBERTYPEQC_ROOT"
 
-uv run python -m src.run_panel_array_task \
+uv run python -m research.run_panel_array_task \
   --manifest "$VIVIENNE_MANIFEST" \
   --input-root "$VIVIENNE_INPUT_ROOT" \
   --output-root "$VIVIENNE_OUTPUT_ROOT" \

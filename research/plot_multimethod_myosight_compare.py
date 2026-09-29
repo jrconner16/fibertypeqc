@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from src.biology_metadata import AGE_ORDER, GENOTYPE_ORDER, add_biology_metadata
-from src.plot_validation_summary import prep_table
+from research.biology_metadata import AGE_ORDER, GENOTYPE_ORDER, add_biology_metadata
+from research.plot_validation_summary import prep_table
 
 DEFAULT_METHOD_SPECS = [
     (

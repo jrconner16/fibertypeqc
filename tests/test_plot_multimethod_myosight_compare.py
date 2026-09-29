@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.plot_multimethod_myosight_compare import (
+from research.plot_multimethod_myosight_compare import (
     UNCALIBRATED_REVIEW_LABEL,
     build_method_long,
     build_review_long,

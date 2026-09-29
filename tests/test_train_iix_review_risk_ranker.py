@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.train_iix_review_risk_ranker import _prepare_training_table
+from research.train_iix_review_risk_ranker import _prepare_training_table
 
 
 def test_prepare_training_table_merges_feature_columns():

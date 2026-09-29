@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from src.build_czi_input_manifest import build_manifest_rows
+from research.build_czi_input_manifest import build_manifest_rows
 
 
 def test_build_manifest_rows_filters_explicit_duplicate_patterns(tmp_path: Path) -> None:

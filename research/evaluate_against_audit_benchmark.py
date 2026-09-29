@@ -6,12 +6,12 @@ from pathlib import Path
 import pandas as pd
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, classification_report
 
-from src.quantify_classify import FROZEN_ALPHA_BASELINE_FEATURES
-from src.train_candidate_from_feature_table import (
+from research.train_candidate_from_feature_table import (
     _candidate_model_builders,
     _expanded_feature_columns,
     _load_feature_table,
 )
+from src.quantify_classify import FROZEN_ALPHA_BASELINE_FEATURES
 
 CANONICAL_CLASSES = ("iib", "iia", "iix")
 

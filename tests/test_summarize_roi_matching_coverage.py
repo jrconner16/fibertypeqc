@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.compare_roi_boundaries import classify_match_candidates
-from src.summarize_roi_matching_coverage import (
+from research.compare_roi_boundaries import classify_match_candidates
+from research.summarize_roi_matching_coverage import (
     apply_one_to_one_outcomes,
     build_class_summary,
 )

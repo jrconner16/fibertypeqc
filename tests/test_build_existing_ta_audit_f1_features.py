@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.build_existing_ta_audit_f1_features import F1_COLUMNS, build_existing_ta_features
+from research.build_existing_ta_audit_f1_features import F1_COLUMNS, build_existing_ta_features
 
 
 def test_build_existing_ta_features_uses_only_weighted_manual_target_rows(tmp_path):

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.summarize_roi_matching_qc import (
+from research.summarize_roi_matching_qc import (
     _resolve_existing_path,
     audit_match_rows,
 )
