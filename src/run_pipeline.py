@@ -13,7 +13,9 @@ import tifffile
 from fibertypeqc.artifacts import (
     build_run_manifest,
     can_reuse_fiber_labels,
+    file_sha256,
     load_run_manifest,
+    portable_path,
     write_run_manifest,
 )
 from fibertypeqc.config import resolve_channel_config
@@ -57,7 +59,7 @@ from src.quantify_classify import (
     summary_classes,
 )
 from src.run_nuclear_stage import run_nuclear_analysis
-from src.segment_cellpose import CellposeConfig, run_cellpose
+from src.segment_cellpose import CellposeConfig, resolve_device, run_cellpose
 
 
 @contextmanager
@@ -443,7 +445,7 @@ def main() -> None:
     stem = image_id.strip().replace(" ", "_")
     preflight_qc_path = output_dir / f"{stem}_preflight_qc.json"
     preflight_checks: list[dict[str, object]] = []
-    preflight_context: dict[str, object] = {"input": str(args.input)}
+    preflight_context: dict[str, object] = {"input": portable_path(args.input)}
 
     def fail_preflight(code: str, error: Exception, next_action: str) -> None:
         preflight_checks.append(qc_check(code, "fail", str(error), next_action))
@@ -688,13 +690,20 @@ def main() -> None:
 
         run_manifest_path = output_dir / f"{stem}_run.json"
         labels_path = output_dir / f"{stem}_cellpose_labels.tif"
+        if args.labels_path is not None:
+            labels_source = f"provided:{file_sha256(args.labels_path)}"
+            segmentation_device = "not_used"
+        else:
+            labels_source = "cellpose"
+            segmentation_device = resolve_device(not args.cpu)
         seg_manifest = {
             "model": args.cellpose_model,
             "diameter": None if args.diameter <= 0 else args.diameter,
             "bsize": args.bsize,
             "resample": bool(args.resample),
-            "requested_device": "cpu" if args.cpu else "mps_or_cpu",
+            "device": segmentation_device,
             "normalize": bool(args.cellpose_normalize),
+            "labels_source": labels_source,
         }
         preprocessing_manifest = {
             "crop_auto": bool(args.crop_auto),
@@ -708,16 +717,21 @@ def main() -> None:
             "p_high": args.p_high,
             "noise_floor": args.noise_floor,
         }
+        manifest_classifier = None if semantic_candidate else args.classifier_path
         run_manifest = build_run_manifest(
             input_path=args.input,
+            input_sha256=file_sha256(args.input),
             image_shape=tuple(image.shape),
             pixel_size_um=(pixel_size_x_um, pixel_size_y_um),
             panel_fingerprint=panel.fingerprint,
             panel_channels=panel.channels,
             segmentation=seg_manifest,
             preprocessing=preprocessing_manifest,
-            classifier_path=None if semantic_candidate else args.classifier_path,
+            classifier_path=manifest_classifier,
             model_manifest_path=args.model_manifest,
+            classifier_sha256=(
+                file_sha256(Path(manifest_classifier)) if manifest_classifier else None
+            ),
         )
         reused_labels = False
         labels = None
@@ -889,26 +903,29 @@ def main() -> None:
                 max_residual_rate=qc_cfg.max_residual_rate,
             ),
             context={
-                "input": str(args.input),
-                "fibers_path": str(fibers_path),
+                "input": portable_path(args.input),
+                "fibers_path": fibers_path.name,
                 "review_required": bool(fibers.get("needs_review", pd.Series(dtype=bool)).any()),
             },
         )
         write_qc_report(postrun_qc_path, postrun_report)
 
         summary = {
-            "input": str(args.input),
-            "labels_path": str(labels_path),
-            "fibers_path": str(fibers_path),
+            # Paths are portable: the input as given (or its file name) and output files
+            # relative to this image's output directory.
+            "input": portable_path(args.input),
+            "input_sha256": run_manifest["source_image_sha256"],
+            "labels_path": labels_path.name,
+            "fibers_path": fibers_path.name,
             "feature_diagnostics_path": (
-                str(diagnostics_path) if diagnostics_path is not None else ""
+                diagnostics_path.name if diagnostics_path is not None else ""
             ),
             "semantic_predictions_path": (
-                str(semantic_predictions_path) if semantic_predictions_path is not None else ""
+                semantic_predictions_path.name if semantic_predictions_path is not None else ""
             ),
-            "run_manifest_path": str(run_manifest_path),
-            "preflight_qc_path": str(preflight_qc_path),
-            "postrun_qc_path": str(postrun_qc_path),
+            "run_manifest_path": run_manifest_path.name,
+            "preflight_qc_path": preflight_qc_path.name,
+            "postrun_qc_path": postrun_qc_path.name,
             "runtime_s": round(float(runtime_s), 2),
             "membrane_channel": int(channel_cfg.membrane_channel),
             "dapi_channel": channel_cfg.dapi_channel,

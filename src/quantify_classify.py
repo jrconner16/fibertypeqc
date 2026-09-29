@@ -12,6 +12,7 @@ from scipy.spatial import ConvexHull
 from skimage.filters import threshold_otsu, threshold_yen
 from skimage.measure import find_contours
 
+from fibertypeqc.artifacts import portable_path
 from fibertypeqc.feature_schema import (
     MULTIPANEL_FEATURE_SCHEMA,
     SEMANTIC_MARKER_NAMES,
@@ -1235,7 +1236,7 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
         if "model_margin" not in df.columns:
             df["model_margin"] = np.nan
         df["confidence"] = df["model_confidence"]
-        df["classifier_path"] = model_path
+        df["classifier_path"] = portable_path(model_path)
         df = _add_model_signal_qc(df, cfg)
         return df
 

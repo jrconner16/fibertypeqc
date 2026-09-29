@@ -84,8 +84,13 @@ four observed channels, and every configured index must be within the image chan
 ## Run provenance and model sidecars
 
 Each successful preprocessing start writes `<image-stem>_run.json` beside the legacy outputs. It
-records the resolved semantic panel, input shape and pixel scale, Cellpose/preprocessing settings,
-software versions, Git commit, and stage fingerprints. It is ignored as generated output.
+records the resolved semantic panel, input shape and pixel scale, Cellpose/preprocessing settings
+including the device actually used, the labels source (`cellpose` or `provided:<sha256>`), versions
+of Cellpose, torch, numpy, scipy, scikit-image, scikit-learn, pandas, tifffile, and czifile, the Git
+commit, and stage fingerprints (run-manifest schema 2). Inputs are identified by
+`source_image_sha256` and the classifier by `classifier_sha256`. Recorded paths are portable:
+relative paths are kept, and absolute paths outside the working directory are reduced to the file
+name. It is ignored as generated output.
 
 `--model-manifest PATH` is an optional JSON or YAML sidecar for `--classifier-path`. A manifest
 must declare its version, identifier, task, feature-schema version, required observed markers, and
@@ -105,7 +110,9 @@ enabled; the cached shape is checked before association tables are regenerated.
 
 `--reuse-artifacts auto|never|required` is now available in both single-image and batch commands.
 It reuses only a same-output-directory `*_cellpose_labels.tif` whose prior `run.json` has an
-identical fiber-segmentation fingerprint. `required` stops before Cellpose if no compatible labels
+identical fiber-segmentation fingerprint. That fingerprint includes the input image digest, labels
+source, device, and Cellpose version, so labels are never reused for a different image or a
+provided mask. Records written before run-manifest schema 2 are not reused. `required` stops before Cellpose if no compatible labels
 exist; `auto` recomputes safely. Cached label shape is also checked against the current image.
 `--labels-path` is the explicit corrected-mask route and cannot be combined with
 `--reuse-artifacts`.
