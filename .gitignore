@@ -33,7 +33,6 @@ Thumbs.db
 outputs/
 /data/runs/
 /data/*.csv
-roadmap.md
 
 # Private development notebooks and scratch validation labels
 notebooks/
@@ -81,7 +80,6 @@ quad/
 !/src/
 !/data/models/
 
-AGENTS.md
 RELEASE_PLAN_v0.1.md
 docs/release_checklist_v0.1.md
 docs/review_workflow.md

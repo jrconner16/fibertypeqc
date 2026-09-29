@@ -8,6 +8,17 @@
 - The frozen default classifier and review-assisted public workflow remain unchanged.
 - Candidate-model evaluation, review-policy research, and cohort-specific tools remain experimental.
 
+### Added
+
+- `ROADMAP.md` as the single public execution plan (release overhaul, Stages 0–7); the 2026 H2
+  roadmap moved to `docs/history/`.
+- Tracked `AGENTS.md` contributor rules.
+- Supported release surface map in `ARCHITECTURE.md`.
+- Private-data guardrails in `scripts.check_repository`: unapproved model artifacts, per-fiber tables
+  outside `examples/`/`tests/`, external-drive and cloud-backup paths, and an optional private
+  identifier denylist kept outside Git.
+- `.pre-commit-config.yaml` running repository checks and ruff before each commit.
+
 ## v0.2.0
 
 ### Release Title

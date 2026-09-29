@@ -1,0 +1,17 @@
+# Install once per clone: uv run pre-commit install
+# The private identifier scan reads ~/.config/fibertypeqc/private_denylist.txt (or
+# $FIBERTYPEQC_PRIVATE_DENYLIST); the denylist itself must never be committed.
+repos:
+  - repo: local
+    hooks:
+      - id: fibertypeqc-repository-checks
+        name: FiberTypeQC repository and private-data checks
+        entry: uv run --frozen python -m scripts.check_repository
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: ruff
+        name: ruff
+        entry: uv run --frozen ruff check
+        language: system
+        types: [python]

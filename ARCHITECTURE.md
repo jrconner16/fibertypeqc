@@ -47,6 +47,22 @@ thresholds, feature contract, QC flags, and merge behavior are baseline-sensitiv
 Experimental code is documented in place to avoid disruptive moves. A future `experiments/` namespace
 may be introduced only through incremental moves with wrapper/import compatibility tests.
 
+## Supported release surface
+
+The overhaul in [ROADMAP.md](ROADMAP.md) narrows the supported product to the modules below. Anything
+else under `src/`, `validation/`, or `analysis/` is research tooling: it may change or move without
+notice and is not part of the release contract.
+
+| Layer | Supported modules |
+|---|---|
+| Public commands | `scripts/run_pipeline.py`, `scripts/run_batch.py`, `scripts/merge_reviewed_labels.py`, `scripts/review_labels_napari.py`, `scripts/run_reference.py`, `scripts/validate_reference_outputs.py`, `scripts/check_repository.py` |
+| Pipeline core | `src/run_pipeline.py`, `src/run_batch.py`, `src/io_utils.py`, `src/preprocess_membrane.py`, `src/segment_cellpose.py`, `src/quantify_classify.py`, `src/label_masks.py`, `src/fiber_type_labels.py`, `src/nuclear_association.py`, `src/run_nuclear_stage.py`, `src/dapi_preprocess.py`, `fibertypeqc/czi_scenes.py`, `src/split_czi_scenes.py` |
+| Contracts and provenance | `fibertypeqc/` (config, panels, feature schema, model manifest, semantic model, evidence registry, QC contract, artifacts, result bundle, HTML report) |
+| Review | `src/review/`, `src/review_project_napari.py`, `src/generate_review_qc.py`; legacy `src/review_labels_napari.py` and `src/merge_reviewed_labels.py` until finalization replaces them |
+
+Release target (see roadmap): the project-based review becomes the supported reviewer, a finalizer
+produces analysis-ready tables, and typing uses one panel-specific model per channel configuration.
+
 ## Data and artifact boundaries
 
 - Raw microscopy images, private labels, notebooks, `test_inputs/`, and local research folders are
@@ -54,8 +70,10 @@ may be introduced only through incremental moves with wrapper/import compatibili
 - `outputs/` and `data/runs/` are generated run products and must not be committed.
 - `manifests/` stores small, versioned input/split contracts. Tracked manifests must use
   `input_relpath`, never machine-specific absolute paths. Run them with `--input-root`.
-- `data/models/` contains only released/frozen model artifacts and their documentation. Candidate
-  models belong in ignored output/artifact locations until intentionally released with a model card.
+- `data/models/` contains only model artifacts approved for public distribution and their
+  documentation (enforced by `scripts.check_repository`). Models trained on private or unpublished
+  data are never committed: the registry records their identity and digest, and the artifact is
+  resolved from a private model root at runtime.
 - Documentation belongs in `docs/`; user-facing workflow documentation belongs in the root README or
   linked docs.
 
@@ -87,6 +105,7 @@ Before merging changes, run:
 ```bash
 uv run python -m pytest -m "not integration" -q
 uv run ruff check .
+uv run python -m scripts.check_repository
 ```
 
 For baseline-sensitive changes, also provide a versioned frozen-baseline comparison, document the
