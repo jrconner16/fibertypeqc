@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -24,6 +25,19 @@ ALLOWED_TRACKED_MICROSCOPY_FIXTURES = frozenset(
         "examples/reference/synthetic_reference_labels.tif",
     )
 )
+MODEL_ARTIFACT_SUFFIXES = frozenset(
+    (".joblib", ".pkl", ".pickle", ".pt", ".pth", ".onnx", ".npy", ".npz", ".h5")
+)
+# Model artifacts explicitly approved for public distribution. Models trained on private or
+# unpublished biological data must stay out of Git and be resolved from a private model root.
+APPROVED_PUBLIC_MODEL_ARTIFACTS = frozenset(
+    ("data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib",)
+)
+# Per-fiber tables are only allowed as synthetic/demo fixtures.
+FIBER_TABLE_ALLOWED_PREFIXES = ("examples/", "tests/")
+FIBER_TABLE_HEADER_RE = re.compile(r"(^|,)fiber_id(,|$)")
+PRIVATE_DENYLIST_ENV = "FIBERTYPEQC_PRIVATE_DENYLIST"
+DEFAULT_PRIVATE_DENYLIST = Path.home() / ".config" / "fibertypeqc" / "private_denylist.txt"
 
 
 def tracked_files(repo_root: Path = REPO_ROOT) -> set[str]:
@@ -85,7 +99,25 @@ def forbidden_tracked_artifacts(tracked: set[str]) -> list[str]:
             relative_path not in ALLOWED_TRACKED_MICROSCOPY_FIXTURES
         ):
             forbidden.append(f"forbidden tracked microscopy file: {relative_path}")
+        if suffix in MODEL_ARTIFACT_SUFFIXES and (
+            relative_path not in APPROVED_PUBLIC_MODEL_ARTIFACTS
+        ):
+            forbidden.append(f"model artifact not approved for public release: {relative_path}")
     return forbidden
+
+
+def unapproved_fiber_tables(repo_root: Path, tracked: set[str]) -> list[str]:
+    findings: list[str] = []
+    for relative_path in sorted(tracked):
+        if not relative_path.lower().endswith(".csv"):
+            continue
+        if relative_path.startswith(FIBER_TABLE_ALLOWED_PREFIXES):
+            continue
+        with (repo_root / relative_path).open(encoding="utf-8") as handle:
+            header = handle.readline().strip()
+        if FIBER_TABLE_HEADER_RE.search(header):
+            findings.append(f"per-fiber table outside examples/ or tests/: {relative_path}")
+    return findings
 
 
 def private_absolute_paths(repo_root: Path, tracked: set[str]) -> list[str]:
@@ -95,6 +127,7 @@ def private_absolute_paths(repo_root: Path, tracked: set[str]) -> list[str]:
         re.compile("/" + r"Volumes/[^\s`\"']+"),
         re.compile("/" + r"home/[^\s`\"']+"),
         re.compile("/" + r"temp_work/[^\s`\"']+"),
+        re.compile(r"Google" + r" ?Drive|My" + r" Drive|Cloud" + r"Storage/", re.IGNORECASE),
     )
     for relative_path in sorted(tracked):
         path = repo_root / relative_path
@@ -107,12 +140,52 @@ def private_absolute_paths(repo_root: Path, tracked: set[str]) -> list[str]:
     return findings
 
 
-def check_repository(repo_root: Path = REPO_ROOT) -> None:
+def load_private_denylist(path: Path | None = None) -> list[re.Pattern[str]] | None:
+    """Load private identifier patterns kept outside the repository.
+
+    Returns ``None`` when no denylist is available (for example in public CI), so callers can
+    report that the private identifier scan was skipped rather than silently passing.
+    """
+    if path is None:
+        configured = os.environ.get(PRIVATE_DENYLIST_ENV)
+        path = Path(configured).expanduser() if configured else DEFAULT_PRIVATE_DENYLIST
+    if not path.is_file():
+        return None
+    patterns: list[re.Pattern[str]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        entry = line.strip()
+        if entry and not entry.startswith("#"):
+            patterns.append(re.compile(entry))
+    return patterns
+
+
+def private_identifier_matches(
+    repo_root: Path, tracked: set[str], patterns: list[re.Pattern[str]]
+) -> list[str]:
+    """Report tracked paths or text lines matching private patterns without echoing the match."""
+    findings: list[str] = []
+    for relative_path in sorted(tracked):
+        if any(pattern.search(relative_path) for pattern in patterns):
+            findings.append(f"{relative_path}: path matches private denylist")
+        path = repo_root / relative_path
+        if path.suffix.lower() not in TEXT_SUFFIXES:
+            continue
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if any(pattern.search(line) for pattern in patterns):
+                findings.append(f"{relative_path}:{line_number}: matches private denylist")
+    return findings
+
+
+def check_repository(repo_root: Path = REPO_ROOT) -> bool:
+    """Run repository checks; return whether the private identifier scan ran."""
     tracked = tracked_files(repo_root)
+    denylist = load_private_denylist()
     problems = [
         *broken_documentation_links(repo_root, tracked),
         *forbidden_tracked_artifacts(tracked),
+        *unapproved_fiber_tables(repo_root, tracked),
         *private_absolute_paths(repo_root, tracked),
+        *(private_identifier_matches(repo_root, tracked, denylist) if denylist else []),
     ]
     if problems:
         details = "\n".join(f"- {problem}" for problem in problems)
@@ -125,10 +198,17 @@ def check_repository(repo_root: Path = REPO_ROOT) -> None:
     validate_dataset_evidence_inventory(
         repo_root / "examples/reference/dataset_evidence_inventory.example.yaml"
     )
+    return denylist is not None
 
 
 def main() -> None:
-    check_repository()
+    denylist_scanned = check_repository()
+    if not denylist_scanned:
+        print(
+            "private identifier scan skipped: no denylist "
+            f"(set {PRIVATE_DENYLIST_ENV} or create {DEFAULT_PRIVATE_DENYLIST.name} "
+            "under ~/.config/fibertypeqc/)"
+        )
     print("repository checks passed")
 
 

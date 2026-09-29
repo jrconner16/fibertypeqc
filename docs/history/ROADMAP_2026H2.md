@@ -1,3 +1,6 @@
+> **Superseded (2026-09-29).** Historical record only. The active plan is
+> [ROADMAP.md](../../ROADMAP.md).
+
 # FiberTypeQC Roadmap (2026 H2)
 
 Time window: July-December 2026  
