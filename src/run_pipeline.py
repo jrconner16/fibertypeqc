@@ -4,6 +4,7 @@ import argparse
 import sys
 import time
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +26,7 @@ from fibertypeqc.model_manifest import (
     validate_model_artifact,
     validate_model_compatibility,
 )
+from fibertypeqc.model_resolution import resolve_model
 from fibertypeqc.panels import Panel, validate_requested_domains
 from fibertypeqc.qc_contract import (
     build_qc_report,
@@ -33,7 +35,7 @@ from fibertypeqc.qc_contract import (
     write_qc_report,
 )
 from fibertypeqc.result_bundle import build_result_bundle, write_result_bundle
-from fibertypeqc.semantic_model import predict_semantic_candidate
+from fibertypeqc.semantic_model import apply_semantic_predictions, predict_semantic_candidate
 from src.io_utils import (
     ensure_dir,
     extract_pixel_size_um,
@@ -316,6 +318,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional sklearn model (.joblib/.pkl)",
     )
     p.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help=(
+            "Registered model ID (see manifests/model_registry.v1.yaml). Resolves the manifest "
+            "and artifact; private artifacts are read from $FIBERTYPEQC_MODEL_ROOT and verified "
+            "by digest. Cannot be combined with --classifier-path or --model-manifest."
+        ),
+    )
+    p.add_argument(
         "--model-manifest",
         type=Path,
         default=None,
@@ -430,6 +442,31 @@ AUTO_PROFILE_FLAG_FIELDS = {
 }
 
 
+# CLI flags that change marker features. A model manifest that pins feature extraction owns all
+# of these; passing any of them with such a model is refused.
+FEATURE_EXTRACTION_FLAGS = (
+    "--threshold-mode",
+    "--quantile",
+    "--percentile-q",
+    "--no-percentile-gate",
+    "--typing-preprocess",
+    "--typing-bg-quantile",
+    "--typing-tile-size",
+    "--typing-bg-sigma",
+    "--typing-smooth-sigma",
+    "--typing-erode-px",
+    "--coverage-quantile",
+    "--min-coverage",
+    "--sensitivity",
+    "--mixed-strictness",
+)
+
+
+def passed_flags(argv: list[str], flags: tuple[str, ...]) -> list[str]:
+    passed = {token.split("=", 1)[0] for token in argv if token.startswith("--")}
+    return [flag for flag in flags if flag in passed]
+
+
 def auto_profile_overridden_flags(argv: list[str]) -> list[str]:
     """Return explicitly passed flags whose values the auto profile replaces."""
     passed = {token.split("=", 1)[0] for token in argv if token.startswith("--")}
@@ -437,7 +474,17 @@ def auto_profile_overridden_flags(argv: list[str]) -> list[str]:
 
 
 def main() -> None:
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.model is not None:
+        if args.classifier_path is not None or args.model_manifest is not None:
+            parser.error("--model cannot be combined with --classifier-path or --model-manifest")
+        try:
+            resolved = resolve_model(args.model)
+        except ValueError as exc:
+            parser.error(str(exc))
+        args.classifier_path = str(resolved.artifact_path)
+        args.model_manifest = resolved.manifest_path
     output_dir = ensure_dir(args.output_dir)
     image_id = args.image_id if args.image_id is not None else args.input.stem
     if not image_id.strip() or "/" in image_id or "\\" in image_id or image_id in {".", ".."}:
@@ -513,7 +560,15 @@ def main() -> None:
             )
         )
     overridden_flags = auto_profile_overridden_flags(sys.argv[1:])
-    if overridden_flags:
+    # With a model that pins feature extraction, the sensitivity profile is not used, so a
+    # separate check below refuses conflicting flags instead of warning about the profile.
+    pins_features = False
+    if args.model_manifest is not None:
+        try:
+            pins_features = load_model_manifest(args.model_manifest).feature_extraction is not None
+        except ValueError:
+            pins_features = False  # reported by the manifest check below
+    if overridden_flags and not pins_features:
         profile = apply_auto_profile(
             QuantifyConfig(),
             sensitivity=float(args.sensitivity),
@@ -547,6 +602,15 @@ def main() -> None:
     except (OSError, ValueError) as exc:
         fail_preflight("preflight.model_artifact_valid", exc, "select_verified_model_artifact")
         raise
+    if model_manifest is not None and model_manifest.feature_extraction is not None:
+        conflicting = passed_flags(sys.argv[1:], FEATURE_EXTRACTION_FLAGS)
+        if conflicting:
+            error = ValueError(
+                f"Model '{model_manifest.model_id}' pins its feature-extraction settings; remove "
+                f"{', '.join(conflicting)}."
+            )
+            fail_preflight("preflight.model_feature_settings", error, "remove_conflicting_flags")
+            raise error
     preflight_checks.append(
         qc_check(
             "preflight.model_artifact_valid",
@@ -717,7 +781,8 @@ def main() -> None:
             "p_high": args.p_high,
             "noise_floor": args.noise_floor,
         }
-        manifest_classifier = None if semantic_candidate else args.classifier_path
+        # Semantic and legacy classifiers are both identified by path and digest in the run record.
+        manifest_classifier = args.classifier_path
         run_manifest = build_run_manifest(
             input_path=args.input,
             input_sha256=file_sha256(args.input),
@@ -844,14 +909,17 @@ def main() -> None:
             classifier_path=None if semantic_candidate else args.classifier_path,
             collect_spatial_marker_features=bool(args.export_diagnostics),
         )
-        quant_cfg = apply_auto_profile(
-            quant_cfg,
-            sensitivity=float(args.sensitivity),
-            mixed_strictness=float(args.mixed_strictness),
-        )
+        if model_manifest is not None and model_manifest.feature_extraction is not None:
+            # Reproduce the model's training features exactly: pinned values, no profile.
+            quant_cfg = replace(quant_cfg, **model_manifest.feature_extraction)
+        else:
+            quant_cfg = apply_auto_profile(
+                quant_cfg,
+                sensitivity=float(args.sensitivity),
+                mixed_strictness=float(args.mixed_strictness),
+            )
         fibers = quantify_labels(labels, image, quant_cfg)
         fibers_path = output_dir / f"{stem}_fibers.csv"
-        save_dataframe(fibers_path, fibers)
         diagnostics_path = None
         semantic_predictions_path = None
         if args.export_diagnostics or semantic_candidate:
@@ -865,6 +933,15 @@ def main() -> None:
                     diagnostics, args.classifier_path, model_manifest
                 )
                 save_dataframe(semantic_predictions_path, predictions)
+                if model_manifest.task == "fiber_identity":
+                    fibers = apply_semantic_predictions(
+                        fibers,
+                        predictions,
+                        confidence_threshold=quant_cfg.model_confidence_threshold,
+                        margin_threshold=quant_cfg.model_margin_threshold,
+                        classifier_path=portable_path(args.classifier_path),
+                    )
+        save_dataframe(fibers_path, fibers)
 
     with stage(6, total_stages, "compute summary + QC"):
         qc_cfg = QCConfig(

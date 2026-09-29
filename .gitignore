@@ -23,6 +23,9 @@ __pycache__/
 *.czi
 *.tif
 *.tiff
+# Synthetic public reference fixtures (also allow-listed in scripts/check_repository.py).
+!/examples/reference_four_class/synthetic_four_class.tif
+!/examples/reference_four_class/synthetic_four_class_labels.tif
 *.zip
 
 # OS

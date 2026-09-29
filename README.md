@@ -229,14 +229,25 @@ uv run python -m scripts.merge_reviewed_labels \
 
 ## Model Selection
 
-The v0 pipeline uses `rebaseline_tile_v2_p75p90_iib_iia_iix.joblib`, trained on:
-- Tile-subtraction preprocessing with 512 px training tiles; v0 inference defaults to
-  `--typing-tile-size 256` for background correction
-- Global percentile normalization (p75, p90)
-- Three-class output: IIB, IIA, IIX
+Fiber-type models do not generalize across channel configurations, so each model declares the
+panel it supports and the pipeline refuses a mismatched panel. Select a registered model by ID:
 
-For the v0.3.0.dev0 workflow, only this default model is part of the stable public path. See
-[data/models/model_card.md](data/models/model_card.md) for intended use and limitations.
+```bash
+export FIBERTYPEQC_MODEL_ROOT=/path/to/private/models   # only for privately distributed models
+uv run python -m scripts.run_pipeline --input image.tif --output-dir out \
+  --panel-config my_panel.yaml --model quad_four_class_rf_v1
+```
+
+| Model ID | Panel | Classes | Artifact |
+|---|---|---|---|
+| `quad_four_class_rf_v1` | laminin, Type I, IIa, IIb | I, IIa, IIb, IIx (residual) | private; resolved from `FIBERTYPEQC_MODEL_ROOT` and verified by digest |
+| `synthetic_four_class_reference_v1` | laminin, Type I, IIa, IIb | I, IIa, IIb, IIx | tracked; synthetic test fixture only |
+| `rebaseline_tile_v2_p75p90_iib_iia_iix` | laminin, IIa, IIb | IIa, IIb, IIx (residual) | tracked; retired historical baseline (`scripts.run_batch` default until the release switch) |
+
+The registry is `manifests/model_registry.v1.yaml`. A model manifest may pin its
+feature-extraction settings (`feature_extraction`); the pipeline then computes features exactly as
+in training, does not apply the `--sensitivity` profile, and refuses typing flags that would change
+them. See [data/models/model_card.md](data/models/model_card.md) for the historical baseline.
 
 ---
 

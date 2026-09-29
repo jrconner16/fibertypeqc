@@ -3,13 +3,42 @@ schema_version: 1
 # intentionally narrower than historical files in data/models/; add retired
 # artifacts only when they are used as a named comparison or reproduction target.
 models:
-  - model_id: rebaseline_tile_v2_p75p90_iib_iia_iix
+  - model_id: quad_four_class_rf_v1
     task: fiber_identity
     status: released
+    default: true
+    required_markers: [laminin, type_i, type_iia, type_iib]
+    feature_schema: multiplanel_features.v1
+    artifact: quad_four_class_rf_v1.joblib
+    artifact_location: private
+    artifact_sha256: d1028e388e61e93a06c2f7b1907a14001c33e5844e6c038575bb1dcc87299015
+    manifest: manifests/models/quad_four_class_rf_v1.yaml
+    development_groups: Private reviewed four-marker development sections; identifiers remain internal.
+    evaluation_groups: Leave-one-mouse-out development evidence plus a private locked final test; results are not public.
+    comparator: null
+    evidence: manifests/models/quad_four_class_rf_v1.yaml
+    limitations: Locked development candidate trained on one private cohort. IIx is residual inference from absent I/IIa/IIb signal. Features must be extracted with the pinned manifest settings. Review-assisted use only; not a validated general model.
+  - model_id: synthetic_four_class_reference_v1
+    task: fiber_identity
+    status: exploratory
+    required_markers: [laminin, type_i, type_iia, type_iib]
+    feature_schema: multiplanel_features.v1
+    artifact: examples/reference_four_class/synthetic_four_class_rf.joblib
+    artifact_sha256: 96eaeb2a380b29a4001d0aff9eadc79700014f7a824ed66ade30e0e09f18b36d
+    manifest: examples/reference_four_class/synthetic_four_class_rf.yaml
+    development_groups: Synthetic generated fibers only.
+    evaluation_groups: Synthetic mechanics reference only.
+    comparator: null
+    evidence: scripts/generate_four_class_reference.py
+    limitations: Synthetic test fixture for the pinned four-class path; never use on biological images.
+  - model_id: rebaseline_tile_v2_p75p90_iib_iia_iix
+    task: fiber_identity
+    status: retired
     required_markers: [laminin, type_iia, type_iib]
     feature_schema: legacy_type1_type2.v1
     artifact: data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib
     artifact_sha256: 5a1042a31ad4d90be61a58fabf9204e52517e17b63baccf027c8d84db1d9f946
+    manifest: data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.yaml
     development_groups: Historical frozen-baseline development data; individual source groups are not public.
     evaluation_groups: Synthetic mechanics reference only in the public repository; biological evaluation remains internal.
     comparator: null
@@ -49,5 +78,5 @@ models:
     development_groups: Private reviewed regeneration development groups; identifiers remain internal.
     evaluation_groups: Private regeneration holdout group; identifiers remain internal.
     comparator: null
-    evidence: roadmap_2026H3.md
+    evidence: Private development record; not public.
     limitations: Development-only threshold-policy probe with an unselected positive/negative/uncertain policy; it must not be reported as an adult fiber-type call.

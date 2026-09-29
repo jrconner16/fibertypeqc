@@ -23,6 +23,8 @@ ALLOWED_TRACKED_MICROSCOPY_FIXTURES = frozenset(
     (
         "examples/reference/synthetic_reference.tif",
         "examples/reference/synthetic_reference_labels.tif",
+        "examples/reference_four_class/synthetic_four_class.tif",
+        "examples/reference_four_class/synthetic_four_class_labels.tif",
     )
 )
 MODEL_ARTIFACT_SUFFIXES = frozenset(
@@ -31,7 +33,11 @@ MODEL_ARTIFACT_SUFFIXES = frozenset(
 # Model artifacts explicitly approved for public distribution. Models trained on private or
 # unpublished biological data must stay out of Git and be resolved from a private model root.
 APPROVED_PUBLIC_MODEL_ARTIFACTS = frozenset(
-    ("data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib",)
+    (
+        "data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib",
+        # Fitted only on generated synthetic fibers by scripts.generate_four_class_reference.
+        "examples/reference_four_class/synthetic_four_class_rf.joblib",
+    )
 )
 # Per-fiber tables are only allowed as synthetic/demo fixtures.
 FIBER_TABLE_ALLOWED_PREFIXES = ("examples/", "tests/")
