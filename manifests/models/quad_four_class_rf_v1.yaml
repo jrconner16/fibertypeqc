@@ -1,0 +1,55 @@
+# Private artifact: resolve with FIBERTYPEQC_MODEL_ROOT; verified by artifact_sha256.
+# feature_extraction pins the settings used to compute training features.
+manifest_version: 1
+model_id: quad_four_class_rf_v1
+task: fiber_identity
+feature_schema_version: multiplanel_features.v1
+required_markers:
+- laminin
+- type_i
+- type_iia
+- type_iib
+outputs:
+- i
+- iia
+- iib
+- iix
+artifact: quad_four_class_rf_v1.joblib
+artifact_sha256: d1028e388e61e93a06c2f7b1907a14001c33e5844e6c038575bb1dcc87299015
+intended_use: Default fiber-type model for four-marker panels (Type I, IIa, IIb, laminin) with IIx inferred
+  from absent I/IIa/IIb signal. Locked development candidate; review-assisted use only.
+features:
+- area
+- type_i.mean
+- type_i.p75
+- type_i.p90
+- type_i.coverage_high
+- type_i.snr_mean
+- type_i.snr_p90
+- type_iia.mean
+- type_iia.p75
+- type_iia.p90
+- type_iia.coverage_high
+- type_iia.snr_mean
+- type_iia.snr_p90
+- type_iib.mean
+- type_iib.p75
+- type_iib.p90
+- type_iib.coverage_high
+- type_iib.snr_mean
+- type_iib.snr_p90
+feature_extraction:
+  coverage_quantile: 0.85
+  min_coverage: 0.06
+  mixed_balance_tolerance: 0.25
+  percentile_q: 0.85
+  quantile: 0.6
+  threshold_mode: quantile
+  typing_bg_quantile: 0.02
+  typing_bg_sigma: 24.0
+  typing_erode_px: 2
+  typing_preprocess: global_subtract
+  typing_smooth_sigma: 0.8
+  typing_tile_size: 512
+  use_percentile_gate: true
+training_data_sha256: b6519eff7614d59bfad591084a799a211498423092c04162c12c9b9cec2a94c6

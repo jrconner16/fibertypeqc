@@ -18,6 +18,7 @@ from pathlib import Path
 import pandas as pd
 
 from fibertypeqc.czi_scenes import discover_czi_scenes, export_czi_scenes
+from fibertypeqc.model_resolution import default_model_id
 
 # V0 frozen parameters (these define the baseline production command)
 V0_PARAMS = {
@@ -36,6 +37,7 @@ V0_PARAMS = {
 
 logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+LEGACY_V0_MODEL_ID = "rebaseline_tile_v2_p75p90_iib_iia_iix"
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,7 @@ def build_batch_command(
     reuse_artifacts: str = "never",
     image_id: str | None = None,
     model_manifest: Path | None = None,
+    model_id: str | None = None,
 ) -> list[str]:
     """
     Build the frozen v0 pipeline command for a single image.
@@ -129,18 +132,6 @@ def build_batch_command(
         str(output_dir.resolve()),
         "--image-id",
         image_id if image_id is not None else input_file.stem,
-        "--typing-preprocess",
-        V0_PARAMS["typing_preprocess"],
-        "--typing-tile-size",
-        str(V0_PARAMS["typing_tile_size"]),
-        "--typing-erode-px",
-        str(V0_PARAMS["typing_erode_px"]),
-        "--classifier-path",
-        str((classifier_path or (PROJECT_ROOT / V0_PARAMS["classifier_path"])).resolve()),
-        "--model-confidence-threshold",
-        str(V0_PARAMS["model_confidence_threshold"]),
-        "--model-margin-threshold",
-        str(V0_PARAMS["model_margin_threshold"]),
         "--downsample-factor",
         str(downsample_factor or V0_PARAMS["downsample_factor"]),
         "--retain-mode",
@@ -148,12 +139,40 @@ def build_batch_command(
         "--reuse-artifacts",
         reuse_artifacts,
     ]
-    # The frozen model's manifest pins its artifact digest and required markers. A custom
-    # classifier is only verified when its own manifest is supplied.
-    if model_manifest is None and classifier_path is None:
-        model_manifest = PROJECT_ROOT / V0_PARAMS["model_manifest"]
-    if model_manifest is not None:
-        cmd.extend(["--model-manifest", str(model_manifest.resolve())])
+    legacy_v0 = model_id is None or model_id == LEGACY_V0_MODEL_ID
+    if legacy_v0:
+        # The historical three-class model's typing settings and review thresholds. Models that
+        # pin their own feature extraction must not receive these flags.
+        cmd.extend(
+            [
+                "--typing-preprocess",
+                V0_PARAMS["typing_preprocess"],
+                "--typing-tile-size",
+                str(V0_PARAMS["typing_tile_size"]),
+                "--typing-erode-px",
+                str(V0_PARAMS["typing_erode_px"]),
+                "--model-confidence-threshold",
+                str(V0_PARAMS["model_confidence_threshold"]),
+                "--model-margin-threshold",
+                str(V0_PARAMS["model_margin_threshold"]),
+            ]
+        )
+    if model_id is not None:
+        # run_pipeline resolves the registered manifest and artifact and verifies the digest.
+        cmd.extend(["--model", model_id])
+    else:
+        cmd.extend(
+            [
+                "--classifier-path",
+                str((classifier_path or (PROJECT_ROOT / V0_PARAMS["classifier_path"])).resolve()),
+            ]
+        )
+        # The frozen model's manifest pins its artifact digest and required markers. A custom
+        # classifier is only verified when its own manifest is supplied.
+        if model_manifest is None and classifier_path is None:
+            model_manifest = PROJECT_ROOT / V0_PARAMS["model_manifest"]
+        if model_manifest is not None:
+            cmd.extend(["--model-manifest", str(model_manifest.resolve())])
     if not crop_auto:
         cmd.append("--no-crop-auto")
     for flag, value in (
@@ -166,7 +185,7 @@ def build_batch_command(
     if export_diagnostics:
         cmd.append("--export-diagnostics")
 
-    if not channel_overrides.uses_nonbaseline_channel_config():
+    if legacy_v0 and not channel_overrides.uses_nonbaseline_channel_config():
         cmd.extend(
             [
                 "--type1-channel",
@@ -263,6 +282,7 @@ def run_single_image(
     retain_mode: str = "full",
     reuse_artifacts: str = "never",
     model_manifest: Path | None = None,
+    model_id: str | None = None,
 ) -> dict:
     """
     Process a single image through the v0 pipeline.
@@ -305,6 +325,7 @@ def run_single_image(
         reuse_artifacts=reuse_artifacts,
         image_id=str(result["image_name"]),
         model_manifest=model_manifest,
+        model_id=model_id,
     )
 
     try:
@@ -414,6 +435,15 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help=(
+            "Registered model ID; forwarded to run_pipeline. Cannot be combined with "
+            "--classifier-path or --model-manifest."
+        ),
+    )
+    parser.add_argument(
         "--model-manifest",
         type=Path,
         default=None,
@@ -519,6 +549,24 @@ def main() -> None:
     args = parser.parse_args()
     if args.channel_config is not None and args.panel_config is not None:
         parser.error("use only one of --panel-config and --channel-config")
+    if args.model is not None and (
+        args.classifier_path is not None or args.model_manifest is not None
+    ):
+        parser.error("--model cannot be combined with --classifier-path or --model-manifest")
+    if args.model is None and args.classifier_path is None:
+        # Release default: the registry's default fiber-type model (four-class QUAD). The
+        # historical three-class run remains available with --model LEGACY_V0_MODEL_ID.
+        args.model = default_model_id("fiber_identity")
+    if (
+        args.model is not None
+        and args.model != LEGACY_V0_MODEL_ID
+        and args.panel_config is None
+        and args.channel_config is None
+    ):
+        parser.error(
+            f"model '{args.model}' needs --panel-config describing which channel holds each "
+            f"marker; for the historical three-class run use --model {LEGACY_V0_MODEL_ID}"
+        )
 
     # Show v0 params if requested
     if args.show_v0_params:
@@ -691,6 +739,7 @@ def main() -> None:
             retain_mode=args.retain_mode,
             reuse_artifacts=args.reuse_artifacts,
             model_manifest=args.model_manifest,
+            model_id=args.model,
         )
         results.append(result)
     results.extend(scene_failures)

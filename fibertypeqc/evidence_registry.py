@@ -18,6 +18,7 @@ DATASET_SPLIT_LEDGER_SCHEMA_VERSION = 1
 DATASET_EVIDENCE_INVENTORY_SCHEMA_VERSION = 1
 
 MODEL_STATUSES = frozenset({"released", "standing_candidate", "exploratory", "retired"})
+ARTIFACT_LOCATIONS = frozenset({"tracked", "private"})
 MODEL_TASKS = frozenset({"fiber_identity", "emhc_status", "review_risk", "segmentation"})
 LABEL_AUTHORITY_TIERS = frozenset(
     {"manual_gold", "reviewed_myosight", "myosight_derived", "model_prediction", "mixed"}
@@ -64,6 +65,7 @@ def validate_model_registry(path: Path, *, repo_root: Path | None = None) -> Non
         raise ValueError(f"Model registry {path} must contain a non-empty models list.")
 
     seen_ids: set[str] = set()
+    default_tasks: set[str] = set()
     root = repo_root or path.parents[1]
     for index, entry in enumerate(entries, start=1):
         description = f"Model registry entry {index}"
@@ -79,6 +81,12 @@ def validate_model_registry(path: Path, *, repo_root: Path | None = None) -> Non
         status = _require_string(entry, "status", description=description)
         if status not in MODEL_STATUSES:
             raise ValueError(f"{description} has unsupported status: {status}.")
+        if entry.get("default"):
+            if status != "released":
+                raise ValueError(f"{description} can be the default only when released.")
+            if task in default_tasks:
+                raise ValueError(f"Model registry declares more than one default for {task}.")
+            default_tasks.add(task)
         required_markers = entry.get("required_markers")
         if not isinstance(required_markers, list) or not all(
             isinstance(marker, str) and marker for marker in required_markers
@@ -89,9 +97,29 @@ def validate_model_registry(path: Path, *, repo_root: Path | None = None) -> Non
 
         artifact = entry.get("artifact")
         digest = entry.get("artifact_sha256")
+        manifest = entry.get("manifest")
+        if manifest is not None:
+            manifest_path = root / str(manifest)
+            if not manifest_path.is_file():
+                raise ValueError(f"{description} manifest is not tracked locally: {manifest}.")
+            manifest_raw = _load_yaml_mapping(manifest_path, description="model manifest")
+            if manifest_raw.get("model_id") != model_id:
+                raise ValueError(f"{description} manifest declares a different model_id.")
+            if str(manifest_raw.get("artifact_sha256", "")).lower() != str(digest or "").lower():
+                raise ValueError(f"{description} manifest digest differs from the registry.")
+        location = entry.get("artifact_location", "tracked")
+        if location not in ARTIFACT_LOCATIONS:
+            raise ValueError(f"{description} has unsupported artifact_location: {location}.")
         if artifact is None:
             if digest is not None:
                 raise ValueError(f"{description} cannot declare a digest without an artifact.")
+            continue
+        if location == "private":
+            # Artifacts trained on private data are not in Git; only their name and digest are,
+            # so a copy in a private model root can be verified.
+            if not isinstance(artifact, str) or Path(artifact).name != artifact:
+                raise ValueError(f"{description} private artifact must be a bare file name.")
+            _require_sha256(digest, description=f"{description} artifact_sha256")
             continue
         if not isinstance(artifact, str) or not artifact:
             raise ValueError(f"{description} artifact must be a repository-relative path or null.")

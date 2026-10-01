@@ -9,8 +9,9 @@ FiberTypeQC writes one output folder per image.
 - `*_feature_diagnostics.csv`: optional model-development/debugging table written only when
   `--export-diagnostics` is enabled. The same schema is built internally for semantic candidate
   inference even when the file is not retained.
-- `*_model_predictions.csv`: predictions from a compatible `multiplanel_features.v1` candidate
-  bundle. This sidecar never overwrites stable fiber calls.
+- `*_model_predictions.csv`: raw predictions from a manifest-declared `multiplanel_features.v1`
+  model. For `fiber_identity` models the same predictions also become the calls in `*_fibers.csv`
+  (`classification_method = semantic_model`); other tasks remain sidecar-only.
 - `*_summary.csv`: one row with image-level processing settings, counts, QC metrics, and summaries.
   Class proportions are reported as `prop_<class>`, `ci95_low_<class>`, and `ci95_high_<class>` for
   each class the model outputs (e.g. `iia`, `iib`, `iix`); rule-only runs keep the legacy
@@ -166,7 +167,10 @@ Classification columns:
   `direct_marker`, `hybrid_marker`, `residual_inference`, or `model_prediction`.
 - `available_markers`: pipe-delimited marker channels available for that run, for
   example `iib|iia` or `iib|iia|i|iix`.
-- `classification_method`: classifier/rule source.
+- `classification_method`: classifier/rule source; `semantic_model` when a manifest-declared
+  semantic model made the calls. Its probabilities appear as one `prob_<class>` column per model
+  class, with `model_confidence` (top probability), `model_margin` (top minus second), and
+  `needs_review` (below `--model-confidence-threshold` or `--model-margin-threshold`).
 - `prob_iib`, `prob_iia`, `prob_iix`: model class probabilities when available.
 - `model_confidence`: highest model probability.
 - `model_margin`: gap between the highest and second-highest probabilities.

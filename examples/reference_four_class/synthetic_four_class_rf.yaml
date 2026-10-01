@@ -1,0 +1,51 @@
+manifest_version: 1
+model_id: synthetic_four_class_reference_v1
+task: fiber_identity
+feature_schema_version: multiplanel_features.v1
+required_markers:
+- laminin
+- type_i
+- type_iia
+- type_iib
+outputs:
+- i
+- iia
+- iib
+- iix
+artifact: synthetic_four_class_rf.joblib
+artifact_sha256: 96eaeb2a380b29a4001d0aff9eadc79700014f7a824ed66ade30e0e09f18b36d
+intended_use: Synthetic mechanics reference for the pinned four-class model path.
+features:
+- area
+- type_i.mean
+- type_i.p75
+- type_i.p90
+- type_i.coverage_high
+- type_i.snr_mean
+- type_i.snr_p90
+- type_iia.mean
+- type_iia.p75
+- type_iia.p90
+- type_iia.coverage_high
+- type_iia.snr_mean
+- type_iia.snr_p90
+- type_iib.mean
+- type_iib.p75
+- type_iib.p90
+- type_iib.coverage_high
+- type_iib.snr_mean
+- type_iib.snr_p90
+feature_extraction:
+  coverage_quantile: 0.85
+  min_coverage: 0.06
+  mixed_balance_tolerance: 0.25
+  percentile_q: 0.85
+  quantile: 0.6
+  threshold_mode: quantile
+  typing_bg_quantile: 0.02
+  typing_bg_sigma: 24.0
+  typing_erode_px: 2
+  typing_preprocess: global_subtract
+  typing_smooth_sigma: 0.8
+  typing_tile_size: 512
+  use_percentile_gate: true

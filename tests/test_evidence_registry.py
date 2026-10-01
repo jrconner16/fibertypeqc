@@ -109,3 +109,40 @@ def test_dataset_ledger_accepts_mixed_cohort_label_authority(tmp_path):
     )
 
     validate_dataset_split_ledger(path)
+
+
+def _registry_entry(**overrides):
+    entry = {
+        "model_id": "private_model_v1",
+        "task": "fiber_identity",
+        "status": "released",
+        "required_markers": ["laminin", "type_i"],
+        "feature_schema": "multiplanel_features.v1",
+        "artifact": "private_model_v1.joblib",
+        "artifact_location": "private",
+        "artifact_sha256": "a" * 64,
+        "development_groups": "private",
+        "evaluation_groups": "private",
+        "limitations": "synthetic test entry",
+    }
+    entry.update(overrides)
+    return entry
+
+
+def test_registry_accepts_private_artifact_with_digest_only(tmp_path):
+    path = tmp_path / "registry.yaml"
+    path.write_text(yaml.safe_dump({"schema_version": 1, "models": [_registry_entry()]}))
+
+    validate_model_registry(path, repo_root=tmp_path)
+
+
+def test_registry_rejects_private_artifact_paths_and_missing_digests(tmp_path):
+    path = tmp_path / "registry.yaml"
+    for entry, message in (
+        (_registry_entry(artifact="private/dir/model.joblib"), "bare file name"),
+        (_registry_entry(artifact_sha256=None), "SHA-256"),
+        (_registry_entry(artifact_location="cloud"), "artifact_location"),
+    ):
+        path.write_text(yaml.safe_dump({"schema_version": 1, "models": [entry]}))
+        with pytest.raises(ValueError, match=message):
+            validate_model_registry(path, repo_root=tmp_path)

@@ -15,6 +15,26 @@ from fibertypeqc.panels import OBSERVED_CHANNELS, Panel
 MODEL_MANIFEST_VERSION = 1
 LEGACY_FROZEN_ALPHA_REQUIRED_MARKERS = frozenset(("laminin", "type_iia", "type_iib"))
 
+# QuantifyConfig fields that change marker features. A manifest that pins feature extraction must
+# pin all of them, so later changes to code defaults cannot silently shift a model's inputs.
+FEATURE_EXTRACTION_FIELDS = frozenset(
+    (
+        "threshold_mode",
+        "quantile",
+        "percentile_q",
+        "use_percentile_gate",
+        "typing_preprocess",
+        "typing_bg_quantile",
+        "typing_tile_size",
+        "typing_bg_sigma",
+        "typing_smooth_sigma",
+        "typing_erode_px",
+        "coverage_quantile",
+        "min_coverage",
+        "mixed_balance_tolerance",
+    )
+)
+
 
 @dataclass(frozen=True)
 class ModelManifest:
@@ -27,6 +47,13 @@ class ModelManifest:
     artifact: str | None = None
     artifact_sha256: str | None = None
     intended_use: str | None = None
+    # Ordered input features for multiplanel models (required when feature_extraction is set).
+    features: tuple[str, ...] | None = None
+    # Exact QuantifyConfig values used to compute training features. When present, the pipeline
+    # uses these values and does not apply the --sensitivity profile.
+    feature_extraction: dict[str, Any] | None = None
+    code_revision: str | None = None
+    training_data_sha256: str | None = None
 
 
 def load_model_manifest(path: Path) -> ModelManifest:
@@ -72,6 +99,31 @@ def load_model_manifest(path: Path) -> ModelManifest:
     intended_use = raw.get("intended_use")
     if intended_use is not None and not isinstance(intended_use, str):
         raise ValueError(f"Model manifest {path} intended_use must be a string.")
+    features = raw.get("features")
+    if features is not None and (
+        not isinstance(features, list)
+        or not features
+        or not all(isinstance(name, str) and name for name in features)
+        or len(set(features)) != len(features)
+    ):
+        raise ValueError(f"Model manifest {path} features must be a list of unique names.")
+    feature_extraction = raw.get("feature_extraction")
+    if feature_extraction is not None:
+        if not isinstance(feature_extraction, dict):
+            raise ValueError(f"Model manifest {path} feature_extraction must be a mapping.")
+        missing_fields = sorted(FEATURE_EXTRACTION_FIELDS - set(feature_extraction))
+        extra_fields = sorted(set(feature_extraction) - FEATURE_EXTRACTION_FIELDS)
+        if missing_fields or extra_fields:
+            raise ValueError(
+                f"Model manifest {path} feature_extraction must pin exactly the feature-affecting "
+                f"settings; missing: {missing_fields or 'none'}; unknown: {extra_fields or 'none'}."
+            )
+        if features is None:
+            raise ValueError(f"Model manifest {path} feature_extraction requires 'features'.")
+    for field in ("code_revision", "training_data_sha256"):
+        value = raw.get(field)
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"Model manifest {path} {field} must be a string.")
     return ModelManifest(
         model_id=str(raw["model_id"]),
         task=str(raw["task"]),
@@ -82,6 +134,10 @@ def load_model_manifest(path: Path) -> ModelManifest:
         artifact=artifact,
         artifact_sha256=artifact_sha256,
         intended_use=intended_use,
+        features=tuple(features) if features is not None else None,
+        feature_extraction=dict(feature_extraction) if feature_extraction is not None else None,
+        code_revision=raw.get("code_revision"),
+        training_data_sha256=raw.get("training_data_sha256"),
     )
 
 
