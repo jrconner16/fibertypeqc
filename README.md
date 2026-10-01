@@ -220,16 +220,38 @@ uv run python -m scripts.review_labels_napari \
 
 See [README_review_workflow.md](README_review_workflow.md) for detailed review instructions.
 
-### Merge Reviewed Labels
+### Finalize Reviewed Results
 
-Combine model predictions with manual corrections:
+Turn a reviewed project into analysis-ready tables. Finalization reads the predictions, label
+masks, and saved review state, and writes new files; `*_fibers.csv` is never modified.
 
 ```bash
-uv run python -m scripts.merge_reviewed_labels \
-  --fibers outputs/v0_run/image_name/image_name_fibers.csv \
-  --review outputs/v0_run/image_name/image_name_fibers_manual_review.csv \
-  --output outputs/v0_run/image_name/image_name_fibers_final.csv
+uv run python -m scripts.finalize_review_project \
+  --project project.yaml \
+  --output-dir final/
+# Decisions from the per-image reviewer can be imported:
+#   --legacy-review IMAGE_ID=path/to/IMAGE_ID_fibers_manual_review.csv
 ```
+
+Each fiber keeps every model column (call, probabilities, confidence, margin) and gains
+`final_type` and `value_source` (`predicted`, `reviewed`, `excluded`, or `unresolved`), with the
+exclusion reason, reviewer, and decision time. Rules:
+
+- exclusions win: image/section (domain status or `qc/section_selection.csv`), then drawn regions
+  (by fiber centroid), then fiber decisions; otherwise the reviewer's decision, otherwise the
+  prediction;
+- fibers flagged for review but not reviewed keep the model call and are counted;
+- unresolved fibers have no final type and are reported separately;
+- named analysis ROIs tag each fiber (`roi_name`); fibers outside drawn ROIs are excluded;
+- finalization refuses an image whose label mask or fiber table changed since review began, or
+  whose reviewed decisions no longer match the model calls.
+
+Outputs: `<image_id>_fibers_finalized.csv`, `final_fiber_table.csv`, and
+`finalization_manifest.json` (input digests, versions, policies, and counts). See
+[docs/output_schema.md](docs/output_schema.md).
+
+`scripts.merge_reviewed_labels` (per-image merge of the legacy review CSV) still works but is
+deprecated in favor of finalization.
 
 ---
 

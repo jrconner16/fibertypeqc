@@ -66,7 +66,78 @@ def run_reference(output_dir: Path) -> None:
     ]
     subprocess.run(merge_command, cwd=REPO_ROOT, check=True)
     validate_reference_outputs(resolved_output_dir)
+    run_reference_finalization(resolved_output_dir)
     run_four_class_reference(output_dir / "four_class")
+
+
+def run_reference_finalization(output_dir: Path) -> None:
+    """Finalize the reference run through a review project and check it agrees with merge."""
+    # Review state must live outside prediction directories (enforced by load_project).
+    project_dir = output_dir.parent / f"{output_dir.name}_review_project"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    project = {
+        "schema_version": "review_project.v1",
+        "project_id": "synthetic_reference",
+        "project_name": "Synthetic reference",
+        "panel_manifest": str(REPO_ROOT / "examples/reference/panel.yaml"),
+        "model_version": "rebaseline_tile_v2_p75p90_iib_iia_iix",
+        "images": [
+            {
+                "image_id": "synthetic_reference",
+                "mouse_id": "synthetic_mouse",
+                "section_id": "s1",
+                "raw_image_path": str(REPO_ROOT / "examples/reference/synthetic_reference.tif"),
+                "prediction_directory": str(output_dir),
+                "outputs": {
+                    "fiber_table": "synthetic_reference_fibers.csv",
+                    "fiber_labels": "synthetic_reference_cellpose_labels.tif",
+                },
+                "applicable_domains": ["fiber_segmentation", "fiber_typing"],
+            }
+        ],
+    }
+    (project_dir / "project.yaml").write_text(yaml.safe_dump(project), encoding="utf-8")
+    review_dir = project_dir / "review"
+    review_dir.mkdir(exist_ok=True)
+    (review_dir / "review_state.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "review_state.v1",
+                "project_id": "synthetic_reference",
+                "model_version": "rebaseline_tile_v2_p75p90_iib_iia_iix",
+                "active_domain": "fiber_typing",
+                "active_scope": "image",
+                "active_review_mode": "flagged_review",
+            }
+        ),
+        encoding="utf-8",
+    )
+    final_dir = project_dir / "finalized"
+    command = [
+        sys.executable,
+        "-m",
+        "scripts.finalize_review_project",
+        "--project",
+        str(project_dir / "project.yaml"),
+        "--output-dir",
+        str(final_dir),
+        "--legacy-review",
+        f"synthetic_reference={REPO_ROOT / 'examples/reference/review_corrections.csv'}",
+    ]
+    subprocess.run(command, cwd=REPO_ROOT, check=True)
+    finalized = pd.read_csv(
+        final_dir / "synthetic_reference_fibers_finalized.csv", keep_default_na=False
+    ).set_index("label")
+    merged = pd.read_csv(output_dir / "synthetic_reference_fibers_final.csv").set_index("fiber_id")
+    for label, merged_type in merged["final_type"].items():
+        row = finalized.loc[label]
+        expected = {"uncertain": ("", "unresolved"), "exclude": ("", "excluded")}.get(
+            merged_type, (merged_type, row["value_source"])
+        )
+        if (row["final_type"], row["value_source"]) != expected:
+            raise ValueError(f"Finalized reference fiber {label} disagrees with merge output.")
+        if row["fiber_type"] != merged.loc[label, "predicted_type"]:
+            raise ValueError(f"Finalized reference fiber {label} lost its model prediction.")
 
 
 FOUR_CLASS_DIR = Path("examples/reference_four_class")

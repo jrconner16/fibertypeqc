@@ -1332,14 +1332,14 @@ headless. Add a small number of GUI tests only where feasible.
 - [x] Fiber edit marks downstream outputs stale.
 - [x] Nucleus edit does not invalidate fiber typing.
 - [x] Nucleus reassignment updates affected associations.
-- [ ] Region exclusion affects only selected domains.
+- [x] Region exclusion affects only selected domains.
 - [x] `all_passing` selection works.
 - [x] `best_passing` selection works.
 - [x] No-passing selection routes to review.
 - [x] Biological endpoint values do not trigger technical hard fails.
-- [ ] Finalization respects section and region exclusions.
+- [x] Finalization respects section and region exclusions.
 - [x] Resume restores queue position.
-- [ ] Old reviewer output remains loadable where applicable.
+- [x] Old reviewer output remains loadable where applicable.
 
 After each phase:
 
@@ -1431,7 +1431,7 @@ uv run ruff check <changed Python files and tests>
 - [x] Phase 6.2 interactive nuclei review.
 - [ ] Phase 7 fiber segmentation review.
 - [ ] Phase 8 blinded review
-- [ ] Phase 9 finalization/reporting.
+- [x] Phase 9 finalization/reporting. Reports follow in roadmap Stage 5.
 
 ## 12. Decisions and deviations
 

@@ -127,12 +127,14 @@ def main(argv: list[str] | None = None) -> int:
     from src.review.channel_map_widget import ChannelMapWidget
     from src.review.dashboard_widget import CohortDashboardWidget
     from src.review.fiber_type_review import FiberTypeReviewController
+    from src.review.finalization import image_input_fingerprints
     from src.review.guided_review_widget import GuidedReviewWidget
     from src.review.image_review_widget import ImageReviewWidget
     from src.review.nuclear_review_widget import NuclearReviewWidget
     from src.review.region_review import RegionReviewController
     from src.review.region_review_widget import RegionReviewWidget
     from src.review.schemas import RegionKind
+    from src.review.storage import save_session
     from src.typing_display import normalize_for_display
 
     viewer = napari.Viewer(title=f"FiberTypeQC project: {project.project_name}")
@@ -226,6 +228,19 @@ def main(argv: list[str] | None = None) -> int:
             if layer.name.startswith("review_"):
                 viewer.layers.remove(layer)
         image = project.image(image_id)
+        changed_inputs = session.record_input_fingerprints(
+            image_id, image_input_fingerprints(image)
+        )
+        save_session(project.review_state_path, session)
+        if changed_inputs:
+            from napari.utils.notifications import show_warning
+
+            message = (
+                f"{image_id}: {', '.join(changed_inputs)} changed since review began. Existing "
+                "decisions may refer to different fibers; finalization will refuse this image."
+            )
+            print(f"WARNING: {message}", flush=True)
+            show_warning(message)
         raw = load_multichannel_image(image.raw_image_path)
         labels_path = image.outputs.get("fiber_labels")
         nuclei_path = image.outputs.get("nuclei_labels")

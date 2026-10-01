@@ -39,6 +39,9 @@ class ReviewSession:
     reviewed_nucleus_next_ids: dict[str, int] = field(default_factory=dict)
     reviewed_mask_paths: dict[str, dict[str, str]] = field(default_factory=dict)
     stale_products: dict[str, list[str]] = field(default_factory=dict)
+    # Digests of each image's fiber inputs when review began; finalization refuses to apply
+    # decisions if these files have changed since.
+    input_fingerprints: dict[str, dict[str, str]] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
     schema_version: str = REVIEW_SCHEMA_VERSION
@@ -179,6 +182,14 @@ class ReviewSession:
         self.queue_position = position
         self.touch()
 
+    def record_input_fingerprints(self, image_id: str, fingerprints: dict[str, str]) -> list[str]:
+        """Record input digests on first review; return the inputs that changed since."""
+        recorded = self.input_fingerprints.get(image_id)
+        if recorded is None:
+            self.input_fingerprints[image_id] = dict(fingerprints)
+            return []
+        return sorted(key for key, value in recorded.items() if fingerprints.get(key) != value)
+
     def touch(self) -> None:
         self.updated_at = utc_now()
 
@@ -204,6 +215,7 @@ class ReviewSession:
             "reviewed_nucleus_next_ids": self.reviewed_nucleus_next_ids,
             "reviewed_mask_paths": self.reviewed_mask_paths,
             "stale_products": self.stale_products,
+            "input_fingerprints": self.input_fingerprints,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -289,6 +301,10 @@ class ReviewSession:
             reviewed_nucleus_next_ids=normalized_next_ids,
             reviewed_mask_paths=dict(reviewed_mask_paths),
             stale_products=normalized_stale,
+            input_fingerprints={
+                str(image_id): {str(key): str(value) for key, value in digests.items()}
+                for image_id, digests in data.get("input_fingerprints", {}).items()
+            },
             created_at=str(data.get("created_at", "")) or utc_now(),
             updated_at=str(data.get("updated_at", "")) or utc_now(),
         )

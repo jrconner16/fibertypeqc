@@ -223,6 +223,25 @@ The Napari review UI writes:
 - `final_type`: prediction replaced by manual correction, uncertainty, hybrid, or exclusion status.
 - `emhc_manual_label`: the separately preserved manual eMHC assessment.
 
+## Finalized Review Outputs
+
+`scripts.finalize_review_project` writes, per image, `<image_id>_fibers_finalized.csv`: the
+original fiber-table columns unchanged, prefixed by `image_id`, `mouse_id`, `section_id`, plus:
+
+- `final_type`: the analysis value; empty when excluded or unresolved.
+- `value_source`: `predicted`, `reviewed`, `excluded`, or `unresolved`.
+- `exclusion_reason`: e.g. `image:fiber_typing:excluded`, `section_not_selected`,
+  `region:<action>:<region_id>`, `outside_analysis_roi`, `fiber_review`.
+- `review_status`, `reviewer`, `decided_at`: the fiber-level decision, when one exists.
+- `flagged_unreviewed`: flagged by the model (`needs_review`) but not reviewed.
+- `roi_name`, `roi_role`, `roi_status`: analysis-ROI membership by fiber centroid
+  (`assigned`, `outside`, `boundary`, or `ambiguous`).
+
+`final_fiber_table.csv` stacks all images. `finalization_manifest.json`
+(`fibertypeqc.finalization.v1`) records input digests, verification status (`verified` when the
+review session recorded input fingerprints), versions, the policies applied, per-source counts,
+and warnings.
+
 ## Batch Summary Columns
 
 `batch_summary.csv` includes:

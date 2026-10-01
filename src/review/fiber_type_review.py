@@ -170,8 +170,13 @@ def load_legacy_fiber_type_decisions(
     path: Path | str,
     *,
     image_id: str,
+    model_calls: dict[int, str] | None = None,
 ) -> tuple[FiberTypeDecision, ...]:
-    """Adapt the legacy Napari CSV without treating it as the canonical format."""
+    """Adapt the legacy Napari CSV without treating it as the canonical format.
+
+    The legacy reviewer writes corrections without the model call; pass ``model_calls``
+    (fiber ID to predicted type, from the fiber table) to supply it.
+    """
     table = pd.read_csv(path, low_memory=False)
     id_column = "fiber_id" if "fiber_id" in table.columns else "label"
     if id_column not in table.columns:
@@ -184,8 +189,11 @@ def load_legacy_fiber_type_decisions(
         ),
         None,
     )
-    if prediction_column is None:
-        raise ValueError("Legacy review CSV must retain a model prediction column")
+    if prediction_column is None and model_calls is None:
+        raise ValueError(
+            "Legacy review CSV has no model prediction column; supply model_calls from the "
+            "fiber table"
+        )
     decisions: list[FiberTypeDecision] = []
     for _, row in table.iterrows():
         corrected = normalize_review_label(row.get("corrected_type", ""))
@@ -197,7 +205,13 @@ def load_legacy_fiber_type_decisions(
             corrected = "uncertain"
         if not corrected:
             continue
-        model = normalize_review_label(row[prediction_column])
+        fiber_id = int(row[id_column])
+        if prediction_column is not None:
+            model = normalize_review_label(row[prediction_column])
+        elif fiber_id in model_calls:
+            model = normalize_review_label(model_calls[fiber_id])
+        else:
+            raise ValueError(f"Legacy review fiber {fiber_id} is not in the fiber table")
         status = (
             ObjectReviewStatus.EXCLUDED
             if corrected == "exclude"
@@ -210,7 +224,7 @@ def load_legacy_fiber_type_decisions(
         decisions.append(
             FiberTypeDecision(
                 image_id=image_id,
-                fiber_id=int(row[id_column]),
+                fiber_id=fiber_id,
                 model_fiber_type=model,
                 reviewed_fiber_type=corrected,
                 review_status=status,
