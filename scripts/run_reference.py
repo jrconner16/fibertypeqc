@@ -138,6 +138,40 @@ def run_reference_finalization(output_dir: Path) -> None:
             raise ValueError(f"Finalized reference fiber {label} disagrees with merge output.")
         if row["fiber_type"] != merged.loc[label, "predicted_type"]:
             raise ValueError(f"Finalized reference fiber {label} lost its model prediction.")
+    run_reference_results(project_dir, final_dir)
+
+
+def run_reference_results(project_dir: Path, final_dir: Path) -> None:
+    """Summarize the finalized reference and check the composition definitions."""
+    results_dir = project_dir / "results"
+    command = [
+        sys.executable,
+        "-m",
+        "scripts.summarize_results",
+        "--final-dir",
+        str(final_dir),
+        "--project",
+        str(project_dir / "project.yaml"),
+        "--output-dir",
+        str(results_dir),
+    ]
+    subprocess.run(command, cwd=REPO_ROOT, check=True)
+    mouse = pd.read_csv(results_dir / "mouse_summary.csv").iloc[0]
+    # 9 fibers: 1 excluded by the reviewer, 1 unresolved, 7 resolved (4 IIa, 3 IIb); the model
+    # called 6 of the 8 analysis fibers IIa.
+    expected = {
+        "n_fibers_total": 9,
+        "n_excluded": 1,
+        "n_unresolved": 1,
+        "n_resolved": 7,
+        "prop_final_iia": 4 / 7,
+        "prop_predicted_iia": 6 / 8,
+    }
+    for column, value in expected.items():
+        if abs(float(mouse[column]) - value) > 1e-9:
+            raise ValueError(f"Reference result {column} is {mouse[column]}, expected {value}.")
+    if not (results_dir / "cohort_report.html").is_file():
+        raise ValueError("Reference cohort report was not written.")
 
 
 FOUR_CLASS_DIR = Path("examples/reference_four_class")

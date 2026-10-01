@@ -10,6 +10,12 @@
 
 ### Added
 
+- **Results layer:** `scripts.summarize_results` writes image, mouse (pooled sections), ROI, and
+  cohort (mouse as the unit, grouped by project conditions) tables from finalized outputs, a
+  results manifest, and a self-contained `cohort_report.html` built only from those tables. It
+  shows predicted versus finalized composition per mouse, review and exclusion burden, and source
+  table digests. Unresolved fibers are reported separately and excluded from composition
+  denominators.
 - **Review finalization:** `scripts.finalize_review_project` turns a reviewed project into
   `<image_id>_fibers_finalized.csv`, `final_fiber_table.csv`, and `finalization_manifest.json`.
   It applies image/section, region (by centroid), and fiber decisions with exclusion precedence;
