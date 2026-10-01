@@ -242,6 +242,22 @@ original fiber-table columns unchanged, prefixed by `image_id`, `mouse_id`, `sec
 review session recorded input fingerprints), versions, the policies applied, per-source counts,
 and warnings.
 
+## Result Tables
+
+`scripts.summarize_results` writes one row per image (`image_summary.csv`), per mouse
+(`mouse_summary.csv`, fibers pooled across sections), per image and analysis ROI
+(`roi_summary.csv`), and long-format cohort statistics (`cohort_summary.csv`: condition columns,
+`fiber_class`, `view` = `final` or `predicted`, `n_mice`, `mean_proportion`, `sd_proportion`).
+
+Per-row columns include `n_fibers_total`, `n_excluded` (and `n_excluded_image|section|region|
+outside_analysis_roi|fiber_review`), `n_analysis`, `n_resolved`, `n_unresolved`,
+`unresolved_share`, `n_reviewed`, `n_corrected`, `n_flagged_unreviewed`, and per class
+`n_final_<class>`, `prop_final_<class>` (over resolved fibers), `prop_predicted_<class>` (over
+analysis fibers), plus median morphology (`median_area`, `median_area_um2`, `median_feret_*`,
+overall and per final class) when present. `results_manifest.json`
+(`fibertypeqc.results.v1`) records definitions, class order, input and table digests, and the
+finalization manifest.
+
 ## Batch Summary Columns
 
 `batch_summary.csv` includes:

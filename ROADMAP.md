@@ -69,7 +69,7 @@ explained before editing and accompanied by a before/after comparison of referen
 - [x] **Stage 4 — Finalization** ⚗. One finalizer that applies review decisions and region/section
   exclusions, labels every value as predicted, reviewed, excluded, or unresolved, and refuses
   decisions made on different labels or tables.
-- [ ] **Stage 5 — Results layer.** Image, mouse, and cohort tables from finalized outputs; cohort HTML
+- [x] **Stage 5 — Results layer.** Image, mouse, and cohort tables from finalized outputs; cohort HTML
   report including predicted-versus-finalized comparison. Every figure reproducible from exported
   CSV/JSON.
 - [ ] **Stage 6 — One command path and usability.** Documented entry points from batch run through

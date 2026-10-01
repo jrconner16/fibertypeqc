@@ -253,6 +253,24 @@ Outputs: `<image_id>_fibers_finalized.csv`, `final_fiber_table.csv`, and
 `scripts.merge_reviewed_labels` (per-image merge of the legacy review CSV) still works but is
 deprecated in favor of finalization.
 
+### Results Tables and Cohort Report
+
+```bash
+uv run python -m scripts.summarize_results \
+  --final-dir final/ --project project.yaml --output-dir results/
+```
+
+Writes `image_summary.csv`, `mouse_summary.csv`, `roi_summary.csv` (when analysis ROIs exist),
+`cohort_summary.csv` (grouped by the project's per-image `condition` fields), a
+`results_manifest.json`, and a self-contained `cohort_report.html`. The CSVs are the source of
+truth; the report is generated only from them. Definitions:
+
+- finalized composition = final types over resolved fibers (unresolved fibers are counted
+  separately, not in the denominator); predicted composition = model calls over the same analysis
+  fibers, so the report shows what review changed;
+- mouse level pools fibers across sections; cohort level treats the mouse as the unit
+  (mean ± SD of mouse-level proportions).
+
 ---
 
 ## Model Selection
