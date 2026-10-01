@@ -47,6 +47,7 @@ jobs:
           uv run --frozen python -m scripts.run_batch --help
           uv run --frozen python -m scripts.review_labels_napari --help
           uv run --frozen python -m scripts.merge_reviewed_labels --help
+          uv run --frozen python -m scripts.finalize_review_project --help
 
       - name: Run fast tests
         run: uv run --frozen pytest -m "not integration" -q

@@ -10,6 +10,15 @@
 
 ### Added
 
+- **Review finalization:** `scripts.finalize_review_project` turns a reviewed project into
+  `<image_id>_fibers_finalized.csv`, `final_fiber_table.csv`, and `finalization_manifest.json`.
+  It applies image/section, region (by centroid), and fiber decisions with exclusion precedence;
+  keeps every model column beside `final_type` and `value_source`; tags analysis ROIs; and refuses
+  decisions whose label mask or fiber table changed since review (review sessions now record input
+  fingerprints when an image is opened). Legacy per-image review CSVs import through
+  `--legacy-review`, including files without a model-prediction column. `merge_reviewed_labels` is
+  deprecated. Previously project-review decisions and region/section exclusions were saved but
+  never applied to any output.
 - **Default model change:** `run_batch` without a model option now uses the registry default,
   `quad_four_class_rf_v1` (four-class I/IIa/IIb/residual IIx), and requires `--panel-config`.
   The historical three-class run is `--model rebaseline_tile_v2_p75p90_iib_iia_iix`. Before the

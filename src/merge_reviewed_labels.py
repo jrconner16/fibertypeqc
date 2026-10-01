@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -106,6 +107,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
+    print(
+        "Note: merge_reviewed_labels is deprecated; use scripts.finalize_review_project "
+        "(per-image review CSVs import with --legacy-review).",
+        file=sys.stderr,
+    )
     output = args.output or args.fibers.with_name(f"{args.fibers.stem}_reviewed.csv")
     fibers = pd.read_csv(args.fibers)
     review = pd.read_csv(args.review)
