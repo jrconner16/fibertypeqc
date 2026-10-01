@@ -62,7 +62,7 @@ explained before editing and accompanied by a before/after comparison of referen
   list; warn when `--sensitivity` overrides explicit typing flags; batch path/digest fixes; record
   device, library versions, and input digests; explicit image scene/axis handling; extend reference
   validation to summaries and QC.
-- [ ] **Stage 3 — Four-class QUAD default** ⚗. Extended model manifest and registry; semantic path
+- [x] **Stage 3 — Four-class QUAD default** ⚗. Extended model manifest and registry; semantic path
   becomes the primary typing path and supports any sklearn estimator family; fail-closed panel
   compatibility; runtime model resolution with digest verification; public synthetic four-class
   reference; historical models marked retired.

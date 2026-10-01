@@ -256,3 +256,39 @@ def test_error_tail_keeps_the_end_of_child_tracebacks():
 
     assert tail.endswith("ValueError: bad")
     assert len(tail.splitlines()) == 8
+
+
+def test_pinned_model_does_not_receive_legacy_typing_flags(tmp_path):
+    overrides = BatchChannelOverrides(channel_config=tmp_path / "panel.yaml")
+    cmd = build_batch_command(
+        tmp_path / "image.czi", tmp_path / "out", overrides, model_id="quad_four_class_rf_v1"
+    )
+
+    assert cmd[cmd.index("--model") + 1] == "quad_four_class_rf_v1"
+    legacy_flags = ("--typing-preprocess", "--typing-tile-size", "--classifier-path")
+    for flag in (*legacy_flags, "--type1-channel"):
+        assert flag not in cmd
+
+
+def test_legacy_model_id_keeps_frozen_v0_typing_flags(tmp_path):
+    cmd = build_batch_command(
+        tmp_path / "image.czi",
+        tmp_path / "out",
+        BatchChannelOverrides(),
+        model_id="rebaseline_tile_v2_p75p90_iib_iia_iix",
+    )
+
+    assert cmd[cmd.index("--typing-preprocess") + 1] == V0_PARAMS["typing_preprocess"]
+    assert cmd[cmd.index("--type1-channel") + 1] == str(V0_PARAMS["type1_channel"])
+
+
+def test_batch_defaults_to_registry_model_and_requires_panel(tmp_path, monkeypatch, capsys):
+    from src import run_batch
+
+    monkeypatch.setattr(
+        "sys.argv", ["run_batch", "--input-dir", str(tmp_path), "--output-dir", str(tmp_path)]
+    )
+    with pytest.raises(SystemExit):
+        run_batch.main()
+
+    assert "model 'quad_four_class_rf_v1' needs --panel-config" in capsys.readouterr().err

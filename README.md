@@ -141,15 +141,21 @@ pathology calls. See [docs/panel_schema.md](docs/panel_schema.md),
 
 ### 3. Batch Processing
 
-Process multiple images in a directory:
+Process multiple images in a directory. By default `run_batch` uses the registry's default model,
+the four-class QUAD model `quad_four_class_rf_v1` (see
+[its model card](docs/model_cards/quad_four_class_rf_v1.md)), which needs a panel config and the
+private model root:
 
 ```bash
+export FIBERTYPEQC_MODEL_ROOT=/path/to/private/models
 uv run python -m scripts.run_batch \
   --input-dir /path/to/images \
-  --output-dir outputs/v0_batch
+  --panel-config my_quad_panel.yaml \
+  --output-dir outputs/quad_batch
 
-# Or use default output directory (outputs/v0_batch)
-uv run python -m scripts.run_batch --input-dir /path/to/images
+# Historical three-class run (IIb/IIa/laminin panel, legacy channel defaults):
+uv run python -m scripts.run_batch --input-dir /path/to/images \
+  --model rebaseline_tile_v2_p75p90_iib_iia_iix
 ```
 
 The batch runner:
@@ -163,9 +169,9 @@ The batch runner:
   `--model-manifest` to verify a custom `--classifier-path`
 - Refuses manifests with duplicate image IDs
 
-By default, `scripts.run_batch` preserves the frozen v0 alpha behavior. If you pass
-`--channel-config` or explicit channel overrides, the batch run will log that it is no longer a
-strict frozen-baseline run.
+With `--model rebaseline_tile_v2_p75p90_iib_iia_iix` (or `--classifier-path`), `scripts.run_batch`
+reproduces the frozen v0 alpha behavior. If you pass `--channel-config` or explicit channel
+overrides in that mode, the batch run will log that it is no longer a strict frozen-baseline run.
 
 To see v0 parameters:
 ```bash

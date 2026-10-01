@@ -10,6 +10,13 @@
 
 ### Added
 
+- **Default model change:** `run_batch` without a model option now uses the registry default,
+  `quad_four_class_rf_v1` (four-class I/IIa/IIb/residual IIx), and requires `--panel-config`.
+  The historical three-class run is `--model rebaseline_tile_v2_p75p90_iib_iia_iix`. Before the
+  switch, the QUAD model was verified: refit from its training rows reproduces its calls and
+  evaluation; the release pipeline reproduces training-time features bit-identically; and
+  new-segmentation features match training distributions (model card:
+  `docs/model_cards/quad_four_class_rf_v1.md`).
 - Model selection by ID: `run_pipeline --model` / `run_batch --model` resolve a registered model's
   manifest and artifact. Privately distributed artifacts are read from `FIBERTYPEQC_MODEL_ROOT` and
   verified by the digest recorded in the public registry (`artifact_location: private`).
