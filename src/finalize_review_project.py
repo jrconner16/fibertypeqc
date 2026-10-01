@@ -13,6 +13,7 @@ from pathlib import Path
 
 from src.review.finalization import FinalizationError, finalize_project, import_legacy_reviews
 from src.review.project import load_project
+from src.review.session import ReviewSession
 from src.review.storage import load_session
 
 
@@ -50,7 +51,18 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     project = load_project(args.project)
-    session = load_session(project.review_state_path, expected_project_id=project.project_id)
+    if project.review_state_path.is_file():
+        session = load_session(project.review_state_path, expected_project_id=project.project_id)
+    else:
+        print(
+            "warning: no review session found; every fiber keeps its model prediction",
+            file=sys.stderr,
+        )
+        session = ReviewSession(
+            project_id=project.project_id,
+            model_version=project.model_version,
+            qc_version=project.qc_version,
+        )
     qc_dir = args.qc_dir if args.qc_dir is not None else project.root / "qc"
     selection = qc_dir / "section_selection.csv"
     legacy: dict[str, Path] = {}

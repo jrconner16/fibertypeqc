@@ -361,3 +361,18 @@ def test_rule_path_internal_labels_match_normalized_decisions(tmp_path):
     finalized = _by_id(finalize_image(project, session, project.images[0]))
 
     assert finalized.loc[1, ["final_type", "value_source"]].tolist() == ["iib", "reviewed"]
+
+
+def test_project_without_review_session_finalizes_as_predicted(tmp_path, capsys):
+    project = _project(tmp_path)
+
+    assert (
+        finalize_main(
+            ["--project", str(project.manifest_path), "--output-dir", str(tmp_path / "f")]
+        )
+        == 0
+    )
+
+    table = pd.read_csv(tmp_path / "f" / "final_fiber_table.csv")
+    assert set(table["value_source"]) == {"predicted"}
+    assert "no review session found" in capsys.readouterr().err

@@ -4,10 +4,11 @@
 
 This pipeline processes multi-channel immunofluorescence (IF) microscopy images of muscle tissue to:
 1. **Segment** muscle fibers from a membrane/border channel (Cellpose)
-2. **Classify** fiber types (IIB, IIA, IIX) from marker channels
-3. **Extract** quantitative features and statistical summaries
-4. **Review** classifications interactively (Napari UI)
-5. **Export** validated results to CSV
+2. **Classify** fiber types with a panel-specific model (default: Type I, IIa, IIb, and residual
+   IIx on four-marker QUAD panels)
+3. **QC** every image and fiber, and **review** flagged results interactively (Napari)
+4. **Finalize** review decisions into analysis-ready tables without altering predictions
+5. **Report** image, mouse, and cohort results with a self-contained HTML report
 
 ## Demo
 
@@ -87,7 +88,50 @@ Optional integration path:
 uv run python -m pytest -m integration
 ```
 
-### 2. Run the Frozen v0 Pipeline
+## End-to-End Workflow
+
+The supported release path, from images to a cohort report. Each step reads the previous step's
+files and writes new ones; predictions are never modified.
+
+```bash
+# 0. Once per machine: environment and the private model location
+uv sync
+export FIBERTYPEQC_MODEL_ROOT=/path/to/private/models   # contains quad_four_class_rf_v1.joblib
+
+# 1. Segment, type, and QC every image (default model: quad_four_class_rf_v1).
+#    Add --split-czi-scenes when CZIs hold several sections.
+uv run python -m scripts.run_batch \
+  --input-dir images/ --panel-config my_panel.yaml --output-dir runs/batch1
+
+# 2. Build a review project from the batch and a sample sheet
+#    (CSV: image_id, mouse_id, raw_image_path[, section_id][, condition columns...])
+uv run python -m scripts.make_review_project \
+  --batch-dir runs/batch1 --sample-sheet samples.csv \
+  --panel-config my_panel.yaml --project-dir review/batch1
+
+# 3. Project QC and section selection
+uv run python -m scripts.generate_review_qc --project review/batch1/project.yaml
+
+# 4. Review in Napari (GUI); decisions autosave under review/batch1/review/
+uv run python -m scripts.review_project_napari \
+  --project review/batch1/project.yaml --reviewer YOUR_NAME --display-downsample 2
+
+# 5. Finalize review decisions into analysis-ready tables
+uv run python -m scripts.finalize_review_project \
+  --project review/batch1/project.yaml --output-dir review/batch1/final
+
+# 6. Image/mouse/cohort tables and the HTML report
+uv run python -m scripts.summarize_results \
+  --final-dir review/batch1/final --project review/batch1/project.yaml \
+  --output-dir review/batch1/results
+```
+
+Steps 3–6 are fast and can be re-run at any time; step 5 refuses to apply review decisions to
+masks or tables that changed after review began. Keep large run outputs on storage with room for
+them (label masks are about the size of the raw images). Details for each step follow below and in
+[README_review_workflow.md](README_review_workflow.md).
+
+### Single-Image Pipeline (Historical Three-Class Example)
 
 The **v0 frozen command** is the production-validated baseline for consistent results.
 
