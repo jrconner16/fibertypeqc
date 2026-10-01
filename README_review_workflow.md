@@ -1,6 +1,52 @@
-# Fiber Typing V1 Review Workflow
+# Review Workflow
 
-This is the current review-assisted workflow. Routine type/eMHC review edits a correction table.
+## Project-based review (release workflow)
+
+The release path reviews a whole project in one Napari workspace and finalizes the decisions into
+analysis-ready tables. Prepare the project with steps 1–3 of the
+[end-to-end workflow](README.md#end-to-end-workflow), then launch:
+
+```bash
+uv run python -m scripts.review_project_napari \
+  --project review/batch1/project.yaml --reviewer YOUR_NAME --display-downsample 2
+```
+
+`--display-downsample` changes only what is drawn (use `2`, or `4` for very large sections); fiber
+IDs and saved decisions always refer to full-resolution masks.
+
+**Workspaces** (switch with the navigator bar or the **Workspace** menu; **Restore review
+workspace** brings back closed docks):
+
+1. **Cohort QC** — mice → sections → domains with PASS / REVIEW / FAIL, reasons, and the
+   provisional section selection. Read-only.
+2. **Image review** — mark a section Pass, Review, Fail, or Exclude per domain. Fail/Exclude for
+   fiber segmentation or fiber typing removes the whole section at finalization.
+3. **Guided fiber review** — start **Review flagged fibers** (or **Review this section**). One
+   fiber at a time, outlined in cyan. Keys: `K` keep the model call, `1`/`2`/`3`/`4` = I/IIa/IIb/IIx,
+   Left/Right to move, `F` to center, `U` to undo. Uncertain/exclude are under **Advanced review
+   options**. Decisions save immediately and resume where you left off.
+4. **Regions** — draw a polygon in the yellow *Region shapes* layer, pick a domain and action, and
+   apply. *Exclude all analysis* / *ignore fiber typing* removes the fibers whose centers fall
+   inside (folds, tears, bad staining); *unresolved* marks them unresolved. **Analysis ROI** with a
+   name (e.g. `quad_1`) tags fibers for per-ROI results; once any ROI is drawn on a section, fibers
+   outside all ROIs are excluded.
+
+Everything is saved under `<project>/review/` (`review_state.json`, an append-only
+`review_events.csv`, and `review_regions.geojson`). Predictions are never edited. When a section is
+first opened, the reviewer records digests of its label mask and fiber table; if those files later
+change, it warns, and finalization refuses that section rather than applying decisions to the wrong
+fibers.
+
+Then finalize and report (steps 5–6 of the end-to-end workflow). Fibers you did not review keep the
+model call; flagged-but-unreviewed fibers are counted in the report.
+
+## Legacy per-image reviewer (V1)
+
+The per-image reviewer below still works. Its corrections CSV can be imported into finalization with
+`scripts.finalize_review_project --legacy-review IMAGE_ID=CSV`; `merge_reviewed_labels` is
+deprecated.
+
+This was the original review-assisted workflow. Routine type/eMHC review edits a correction table.
 The same UI also offers explicit segmentation-repair controls; repaired labels are saved to a new
 TIFF and must be re-quantified before type review continues.
 

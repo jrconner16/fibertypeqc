@@ -10,6 +10,13 @@
 
 ### Added
 
+- **One command path:** `scripts.make_review_project` builds a review project from `run_batch`
+  output and a sample sheet (split CZI sections expanded, conditions carried, failed images
+  skipped, model version from run records, existing projects never overwritten). Public wrappers
+  `scripts.generate_review_qc` and `scripts.review_project_napari` added. Finalization works before
+  any review (all fibers keep predictions, with a warning). README documents the end-to-end path;
+  `README_review_workflow.md` documents project-based review, with the per-image reviewer marked
+  legacy.
 - **Results layer:** `scripts.summarize_results` writes image, mouse (pooled sections), ROI, and
   cohort (mouse as the unit, grouped by project conditions) tables from finalized outputs, a
   results manifest, and a self-contained `cohort_report.html` built only from those tables. It
