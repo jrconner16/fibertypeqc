@@ -190,8 +190,11 @@ def build_cohort_report(results_dir: Path) -> str:
     unverified = [
         item["image_id"]
         for item in finalization.get("images", [])
-        if item.get("verification") != "verified"
+        if item.get("verification") == "unverified"
     ]
+    not_reviewed = sum(
+        item.get("verification") == "not_reviewed" for item in finalization.get("images", [])
+    )
     sections = [
         "<h1>FiberTypeQC cohort results</h1>",
         f'<p class="meta">Generated from exported tables in this folder · '
@@ -200,6 +203,11 @@ def build_cohort_report(results_dir: Path) -> str:
         + "".join(f"<dt>{k}</dt><dd>{html.escape(str(v))}</dd>" for k, v in meta.items())
         + "</dl>",
     ]
+    if not_reviewed:
+        sections.append(
+            f'<p class="note">{not_reviewed} section(s) were not reviewed; their values are '
+            "model predictions.</p>"
+        )
     if unverified:
         sections.append(
             f'<p class="note">Review inputs were not fingerprint-verified for '

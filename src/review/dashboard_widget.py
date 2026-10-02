@@ -38,6 +38,7 @@ STATUS_COLORS = {
     "targeted_review": QColor("#fff3bf"),
     "no_acceptable_section": QColor("#ffd6d6"),
 }
+STATUS_TEXT_COLOR = QColor("#1b1b1b")
 
 
 class CohortDashboardWidget(QWidget):
@@ -255,6 +256,9 @@ class CohortDashboardWidget(QWidget):
             return
         for column in range(self.section_tree.columnCount()):
             item.setBackground(column, color)
+            # Status backgrounds are light pastels; without an explicit dark foreground the
+            # text inherits the theme's light color and is unreadable in Napari's dark theme.
+            item.setForeground(column, STATUS_TEXT_COLOR)
 
     def _show_selected_details(self) -> None:
         selected = self.section_tree.selectedItems()

@@ -9,6 +9,18 @@ FiberTypeQC uses `uv` to pin Python and synchronize its application and developm
 - `docs/quickstart.md` documents the current command-line workflow
 - `docs/panel_schema.md` documents semantic panel configuration
 
+## Shared or HPC filesystems
+
+If `uv sync` warns that it cannot hardlink files, its cache is on a different filesystem from the
+project and every package is copied. Put the cache on the same filesystem as the environment:
+
+```bash
+export UV_CACHE_DIR=/path/on/the/same/filesystem/.uv-cache
+```
+
+The first sync on Linux downloads the CUDA build of PyTorch (several GB); later syncs reuse the
+cache. Run commands from the repository root so `uv run` uses the project environment.
+
 ## Recommended starting path
 
 Start CPU-first. Do not begin with GPU unless you already know you need it.

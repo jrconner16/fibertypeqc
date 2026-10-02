@@ -117,11 +117,22 @@ def _centroids(labels: np.ndarray) -> dict[int, tuple[float, float]]:
     }
 
 
+def _has_review_activity(session: ReviewSession, image_id: str) -> bool:
+    return (
+        any(decision.image_id == image_id for decision in session.object_decisions)
+        or any(region.image_id == image_id for region in session.regions)
+        or bool(session.image_statuses.get(image_id))
+    )
+
+
 def _verify_inputs(
     image: ProjectImage, session: ReviewSession, require_verified: bool
 ) -> tuple[dict[str, str], str]:
     digests = image_input_fingerprints(image)
     recorded = session.input_fingerprints.get(image.image_id)
+    if recorded is None and not _has_review_activity(session, image.image_id):
+        # Never opened and nothing decided: there are no decisions to verify.
+        return digests, "not_reviewed"
     if recorded is None:
         if require_verified:
             raise FinalizationError(

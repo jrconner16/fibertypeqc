@@ -282,13 +282,55 @@ def test_legacy_model_id_keeps_frozen_v0_typing_flags(tmp_path):
     assert cmd[cmd.index("--type1-channel") + 1] == str(V0_PARAMS["type1_channel"])
 
 
-def test_batch_defaults_to_registry_model_and_requires_panel(tmp_path, monkeypatch, capsys):
+def _run_batch_error(monkeypatch, capsys, argv) -> str:
     from src import run_batch
 
-    monkeypatch.setattr(
-        "sys.argv", ["run_batch", "--input-dir", str(tmp_path), "--output-dir", str(tmp_path)]
-    )
+    monkeypatch.setattr("sys.argv", ["run_batch", *argv])
     with pytest.raises(SystemExit):
         run_batch.main()
+    return capsys.readouterr().err
 
-    assert "model 'quad_four_class_rf_v1' needs --panel-config" in capsys.readouterr().err
+
+def test_batch_defaults_to_registry_model_and_requires_panel(tmp_path, monkeypatch, capsys):
+    (tmp_path / "quad_four_class_rf_v1.joblib").write_bytes(b"placeholder")
+    monkeypatch.setenv("FIBERTYPEQC_MODEL_ROOT", str(tmp_path))
+
+    error = _run_batch_error(
+        monkeypatch, capsys, ["--input-dir", str(tmp_path), "--output-dir", str(tmp_path)]
+    )
+
+    assert "model 'quad_four_class_rf_v1' needs --panel-config" in error
+
+
+def test_batch_fails_before_processing_when_model_cannot_be_resolved(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.delenv("FIBERTYPEQC_MODEL_ROOT", raising=False)
+    base = ["--input-dir", str(tmp_path), "--output-dir", str(tmp_path / "out")]
+
+    assert "Set FIBERTYPEQC_MODEL_ROOT" in _run_batch_error(monkeypatch, capsys, base)
+    assert "got a directory" in _run_batch_error(
+        monkeypatch, capsys, [*base, "--model", str(tmp_path)]
+    )
+    unregistered = tmp_path / "other.joblib"
+    unregistered.write_bytes(b"not a registered model")
+    assert "is not a registered model" in _run_batch_error(
+        monkeypatch, capsys, [*base, "--model", str(unregistered)]
+    )
+    assert not (tmp_path / "out").exists()  # nothing was started
+
+
+def test_show_v0_params_needs_no_model_or_panel(monkeypatch, capsys):
+    from src import run_batch
+
+    monkeypatch.delenv("FIBERTYPEQC_MODEL_ROOT", raising=False)
+    monkeypatch.setattr("sys.argv", ["run_batch", "--show-v0-params"])
+    run_batch.main()
+
+    assert "typing_preprocess: tile_subtract" in capsys.readouterr().out
+
+
+def test_error_tail_prefers_the_argparse_error_line():
+    stderr = "usage: run_pipeline.py [-h]\n   [--flag FLAG]\nrun_pipeline.py: error: Unknown model"
+
+    assert _error_tail(stderr) == "Unknown model"

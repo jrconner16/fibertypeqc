@@ -145,7 +145,8 @@ def validate_model_artifact(path: Path, manifest: ModelManifest) -> None:
     """Verify a selected model artifact against an optional manifest digest."""
     if not path.is_file():
         raise ValueError(f"Model artifact not found: {path}")
-    if manifest.artifact is not None:
+    # The digest, when declared, is the artifact's identity; the file name only matters without it.
+    if manifest.artifact is not None and manifest.artifact_sha256 is None:
         declared = Path(manifest.artifact)
         declared_name = declared.name
         if path.name != declared_name:

@@ -252,14 +252,23 @@ def test_changed_inputs_and_changed_predictions_are_refused(tmp_path):
         finalize_image(project, session, project.images[0], require_verified=True)
 
 
-def test_unverified_sessions_finalize_with_warning(tmp_path):
+def test_unopened_sections_are_not_reviewed_and_decided_ones_unverified(tmp_path):
     project = _project(tmp_path)
     session = ReviewSession(project_id=project.project_id, model_version=project.model_version)
 
-    result = finalize_image(project, session, project.images[0])
+    untouched = finalize_image(project, session, project.images[0])
+    assert untouched.verification == "not_reviewed"
+    assert untouched.warnings == []
+    # Not-reviewed sections are acceptable even when verification is required.
+    assert (
+        finalize_image(project, session, project.images[0], require_verified=True).verification
+        == "not_reviewed"
+    )
 
-    assert result.verification == "unverified"
-    assert result.warnings == ["review session has no input fingerprints for this image"]
+    _decide(session, 1, "accepted", reviewed="iia")  # an older session: decisions, no digests
+    decided = finalize_image(project, session, project.images[0])
+    assert decided.verification == "unverified"
+    assert decided.warnings == ["review session has no input fingerprints for this image"]
 
 
 def test_stale_fiber_features_and_model_version_mismatch_are_refused(tmp_path):
