@@ -10,6 +10,8 @@
 
 ### Added
 
+- `generate_review_qc` prints per-image progress and is faster on large sections (vectorized
+  probability metrics and dictionary lookups; outputs unchanged).
 - **One command path:** `scripts.make_review_project` builds a review project from `run_batch`
   output and a sample sheet (split CZI sections expanded, conditions carried, failed images
   skipped, model version from run records, existing projects never overwritten). Public wrappers

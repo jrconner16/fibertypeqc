@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -301,6 +302,46 @@ def _probability_metrics(row: pd.Series) -> dict[str, float | None]:
     }
 
 
+def _probability_metrics_table(table: pd.DataFrame) -> list[dict[str, float | None]]:
+    """Vectorized equivalent of ``_probability_metrics`` for every row of a fiber table."""
+    count = len(table)
+    numeric = np.full((count, len(PROBABILITY_COLUMNS)), np.nan, dtype=np.float64)
+    for position, column in enumerate(PROBABILITY_COLUMNS):
+        if column in table.columns:
+            numeric[:, position] = pd.to_numeric(table[column], errors="coerce").to_numpy(
+                dtype=np.float64
+            )
+    valid = np.isfinite(numeric) & (numeric >= 0)
+    values = np.where(valid, numeric, 0.0)
+    n_valid = valid.sum(axis=1)
+    totals = values.sum(axis=1)
+    usable = (n_valid >= 2) & (totals > 0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        probabilities = np.where(valid, values / totals[:, None], np.nan)
+        terms = np.where(probabilities > 0, probabilities * np.log(probabilities), 0.0)
+        entropy = -terms.sum(axis=1) / np.log(n_valid)
+    ordered = np.sort(np.where(valid, probabilities, -np.inf), axis=1)
+    max_probability = ordered[:, -1]
+    with np.errstate(invalid="ignore"):  # rows with fewer than two valid values are not usable
+        margin = ordered[:, -1] - ordered[:, -2]
+    rows: list[dict[str, float | None]] = []
+    for index in range(count):
+        row: dict[str, float | None] = {}
+        for position, column in enumerate(PROBABILITY_COLUMNS):
+            value = numeric[index, position]
+            row[column] = None if np.isnan(value) else float(value)
+        if usable[index]:
+            row["max_probability"] = float(max_probability[index])
+            row["probability_margin"] = float(margin[index])
+            row["normalized_entropy"] = float(entropy[index])
+        else:
+            row["max_probability"] = None
+            row["probability_margin"] = None
+            row["normalized_entropy"] = None
+        rows.append(row)
+    return rows
+
+
 def _base_provenance(
     project: Project,
     image: ProjectImage,
@@ -461,8 +502,7 @@ def _fiber_metrics_and_rows(
             typing_metrics["needs_review_fraction"] = (
                 float(parsed_needs_review[known].astype(bool).mean()) if known.any() else None
             )
-        for _, table_row in clean_table.iterrows():
-            probability_rows.append(_probability_metrics(table_row))
+        probability_rows = _probability_metrics_table(clean_table)
         usable = [
             values
             for values in probability_rows
@@ -497,46 +537,47 @@ def _fiber_metrics_and_rows(
             }
         )
 
-    table_lookup = (
-        clean_table.set_index("_object_id", drop=False) if not clean_table.empty else None
+    # Column lookups keyed by fiber ID; per-row DataFrame access is too slow for large sections.
+    table_ids = [int(value) for value in clean_table["_object_id"]] if not clean_table.empty else []
+    table_id_set = set(table_ids)
+    probability_lookup = dict(zip(table_ids, probability_rows, strict=False))
+    prediction_lookup = (
+        dict(zip(table_ids, clean_table[prediction_column], strict=True))
+        if table_ids and prediction_column is not None
+        else {}
     )
-    probability_lookup = {
-        int(clean_table.iloc[index]["_object_id"]): values
-        for index, values in enumerate(probability_rows)
-    }
+    needs_review_lookup = (
+        dict(zip(table_ids, clean_table["needs_review"], strict=True))
+        if table_ids and "needs_review" in clean_table.columns
+        else None
+    )
+    provenance = _base_provenance(project, image, rules, computed_at)
     fiber_rows: list[dict[str, Any]] = []
     for fiber_id, area in zip(mask_ids, areas, strict=True):
         object_id = int(fiber_id)
-        table_row = (
-            table_lookup.loc[object_id]
-            if table_lookup is not None and object_id in table_lookup.index
-            else None
-        )
+        has_row = object_id in table_id_set
         reasons = []
-        if table_artifact.table is not None and table_row is None:
+        if table_artifact.table is not None and not has_row:
             reasons.append("fiber.object_missing_table_row")
         probability = probability_lookup.get(object_id, {})
+        prediction = prediction_lookup.get(object_id) if has_row else None
         fiber_rows.append(
             {
                 "schema_version": FIBER_QC_SCHEMA_VERSION,
-                **_base_provenance(project, image, rules, computed_at),
+                **provenance,
                 "fiber_id": object_id,
                 "area_px": int(area),
                 "touches_image_border": object_id in border_ids,
                 "predicted_type": (
-                    str(table_row[prediction_column])
-                    if table_row is not None
-                    and prediction_column is not None
-                    and not pd.isna(table_row[prediction_column])
-                    else ""
+                    str(prediction) if prediction is not None and not pd.isna(prediction) else ""
                 ),
                 **{column: probability.get(column) for column in PROBABILITY_COLUMNS},
                 "max_probability": probability.get("max_probability"),
                 "probability_margin": probability.get("probability_margin"),
                 "normalized_entropy": probability.get("normalized_entropy"),
                 "needs_review": (
-                    _as_bool(table_row["needs_review"])
-                    if table_row is not None and "needs_review" in table_row.index
+                    _as_bool(needs_review_lookup[object_id])
+                    if has_row and needs_review_lookup is not None
                     else None
                 ),
                 "technical_reason_codes": "|".join(reasons),
@@ -667,14 +708,23 @@ def _nucleus_metrics_and_rows(
     return metrics, nucleus_rows
 
 
-def generate_project_qc(project: Project, rules: QCRuleConfig) -> QCResult:
-    """Generate deterministic, headless QC tables from declared prediction artifacts."""
+def generate_project_qc(
+    project: Project,
+    rules: QCRuleConfig,
+    progress: Callable[[int, int, str], None] | None = None,
+) -> QCResult:
+    """Generate deterministic, headless QC tables from declared prediction artifacts.
+
+    ``progress`` is called as ``progress(position, total, image_id)`` before each image.
+    """
     computed_at = datetime.now(UTC).isoformat()
     image_rows: list[dict[str, Any]] = []
     fiber_rows: list[dict[str, Any]] = []
     nucleus_rows: list[dict[str, Any]] = []
 
-    for image in project.images:
+    for position, image in enumerate(project.images, start=1):
+        if progress is not None:
+            progress(position, len(project.images), image.image_id)
         fiber_labels_artifact = _read_label_artifact(image.outputs.get("fiber_labels"))
         fiber_table_artifact = _read_table_artifact(image.outputs.get("fiber_table"))
         nuclei_labels_artifact = _read_label_artifact(image.outputs.get("nuclei_labels"))

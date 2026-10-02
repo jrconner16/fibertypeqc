@@ -415,3 +415,32 @@ def test_cli_writes_all_phase_2a_outputs(tmp_path: Path) -> None:
     assert set(image_qc["rules_version"]) == {"custom_test_rules.v1"}
     selections = pd.read_csv(output_dir / "section_selection.csv")
     assert set(selections["strategy"]) == {"best_passing"}
+
+
+def test_vectorized_probability_metrics_match_row_reference():
+    from src.review.qc import (
+        PROBABILITY_COLUMNS,
+        _probability_metrics,
+        _probability_metrics_table,
+    )
+
+    rng = np.random.default_rng(0)
+    table = pd.DataFrame(rng.dirichlet([1, 1, 1, 1], 400), columns=PROBABILITY_COLUMNS).astype(
+        object
+    )
+    table.iloc[::7, 0] = np.nan
+    table.iloc[::11, 1] = -0.1
+    table.iloc[::13, 2] = "bad"
+    table.iloc[::17, :] = np.nan
+    table.iloc[::19, 1:] = np.nan
+    table.iloc[5, :] = 0.0
+    table.iloc[6, :] = [1.0, 0.0, 0.0, 0.0]
+    table.iloc[8, :] = [np.inf, 0.2, 0.3, 0.5]
+
+    expected = [_probability_metrics(row) for _, row in table.iterrows()]
+
+    assert _probability_metrics_table(table) == expected
+    partial = table.drop(columns=["prob_i"])
+    assert _probability_metrics_table(partial) == [
+        _probability_metrics(row) for _, row in partial.iterrows()
+    ]
