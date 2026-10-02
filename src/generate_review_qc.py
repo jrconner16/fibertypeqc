@@ -58,7 +58,13 @@ def main(argv: list[str] | None = None) -> int:
     project = load_project(args.project, validate_paths=False)
     rules = load_rule_config(args.rules)
     manual = load_manual_selections(args.manual_selection)
-    qc_result = generate_project_qc(project, rules)
+    qc_result = generate_project_qc(
+        project,
+        rules,
+        progress=lambda position, total, image_id: print(
+            f"QC {position}/{total}: {image_id}", flush=True
+        ),
+    )
     selections = select_sections(
         project,
         qc_result.image_qc,
