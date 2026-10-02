@@ -94,12 +94,15 @@ The supported release path, from images to a cohort report. Each step reads the 
 files and writes new ones; predictions are never modified.
 
 ```bash
+# Run every command from the repository root (the folder containing pyproject.toml).
 # 0. Once per machine: environment and the private model location
 uv sync
 export FIBERTYPEQC_MODEL_ROOT=/path/to/private/models   # contains quad_four_class_rf_v1.joblib
+#    (or skip the export and pass --model /path/to/quad_four_class_rf_v1.joblib to run_batch)
 
 # 1. Segment, type, and QC every image (default model: quad_four_class_rf_v1).
-#    Add --split-czi-scenes when CZIs hold several sections.
+#    Add --split-czi-scenes when CZIs hold several Zeiss scenes; each scene becomes a section
+#    (<image>_section-NN). Tissue pieces imaged within one scene stay together.
 uv run python -m scripts.run_batch \
   --input-dir images/ --panel-config my_panel.yaml --output-dir runs/batch1
 
@@ -126,7 +129,8 @@ uv run python -m scripts.summarize_results \
   --output-dir review/batch1/results
 ```
 
-Steps 3–6 are fast and can be re-run at any time; step 5 refuses to apply review decisions to
+`run_batch` checks the model, panel, and inputs before processing and stops with one message if
+something is missing. Steps 3–6 are fast and can be re-run at any time; step 5 refuses to apply review decisions to
 masks or tables that changed after review began. Keep large run outputs on storage with room for
 them (label masks are about the size of the raw images). Details for each step follow below and in
 [README_review_workflow.md](README_review_workflow.md).
@@ -324,6 +328,7 @@ panel it supports and the pipeline refuses a mismatched panel. Select a register
 
 ```bash
 export FIBERTYPEQC_MODEL_ROOT=/path/to/private/models   # only for privately distributed models
+# --model also accepts a path to a registered model file; it is identified by its SHA-256.
 uv run python -m scripts.run_pipeline --input image.tif --output-dir out \
   --panel-config my_panel.yaml --model quad_four_class_rf_v1
 ```

@@ -263,6 +263,16 @@ def test_dashboard_widget_offscreen_smoke(tmp_path: Path, monkeypatch) -> None:
 
     assert widget.section_tree.topLevelItemCount() == 3
     assert "Mice: 3" in widget.summary_label.text()
+    # Rows with a pastel status background must set dark text (readable in dark themes).
+    colored = 0
+    for index in range(widget.section_tree.topLevelItemCount()):
+        item = widget.section_tree.topLevelItem(index)
+        background = item.background(0).color()
+        if item.background(0).style() != 0:
+            colored += 1
+            assert background.lightness() > 180
+            assert item.foreground(0).color().lightness() < 80
+    assert colored > 0
     widget.strategy_combo.setCurrentText("best_passing")
     application.processEvents()
     assert widget.model.strategy.value == "best_passing"

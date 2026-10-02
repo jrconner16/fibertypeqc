@@ -4,7 +4,11 @@ import pytest
 import yaml
 
 from fibertypeqc.model_manifest import load_model_manifest
-from fibertypeqc.model_resolution import default_model_id, resolve_model
+from fibertypeqc.model_resolution import (
+    default_model_id,
+    resolve_model,
+    resolve_model_argument,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -54,3 +58,16 @@ def test_manifest_rejects_partial_feature_pins(tmp_path):
 
     with pytest.raises(ValueError, match="missing: \\['typing_smooth_sigma'\\]"):
         load_model_manifest(path)
+
+
+def test_model_file_path_is_identified_by_digest_regardless_of_name(tmp_path):
+    source = REPO_ROOT / "examples/reference_four_class/synthetic_four_class_rf.joblib"
+    renamed = tmp_path / "my_copy.joblib"
+    renamed.write_bytes(source.read_bytes())
+
+    resolved = resolve_model_argument(str(renamed))
+
+    assert resolved.model_id == "synthetic_four_class_reference_v1"
+    assert resolved.artifact_path == renamed.resolve()
+    assert resolved.manifest_path.name == "synthetic_four_class_rf.yaml"
+    assert resolve_model_argument("synthetic_four_class_reference_v1").model_id == resolved.model_id

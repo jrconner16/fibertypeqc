@@ -17,8 +17,9 @@ from pathlib import Path
 
 import pandas as pd
 
+from fibertypeqc.artifacts import file_sha256
 from fibertypeqc.czi_scenes import discover_czi_scenes, export_czi_scenes
-from fibertypeqc.model_resolution import default_model_id
+from fibertypeqc.model_resolution import default_model_id, resolve_model_argument
 
 # V0 frozen parameters (these define the baseline production command)
 V0_PARAMS = {
@@ -109,6 +110,7 @@ def build_batch_command(
     image_id: str | None = None,
     model_manifest: Path | None = None,
     model_id: str | None = None,
+    model_argument: str | None = None,
 ) -> list[str]:
     """
     Build the frozen v0 pipeline command for a single image.
@@ -159,7 +161,7 @@ def build_batch_command(
         )
     if model_id is not None:
         # run_pipeline resolves the registered manifest and artifact and verifies the digest.
-        cmd.extend(["--model", model_id])
+        cmd.extend(["--model", model_argument or model_id])
     else:
         cmd.extend(
             [
@@ -227,6 +229,10 @@ def output_stem(image_id: str) -> str:
 def _error_tail(stderr: str | None, max_lines: int = 8, max_chars: int = 1500) -> str:
     """Keep the end of a child traceback, where the actual error is reported."""
     lines = (stderr or "").strip().splitlines()
+    # argparse failures end with "prog: error: message" after a long usage dump.
+    for line in reversed(lines):
+        if ": error: " in line:
+            return line.split(": error: ", 1)[1][-max_chars:]
     return "\n".join(lines[-max_lines:])[-max_chars:]
 
 
@@ -283,6 +289,7 @@ def run_single_image(
     reuse_artifacts: str = "never",
     model_manifest: Path | None = None,
     model_id: str | None = None,
+    model_argument: str | None = None,
 ) -> dict:
     """
     Process a single image through the v0 pipeline.
@@ -326,6 +333,7 @@ def run_single_image(
         image_id=str(result["image_name"]),
         model_manifest=model_manifest,
         model_id=model_id,
+        model_argument=model_argument,
     )
 
     try:
@@ -553,27 +561,36 @@ def main() -> None:
         args.classifier_path is not None or args.model_manifest is not None
     ):
         parser.error("--model cannot be combined with --classifier-path or --model-manifest")
-    if args.model is None and args.classifier_path is None:
-        # Release default: the registry's default fiber-type model (four-class QUAD). The
-        # historical three-class run remains available with --model LEGACY_V0_MODEL_ID.
-        args.model = default_model_id("fiber_identity")
-    if (
-        args.model is not None
-        and args.model != LEGACY_V0_MODEL_ID
-        and args.panel_config is None
-        and args.channel_config is None
-    ):
-        parser.error(
-            f"model '{args.model}' needs --panel-config describing which channel holds each "
-            f"marker; for the historical three-class run use --model {LEGACY_V0_MODEL_ID}"
-        )
-
     # Show v0 params if requested
     if args.show_v0_params:
         print("V0 Frozen Parameters:")
         for k, v in V0_PARAMS.items():
             print(f"  {k}: {v}")
         return
+
+    if args.model is None and args.classifier_path is None:
+        # Release default: the registry's default fiber-type model (four-class QUAD). The
+        # historical three-class run remains available with --model LEGACY_V0_MODEL_ID.
+        args.model = default_model_id("fiber_identity")
+    resolved_model = None
+    if args.model is not None:
+        # Resolve once, before any image is processed, so a wrong ID, missing model root, or
+        # unregistered file fails immediately with one message.
+        try:
+            resolved_model = resolve_model_argument(args.model)
+        except ValueError as exc:
+            parser.error(str(exc))
+    if (
+        resolved_model is not None
+        and resolved_model.model_id != LEGACY_V0_MODEL_ID
+        and args.panel_config is None
+        and args.channel_config is None
+    ):
+        parser.error(
+            f"model '{resolved_model.model_id}' needs --panel-config describing which channel "
+            f"holds each marker; for the historical three-class run use --model "
+            f"{LEGACY_V0_MODEL_ID}"
+        )
 
     # Validate input
     if bool(args.input_dir) == bool(args.input_manifest):
@@ -648,6 +665,7 @@ def main() -> None:
             scene_dir = scene_export_root / image_name
             try:
                 expected_scene_count = len(discover_czi_scenes(image_path))
+                logger.info(f"{image_path.name}: {expected_scene_count} Zeiss scene(s)")
                 if expected_scene_count == 0:
                     expanded_rows.append((image_name, image_path))
                     continue
@@ -685,9 +703,15 @@ def main() -> None:
         sys.exit(1)
 
     logger.info(f"Found {len(image_rows)} image(s) to process")
-    logger.info("V0 Parameters:")
-    for k, v in V0_PARAMS.items():
-        logger.info(f"  {k}: {v}")
+    if resolved_model is not None and resolved_model.model_id != LEGACY_V0_MODEL_ID:
+        logger.info(f"Model: {resolved_model.model_id}")
+        logger.info(f"  artifact sha256: {file_sha256(resolved_model.artifact_path)}")
+        logger.info(f"  manifest: {resolved_model.manifest_path.name}")
+        logger.info("  feature extraction and typing settings come from the model manifest")
+    else:
+        logger.info("V0 Parameters:")
+        for k, v in V0_PARAMS.items():
+            logger.info(f"  {k}: {v}")
     if args.classifier_path is not None:
         logger.info(f"Override: classifier_path={args.classifier_path}")
     if args.downsample_factor is not None:
@@ -739,7 +763,10 @@ def main() -> None:
             retain_mode=args.retain_mode,
             reuse_artifacts=args.reuse_artifacts,
             model_manifest=args.model_manifest,
-            model_id=args.model,
+            model_id=resolved_model.model_id if resolved_model is not None else None,
+            # The verified absolute artifact path: children identify it by digest and do not
+            # depend on the working directory or FIBERTYPEQC_MODEL_ROOT.
+            model_argument=str(resolved_model.artifact_path) if resolved_model else None,
         )
         results.append(result)
     results.extend(scene_failures)

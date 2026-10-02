@@ -10,6 +10,15 @@
 
 ### Added
 
+- `--model` accepts a path to a registered model file as well as a model ID; the file is identified
+  by SHA-256, so a private model needs no `FIBERTYPEQC_MODEL_ROOT` and may have any file name.
+  `run_batch` resolves the model once before processing (one clear error instead of one per image),
+  logs the model in use instead of the legacy v0 parameters, reports the scene count per CZI, and
+  shows the child's error line rather than its usage text. `--show-v0-params` works without a
+  model or panel.
+- Finalization and the cohort report label sections with no review activity `not_reviewed`
+  (no warning); `unverified` is reserved for sections with decisions but no recorded fingerprints.
+- Cohort dashboard rows are readable in dark themes (dark text on status colors).
 - `generate_review_qc` prints per-image progress and is faster on large sections (vectorized
   probability metrics and dictionary lookups; outputs unchanged).
 - **One command path:** `scripts.make_review_project` builds a review project from `run_batch`

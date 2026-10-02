@@ -26,7 +26,7 @@ from fibertypeqc.model_manifest import (
     validate_model_artifact,
     validate_model_compatibility,
 )
-from fibertypeqc.model_resolution import resolve_model
+from fibertypeqc.model_resolution import resolve_model_argument
 from fibertypeqc.panels import Panel, validate_requested_domains
 from fibertypeqc.qc_contract import (
     build_qc_report,
@@ -322,9 +322,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help=(
-            "Registered model ID (see manifests/model_registry.v1.yaml). Resolves the manifest "
-            "and artifact; private artifacts are read from $FIBERTYPEQC_MODEL_ROOT and verified "
-            "by digest. Cannot be combined with --classifier-path or --model-manifest."
+            "Registered model ID (see manifests/model_registry.v1.yaml) or a path to a registered "
+            "model file (identified by digest). With an ID, private artifacts are read from "
+            "$FIBERTYPEQC_MODEL_ROOT. Cannot be combined with --classifier-path or "
+            "--model-manifest."
         ),
     )
     p.add_argument(
@@ -480,7 +481,7 @@ def main() -> None:
         if args.classifier_path is not None or args.model_manifest is not None:
             parser.error("--model cannot be combined with --classifier-path or --model-manifest")
         try:
-            resolved = resolve_model(args.model)
+            resolved = resolve_model_argument(args.model)
         except ValueError as exc:
             parser.error(str(exc))
         args.classifier_path = str(resolved.artifact_path)
