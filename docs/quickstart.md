@@ -1,12 +1,16 @@
-# Quickstart
+# Single-Image and Historical Commands
+
+The supported release workflow (batch → project → QC → review → finalize → report) is in the
+[README](../README.md#end-to-end-workflow). This page covers single-image runs, the historical
+three-class model, and the legacy per-image reviewer. Run commands from the repository root.
 
 ## Install
 
 ```bash
-uv sync
+uv sync --frozen
 ```
 
-## Run One Image
+## Run One Image (historical three-class model)
 
 ```bash
 uv run python -m scripts.run_pipeline \
@@ -21,7 +25,7 @@ uv run python -m scripts.run_pipeline \
   --classifier-path data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib
 ```
 
-Channel meanings in v0.1-alpha:
+Channel meanings for this historical model:
 
 - `--iib-channel`: IIb marker
 - `--iia-channel`: IIa marker
@@ -69,15 +73,18 @@ Every successful run also writes `*_result_report.html`. Open it locally to insp
 retained artifacts, and the recommended review or configuration action. It has no network or
 JavaScript dependency and does not display the source-image path.
 
-## Run A Batch
+## Run A Batch (historical three-class model)
+
+`run_batch` defaults to the four-class model and needs a panel file. For the historical model:
 
 ```bash
 uv run python -m scripts.run_batch \
   --input-dir path/to/images \
+  --model rebaseline_tile_v2_p75p90_iib_iia_iix \
   --output-dir outputs/v0_batch
 ```
 
-## Review Flags
+## Review Flags (legacy per-image reviewer)
 
 ```bash
 uv run python -m scripts.review_labels_napari \
@@ -91,7 +98,7 @@ For a panel-aware run, pass the same mapping with `--channel-config`. Add
 `--nuclei-labels outputs/panel_run/image_name/nuclear/image_name_nuclei_labels.tif` to display the
 nuclear overlay. The review table stores Type I corrections and eMHC assessments separately.
 
-## Merge Review
+## Merge Review (deprecated; prefer `scripts.finalize_review_project`)
 
 ```bash
 uv run python -m scripts.merge_reviewed_labels \

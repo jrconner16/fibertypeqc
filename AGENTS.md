@@ -8,9 +8,10 @@ Rules of the road for working on FiberTypeQC.
 - Prefer small, reviewable edits over broad refactors.
 - Use existing pipeline conventions unless the release plan says otherwise.
 - Before changing CLI docs, verify script arguments against the source.
-- Current public workflow is:
-  `run_pipeline` / `run_batch` -> `review_labels_napari` -> `merge_reviewed_labels`.
-  The target release workflow (project review and finalization) is described in `ROADMAP.md`.
+- Supported workflow is:
+  `run_batch` -> `make_review_project` -> `generate_review_qc` -> `review_project_napari` ->
+  `finalize_review_project` -> `summarize_results` (see `README.md`). The per-image
+  `review_labels_napari` / `merge_reviewed_labels` path is legacy.
 - Treat `ui_napari.py` as experimental unless explicitly promoted.
 - Report files changed and commands/tests run at the end of each task.
 - If a task risks changing scientific behavior, stop and explain before editing.

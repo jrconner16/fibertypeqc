@@ -1,5 +1,9 @@
 # FiberTypeQC Frozen Alpha Model Card
 
+> **Retired historical model.** It remains reproducible and selectable
+> (`--model rebaseline_tile_v2_p75p90_iib_iia_iix`) but is not the release default. The default is
+> described in [docs/model_cards/quad_four_class_rf_v1.md](../../docs/model_cards/quad_four_class_rf_v1.md).
+
 ## Model Identity
 
 - File: `data/models/rebaseline_tile_v2_p75p90_iib_iia_iix.joblib`
