@@ -444,3 +444,44 @@ def test_vectorized_probability_metrics_match_row_reference():
     assert _probability_metrics_table(partial) == [
         _probability_metrics(row) for _, row in partial.iterrows()
     ]
+
+
+def _laminin_fixture():
+    """A 6x6 grid of square fibers with a thin laminin outline; fiber 8 thick, fiber 20 faint."""
+    labels = np.zeros((140, 140), dtype=np.int32)
+    laminin = np.full((140, 140), 100.0, dtype=np.float32)
+    rng = np.random.default_rng(0)
+    fiber_id = 0
+    for row in range(6):
+        for column in range(6):
+            fiber_id += 1
+            y0, x0 = 4 + row * 22, 4 + column * 22
+            labels[y0 : y0 + 20, x0 : x0 + 20] = fiber_id
+            rim = 1000.0  # uniform outlines: only the deliberate cases should be flagged
+            interior = 900.0 if fiber_id == 8 else 120.0 + rng.normal(0, 5)  # 8: thick laminin
+            laminin[y0 : y0 + 20, x0 : x0 + 20] = interior
+            laminin[y0 : y0 + 20, [x0, x0 + 19]] = rim
+            laminin[[y0, y0 + 19], x0 : x0 + 20] = rim
+            if fiber_id == 20:  # almost no laminin on the outline
+                laminin[y0 : y0 + 20, [x0, x0 + 19]] = 130.0
+                laminin[[y0, y0 + 19], x0 : x0 + 20] = 130.0
+    return labels, laminin
+
+
+def test_laminin_review_flags_identify_thick_and_faint_outlines():
+    from src.review.qc import (
+        THICK_LAMININ_REASON,
+        WEAK_LAMININ_RIM_REASON,
+        laminin_review_flags,
+    )
+
+    labels, laminin = _laminin_fixture()
+
+    flags = laminin_review_flags(labels, laminin)
+
+    assert len(flags) == 36
+    flagged = {fiber_id: reasons for fiber_id, (_, _, reasons) in flags.items() if reasons}
+    assert flagged == {8: (THICK_LAMININ_REASON,), 20: (WEAK_LAMININ_RIM_REASON,)}
+    rim, band, _ = flags[1]
+    assert rim > 800 and band < 200
+    assert laminin_review_flags(np.zeros((5, 5), dtype=np.int32), np.zeros((5, 5))) == {}

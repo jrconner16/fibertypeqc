@@ -244,3 +244,33 @@ def test_guided_navigator_and_tutorial_are_recoverable(tmp_path: Path, monkeypat
     widget.close()
     widget.deleteLater()
     application.processEvents()
+
+
+def test_technical_flags_join_the_flagged_queue_with_specific_reasons():
+    from src.review.queues import describe_reason
+
+    rows = pd.DataFrame(
+        {
+            "image_id": ["a"] * 4,
+            "mouse_id": ["m"] * 4,
+            "fiber_id": [1, 2, 3, 4],
+            "model_fiber_type": ["iib"] * 4,
+            "confidence": [0.9, 0.5, 0.9, 0.5],
+            "probability_margin": [0.8, 0.1, 0.8, 0.1],
+            "normalized_entropy": [0.1, 0.9, 0.1, 0.9],
+            "needs_review": [False, True, False, True],
+            "typing_signal_qc_flags": ["", "", "", ""],
+            "technical_flags": ["", "", "fiber.thick_laminin", "fiber.weak_laminin_rim"],
+        }
+    )
+
+    queue = build_fiber_type_queue(rows, QueueSource.FLAGGED)
+
+    reasons = {item.fiber_id: item.reason_code for item in queue}
+    assert reasons == {
+        2: "flagged_by_model_or_qc",
+        3: "fiber.thick_laminin",
+        4: "flagged_by_model_or_qc|fiber.weak_laminin_rim",
+    }
+    assert describe_reason(reasons[4]) == "low model confidence or margin; faint laminin outline"
+    assert describe_reason("random_audit:cohort:seed=0") == "random audit:cohort:seed=0"
