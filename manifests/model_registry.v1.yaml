@@ -46,7 +46,7 @@ models:
     limitations: IIx is residual inference from direct IIa/IIb evidence; this is the released comparator, not a universal model.
   - model_id: manual8_myo3_base0p1
     task: fiber_identity
-    status: standing_candidate
+    status: retired
     required_markers: [laminin, type_iia, type_iib]
     feature_schema: legacy_type1_type2.v1
     artifact: null

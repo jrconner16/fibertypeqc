@@ -9,27 +9,32 @@ cleanup work.
 
 The latest published release is v0.2.0. The working development version is v0.3.0.dev0.
 
-## Stable public workflow
+## Supported workflow
 
 ```text
-scripts.run_pipeline -> scripts.review_labels_napari -> scripts.merge_reviewed_labels
-                         \
-                          scripts.run_batch (multi-image pipeline execution)
+scripts.run_batch -> scripts.make_review_project -> scripts.generate_review_qc
+  -> scripts.review_project_napari -> scripts.finalize_review_project -> scripts.summarize_results
 ```
 
 Public command wrappers live in `scripts/`:
 
-- `run_pipeline.py`: single-image preprocessing, fiber segmentation, quantification, classification,
-  QC, and output creation.
-- `run_batch.py`: applies the frozen workflow across a directory or explicit manifest.
-- `review_labels_napari.py`: records manual fiber-label corrections.
-- `merge_reviewed_labels.py`: combines model outputs with manual corrections.
-- `debug_fiber.py` and `backfill_feret_from_labels.py`: diagnostic/maintenance utilities, not primary
-  workflow steps.
+- `run_batch.py` / `run_pipeline.py`: segmentation, panel-specific fiber typing, per-image QC, and
+  provenance for many images or one.
+- `make_review_project.py`: builds a review project from batch output and a sample sheet.
+- `generate_review_qc.py`: project QC tables and section selection.
+- `review_project_napari.py`: project review (cohort QC, section status, guided fiber review,
+  regions).
+- `finalize_review_project.py`: applies review decisions and exclusions into finalized tables.
+- `summarize_results.py`: image, mouse, ROI, and cohort tables and the cohort report.
+- `run_reference.py` / `check_repository.py`: synthetic end-to-end check and repository guardrails.
+- `review_labels_napari.py` and `merge_reviewed_labels.py`: legacy per-image review and merge
+  (merge is deprecated; legacy corrections import into finalization).
+- `debug_fiber.py` and `backfill_feret_from_labels.py`: diagnostic/maintenance utilities.
 
-The stable biological contract is `pipeline -> review -> merge`. The frozen default model expects
-IIb and IIa markers plus a membrane channel and treats IIx as residual inference. Its defaults,
-thresholds, feature contract, QC flags, and merge behavior are baseline-sensitive.
+The contract is that predictions are never modified after the pipeline writes them: review state,
+finalized tables, and results are separate files, each carrying the identity of its inputs. Models
+are panel-specific and selected by registry ID; a model manifest may pin its feature-extraction
+settings, which are then baseline-sensitive.
 
 ## Code areas
 

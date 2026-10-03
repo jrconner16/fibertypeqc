@@ -1,6 +1,6 @@
 # FiberTypeQC Roadmap
 
-- Updated: 2026-09-29
+- Updated: 2026-10-03
 - Status: active. This is the single public execution plan.
 - Supersedes: [docs/history/ROADMAP_2026H2.md](docs/history/ROADMAP_2026H2.md) and earlier planning notes.
 
@@ -33,19 +33,21 @@ The release validates the workflow, not a universal classifier.
   `src/review/`). The per-image reviewer is kept only as an input bridge.
 - **Not a rewrite.** Separate the supported product core from research code, then close the gaps.
 
-## Current state (2026-09-29)
+## Current state (2026-10-03)
 
 | Area | State |
 |---|---|
-| Ingest, segmentation, feature extraction | Works; image-axis/scene handling and device recording need hardening |
-| Typing | Three-class path works; four-class semantic path is a sidecar only |
-| Image summary / post-run QC | Class proportions and residual-rate QC assume legacy class names |
-| Batch | Works; renamed outputs and model-digest checks need fixes |
-| Model registry | Lacks ordered features, class list, training-ledger digest, code revision, private artifact URI |
-| Project review | Built and tested, but its decisions do not yet feed any output |
-| Finalization | Missing |
-| Mouse/cohort summaries and cohort report | Missing (report is per-image) |
-| Reproducibility infrastructure | Locked environment, CI, synthetic reference, result bundles, digests |
+| Ingest and segmentation | Axis-metadata loading; multi-scene CZIs split deterministically; device and digests recorded |
+| Typing | Panel-specific models selected by ID or file; pinned feature extraction; fail-closed panel check |
+| Per-image summary and QC | Class proportions from the model's classes; uncertainty and residual-class checks |
+| Batch | Model verified before processing; outputs named by image ID; portable paths |
+| Model registry | Features, classes, digests, and private-artifact entries; default model declared |
+| Project review | Cohort QC, section status, guided fiber review, regions and analysis ROIs; laminin review prompts |
+| Finalization | Review decisions and exclusions applied into finalized tables; predictions never modified |
+| Results | Image, mouse, ROI, and cohort tables; cohort report built only from exported tables |
+| Reproducibility infrastructure | Locked environment, CI, synthetic references run end to end, private-data guardrails |
+| Default model validation | Software reproducibility checks pass; random hold-out validation not yet done |
+| Default model distribution | Not in the repository; distribution route undecided |
 
 ## Stages
 
@@ -72,14 +74,32 @@ explained before editing and accompanied by a before/after comparison of referen
 - [x] **Stage 5 — Results layer.** Image, mouse, and cohort tables from finalized outputs; cohort HTML
   report including predicted-versus-finalized comparison. Every figure reproducible from exported
   CSV/JSON.
-- [ ] **Stage 6 — One command path and usability.** Documented entry points from batch run through
-  QC, review, finalization, and report; usability pass on a large project.
-- [ ] **Stage 7 — Rehearsal and release.** Clean-checkout rehearsal by the developer and then by a
-  non-author; convert every blocker into documentation, automation, or a stated limitation; tag.
+- [x] **Stage 6 — One command path and usability.** Documented entry points from batch run through
+  QC, review, finalization, and report; first hands-on usability pass on a multi-mouse project on
+  an HPC GUI, with its fixes merged.
+- [ ] **Stage 7 — Rehearsal and release.** Remaining:
+  - [ ] decide how the default model file is distributed (public download or on request);
+  - [ ] clean-checkout rehearsal by a non-author following the README only; convert every blocker
+    into documentation, automation, or a stated limitation;
+  - [ ] private reference run with frozen expected outputs;
+  - [ ] version bump and tag.
 
 Order: `0 → 1 → 2 → {3, 4} → 5 → 6 → 7`. Reference outputs are frozen only after Stage 2.
 
-Later and optional: rebuilt TA model, OCI/Apptainer images, shared TA+QUAD model research.
+## After this release
+
+- **Validation:** blinded review of a random hold-out sample for the default model; until then its
+  model card makes no accuracy claims.
+- **Adapt-to-your-panel workflow:** create project → map channels → run a baseline → review/label a
+  subset (including a blind random sample) → train a panel model with pinned features and a recorded
+  evaluation → rerun → finalize/report. This is what makes the tool usable on panels without a
+  published model.
+- **Usability:** one project-folder convention, an init wizard for panel and sample-sheet files,
+  a `status`/next-action command, a finalize-and-report button in the reviewer, panel presets;
+  later a GUI channel mapper, sample-sheet editor, and napari plugin.
+- **Install:** split GUI and research dependencies into optional extras.
+- **Sections:** splitting separate tissue pieces imaged within one Zeiss scene.
+- Optional: rebuilt TA model, OCI/Apptainer images, shared TA+QUAD model research.
 
 ## Verification for every stage
 

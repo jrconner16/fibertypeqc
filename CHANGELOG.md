@@ -10,6 +10,10 @@
 
 ### Added
 
+- README rewritten around the release workflow (requirements, install check, inputs, end-to-end
+  steps, outputs, models, QC, troubleshooting); `docs/quickstart.md` now covers single-image and
+  historical commands; `ARCHITECTURE.md` and `AGENTS.md` describe the supported workflow; the
+  historical model card is marked retired; `manual8_myo3_base0p1` is retired in the registry.
 - Project QC measures laminin on and just inside each fiber outline and adds two review-only
   reasons, `fiber.weak_laminin_rim` and `fiber.thick_laminin`. They join the flagged review queue
   and "Why shown" now names the specific reason. No fiber is excluded and no call changes.
