@@ -24,7 +24,9 @@ workspace** brings back closed docks):
 3. **Guided fiber review** — start **Review flagged fibers** (or **Review this section**). One
    fiber at a time, outlined in cyan. Keys: `K` keep the model call, `1`/`2`/`3`/`4` = I/IIa/IIb/IIx,
    Left/Right to move, `F` to center, `U` to undo. Uncertain/exclude are under **Advanced review
-   options**. Decisions save immediately and resume where you left off.
+   options**. The flagged queue also includes fibers with a faint or unusually thick laminin
+   outline (from project QC); "Why shown" names the reason. These are prompts to look, not
+   exclusions. Decisions save immediately and resume where you left off.
 4. **Regions** — draw a polygon in the yellow *Region shapes* layer, pick a domain and action, and
    apply. *Exclude all analysis* / *ignore fiber typing* removes the fibers whose centers fall
    inside (folds, tears, bad staining); *unresolved* marks them unresolved. **Analysis ROI** with a

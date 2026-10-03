@@ -99,8 +99,26 @@ def _probability_metrics(row: pd.Series) -> tuple[float | None, float | None]:
     return float(margin), float(entropy)
 
 
-def load_fiber_type_rows(project: Project) -> pd.DataFrame:
-    """Load canonical object rows while retaining model outputs as read-only input."""
+REASON_LABELS = {
+    "flagged_by_model_or_qc": "low model confidence or margin",
+    "fiber.weak_laminin_rim": "faint laminin outline",
+    "fiber.thick_laminin": "thick laminin",
+    "fiber.object_missing_table_row": "fiber missing from the table",
+}
+
+
+def describe_reason(reason_code: str) -> str:
+    """Plain-language text for a queue item's reason codes."""
+    parts = [part for part in str(reason_code).split("|") if part]
+    return "; ".join(REASON_LABELS.get(part, part.replace("_", " ")) for part in parts)
+
+
+def load_fiber_type_rows(project: Project, fiber_qc: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Load canonical object rows while retaining model outputs as read-only input.
+
+    ``fiber_qc`` (the project QC fiber table) adds per-fiber technical review reasons such as
+    weak or thick laminin; they only affect which fibers are queued for review.
+    """
     records: list[dict[str, object]] = []
     for image in project.images:
         if Domain.FIBER_TYPING not in image.applicable_domains:
@@ -160,6 +178,19 @@ def load_fiber_type_rows(project: Project) -> pd.DataFrame:
         )
     if result.duplicated(["image_id", "fiber_id"]).any():
         raise ValueError("Fiber table IDs must be unique within each image")
+    result["technical_flags"] = ""
+    if fiber_qc is not None and not fiber_qc.empty and not result.empty:
+        reasons = fiber_qc.loc[:, ["image_id", "fiber_id", "technical_reason_codes"]].copy()
+        reasons["technical_reason_codes"] = reasons["technical_reason_codes"].fillna("").astype(str)
+        reasons = reasons[reasons["technical_reason_codes"].ne("")]
+        lookup = {
+            (str(row.image_id), int(row.fiber_id)): row.technical_reason_codes
+            for row in reasons.itertuples(index=False)
+        }
+        result["technical_flags"] = [
+            lookup.get((str(image_id), int(fiber_id)), "")
+            for image_id, fiber_id in zip(result["image_id"], result["fiber_id"], strict=True)
+        ]
     return result
 
 
@@ -185,7 +216,19 @@ def build_fiber_type_queue(
         needs_review = (
             work.get("needs_review", pd.Series(False, index=work.index)).fillna(False).astype(bool)
         )
-        work = work[needs_review | flags.astype(str).str.strip().ne("")]
+        model_flagged = needs_review | flags.astype(str).str.strip().ne("")
+        technical = (
+            work.get("technical_flags", pd.Series("", index=work.index)).fillna("").astype(str)
+        )
+        work = work.assign(
+            queue_reason=[
+                "|".join(
+                    part for part in ("flagged_by_model_or_qc" if flagged else "", tech) if part
+                )
+                for flagged, tech in zip(model_flagged, technical, strict=True)
+            ]
+        )
+        work = work[work["queue_reason"].ne("")]
         reason = "flagged_by_model_or_qc"
     elif parsed_source is QueueSource.LOW_CONFIDENCE:
         work = work[work["confidence"].notna()].sort_values(
@@ -238,7 +281,7 @@ def build_fiber_type_queue(
             fiber_id=int(row.fiber_id),
             model_fiber_type=str(row.model_fiber_type),
             queue_source=parsed_source,
-            reason_code=reason,
+            reason_code=getattr(row, "queue_reason", reason),
             confidence=None if pd.isna(row.confidence) else float(row.confidence),
             probability_margin=None
             if pd.isna(row.probability_margin)

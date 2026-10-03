@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import pandas as pd
 from qtpy.QtCore import QSettings, Qt
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import (
@@ -25,6 +26,7 @@ from src.review.queues import (
     QueueSource,
     RandomAuditScope,
     build_fiber_type_queue,
+    describe_reason,
     load_fiber_type_rows,
 )
 from src.review.schemas import Domain, ObjectReviewStatus, Scope
@@ -42,6 +44,7 @@ class GuidedReviewWidget(QWidget):
         show_dashboard: Callable[[], None] | None = None,
         show_section: Callable[[], None] | None = None,
         show_region: Callable[[], None] | None = None,
+        fiber_qc: pd.DataFrame | None = None,
         show_domain: Callable[[Domain], None] | None = None,
         focus_current_object: Callable[[], None] | None = None,
         parent: QWidget | None = None,
@@ -55,7 +58,7 @@ class GuidedReviewWidget(QWidget):
         self.show_region = show_region
         self.show_domain = show_domain
         self.focus_current_object = focus_current_object
-        self.rows = load_fiber_type_rows(project)
+        self.rows = load_fiber_type_rows(project, fiber_qc)
         self._review_started = bool(self.controller.session.active_queue)
         self._settings = QSettings("FiberTypeQC", "FiberTypeQC")
         self.setMinimumWidth(410)
@@ -423,7 +426,7 @@ class GuidedReviewWidget(QWidget):
         )
         values = [
             f"Model call: {item.model_fiber_type.upper()}",
-            f"Why shown: {item.reason_code.replace('_', ' ')}",
+            f"Why shown: {describe_reason(item.reason_code)}",
         ]
         if item.confidence is not None:
             values.append(f"confidence {item.confidence:.2f}")

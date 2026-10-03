@@ -13,6 +13,8 @@ import numpy as np
 import pandas as pd
 import tifffile
 
+from fibertypeqc.config import load_channel_config
+from src.io_utils import load_multichannel_image
 from src.review.project import Project, ProjectImage
 from src.review.qc_rules import QCRuleConfig, RuleSeverity, evaluate_rules
 from src.review.schemas import Domain
@@ -100,6 +102,8 @@ FIBER_QC_COLUMNS = [
     "fiber_id",
     "area_px",
     "touches_image_border",
+    "laminin_rim_mean",
+    "laminin_inner_band_mean",
     "predicted_type",
     "prob_i",
     "prob_iia",
@@ -302,6 +306,72 @@ def _probability_metrics(row: pd.Series) -> dict[str, float | None]:
     }
 
 
+# Laminin review flags. Both are review prompts only: they never exclude a fiber or change its type.
+WEAK_LAMININ_RIM_MAD_FACTOR = 3.0  # rim mean below the section median minus 3 MADs
+THICK_LAMININ_BAND_Z = 4.0  # robust z-score of laminin 3-7 px inside the fiber outline
+THICK_LAMININ_BAND_PX = (3, 7)
+WEAK_LAMININ_RIM_REASON = "fiber.weak_laminin_rim"
+THICK_LAMININ_REASON = "fiber.thick_laminin"
+
+
+def laminin_review_flags(
+    labels: np.ndarray, laminin: np.ndarray
+) -> dict[int, tuple[float | None, float | None, tuple[str, ...]]]:
+    """Per-fiber laminin measurements and review reasons, relative to the section.
+
+    ``rim`` is the mean laminin on the fiber's own outline pixels; a markedly weak rim suggests an
+    unsupported boundary. ``band`` is the mean laminin 3-7 px inside the outline; a normal fiber
+    has laminin only at its edge, so a high band value means thick or smeared laminin. Thresholds
+    are robust and within-section, so they do not depend on acquisition intensity scale.
+    """
+    from scipy.ndimage import distance_transform_edt
+
+    labels = np.asarray(labels)
+    laminin = np.asarray(laminin, dtype=np.float32)
+    count = int(labels.max())
+    if count < 1:
+        return {}
+    inner = np.zeros(labels.shape, dtype=bool)
+    vertical = labels[1:, :] != labels[:-1, :]
+    inner[1:, :] |= vertical & (labels[1:, :] > 0)
+    inner[:-1, :] |= vertical & (labels[:-1, :] > 0)
+    horizontal = labels[:, 1:] != labels[:, :-1]
+    inner[:, 1:] |= horizontal & (labels[:, 1:] > 0)
+    inner[:, :-1] |= horizontal & (labels[:, :-1] > 0)
+    foreground = labels > 0
+    depth = distance_transform_edt(foreground & ~inner)
+    low, high = THICK_LAMININ_BAND_PX
+    band_mask = foreground & (depth >= low) & (depth <= high)
+
+    def mean_per_label(mask: np.ndarray) -> np.ndarray:
+        sums = np.bincount(labels[mask], weights=laminin[mask], minlength=count + 1)[1:]
+        counts = np.bincount(labels[mask], minlength=count + 1)[1:]
+        return np.divide(sums, counts, out=np.full(count, np.nan), where=counts > 0)
+
+    rim, band = mean_per_label(inner), mean_per_label(band_mask)
+    present = np.bincount(labels.ravel(), minlength=count + 1)[1:] > 0
+    rim_median = np.nanmedian(rim[present])
+    rim_mad = np.nanmedian(np.abs(rim[present] - rim_median))
+    weak = rim < rim_median - WEAK_LAMININ_RIM_MAD_FACTOR * max(rim_mad, np.finfo(float).eps)
+    band_median = np.nanmedian(band[present])
+    band_mad = np.nanmedian(np.abs(band[present] - band_median))
+    band_z = (band - band_median) / (1.4826 * max(band_mad, np.finfo(float).eps))
+    thick = band_z > THICK_LAMININ_BAND_Z
+    result: dict[int, tuple[float | None, float | None, tuple[str, ...]]] = {}
+    for index in np.flatnonzero(present):
+        reasons = []
+        if weak[index]:
+            reasons.append(WEAK_LAMININ_RIM_REASON)
+        if thick[index]:
+            reasons.append(THICK_LAMININ_REASON)
+        result[int(index) + 1] = (
+            None if np.isnan(rim[index]) else float(rim[index]),
+            None if np.isnan(band[index]) else float(band[index]),
+            tuple(reasons),
+        )
+    return result
+
+
 def _probability_metrics_table(table: pd.DataFrame) -> list[dict[str, float | None]]:
     """Vectorized equivalent of ``_probability_metrics`` for every row of a fiber table."""
     count = len(table)
@@ -427,9 +497,15 @@ def _fiber_metrics_and_rows(
     computed_at: str,
     labels_artifact: _LabelArtifact,
     table_artifact: _TableArtifact,
+    laminin: np.ndarray | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], pd.DataFrame]:
     labels = labels_artifact.labels
     mask_ids, areas, border_ids = _mask_geometry(labels)
+    laminin_flags = (
+        laminin_review_flags(labels, laminin)
+        if labels is not None and laminin is not None and laminin.shape == labels.shape
+        else {}
+    )
     clean_table, _, table_ids_valid = _clean_id_table(
         table_artifact.table, ("fiber_id", "label")
     )
@@ -561,6 +637,8 @@ def _fiber_metrics_and_rows(
             reasons.append("fiber.object_missing_table_row")
         probability = probability_lookup.get(object_id, {})
         prediction = prediction_lookup.get(object_id) if has_row else None
+        rim_mean, band_mean, laminin_reasons = laminin_flags.get(object_id, (None, None, ()))
+        reasons.extend(laminin_reasons)
         fiber_rows.append(
             {
                 "schema_version": FIBER_QC_SCHEMA_VERSION,
@@ -568,6 +646,8 @@ def _fiber_metrics_and_rows(
                 "fiber_id": object_id,
                 "area_px": int(area),
                 "touches_image_border": object_id in border_ids,
+                "laminin_rim_mean": rim_mean,
+                "laminin_inner_band_mean": band_mean,
                 "predicted_type": (
                     str(prediction) if prediction is not None and not pd.isna(prediction) else ""
                 ),
@@ -708,6 +788,25 @@ def _nucleus_metrics_and_rows(
     return metrics, nucleus_rows
 
 
+def _project_laminin_channel(project: Project) -> int | None:
+    """Laminin channel index from the project's panel; None when it cannot be determined."""
+    try:
+        return int(load_channel_config(project.panel_manifest).membrane_channel)
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def _laminin_channel(image: ProjectImage, channel: int | None) -> np.ndarray | None:
+    """Raw laminin plane for an image, or None when unavailable (flags are then skipped)."""
+    if channel is None:
+        return None
+    try:
+        raw = load_multichannel_image(image.raw_image_path)
+    except (OSError, ValueError, ImportError):
+        return None
+    return raw[channel] if 0 <= channel < raw.shape[0] else None
+
+
 def generate_project_qc(
     project: Project,
     rules: QCRuleConfig,
@@ -722,6 +821,7 @@ def generate_project_qc(
     fiber_rows: list[dict[str, Any]] = []
     nucleus_rows: list[dict[str, Any]] = []
 
+    laminin_channel = _project_laminin_channel(project)
     for position, image in enumerate(project.images, start=1):
         if progress is not None:
             progress(position, len(project.images), image.image_id)
@@ -737,6 +837,7 @@ def generate_project_qc(
             computed_at=computed_at,
             labels_artifact=fiber_labels_artifact,
             table_artifact=fiber_table_artifact,
+            laminin=_laminin_channel(image, laminin_channel),
         )
         fiber_rows.extend(image_fibers)
         fiber_count = segmentation_metrics.get("fiber_count")

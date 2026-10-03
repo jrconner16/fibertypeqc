@@ -10,6 +10,9 @@
 
 ### Added
 
+- Project QC measures laminin on and just inside each fiber outline and adds two review-only
+  reasons, `fiber.weak_laminin_rim` and `fiber.thick_laminin`. They join the flagged review queue
+  and "Why shown" now names the specific reason. No fiber is excluded and no call changes.
 - `--model` accepts a path to a registered model file as well as a model ID; the file is identified
   by SHA-256, so a private model needs no `FIBERTYPEQC_MODEL_ROOT` and may have any file name.
   `run_batch` resolves the model once before processing (one clear error instead of one per image),

@@ -83,7 +83,14 @@ The command writes:
 
 - `qc/image_qc.csv`: one image/domain row with metrics, status, scores, explicit
   reasons, and provenance;
-- `qc/fiber_qc.csv`: one row per positive fiber-mask object;
+- `qc/fiber_qc.csv`: one row per positive fiber-mask object. When the panel's laminin channel and
+  the raw image are available it includes `laminin_rim_mean` (laminin on the fiber's outline) and
+  `laminin_inner_band_mean` (laminin 3–7 px inside the outline), and `technical_reason_codes` may
+  contain `fiber.weak_laminin_rim` (outline below the section median by more than 3 MADs) and
+  `fiber.thick_laminin` (inner-band laminin more than 4 robust SDs above the section median).
+  These are review prompts only: they queue the fiber for review and never exclude it or change
+  its type. Both are relative to the section, so a small share of ordinary fibers is always
+  flagged;
 - `qc/nucleus_qc.csv`: one row per positive nucleus-mask object;
 - `qc/section_selection.csv`: one mouse/domain result for the selected strategy.
 

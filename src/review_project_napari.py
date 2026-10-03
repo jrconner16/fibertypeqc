@@ -457,6 +457,7 @@ def main(argv: list[str] | None = None) -> int:
         show_dashboard=open_dashboard,
         show_section=show_section,
         show_region=open_region_review,
+        fiber_qc=tables.fiber_qc,
         show_domain=show_domain,
         focus_current_object=focus_current_object,
     )
