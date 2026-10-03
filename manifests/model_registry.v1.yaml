@@ -14,7 +14,7 @@ models:
     artifact_sha256: d1028e388e61e93a06c2f7b1907a14001c33e5844e6c038575bb1dcc87299015
     manifest: manifests/models/quad_four_class_rf_v1.yaml
     development_groups: Private reviewed four-marker development sections; identifiers remain internal.
-    evaluation_groups: Leave-one-mouse-out development evidence plus a private locked final test; results are not public.
+    evaluation_groups: Private leave-one-mouse-out development evaluation and a targeted blinded audit of held-out mice; a random hold-out evaluation has not been done and no results are public.
     comparator: null
     evidence: manifests/models/quad_four_class_rf_v1.yaml
     limitations: Locked development candidate trained on one private cohort. IIx is residual inference from absent I/IIa/IIb signal. Features must be extracted with the pinned manifest settings. Review-assisted use only; not a validated general model.

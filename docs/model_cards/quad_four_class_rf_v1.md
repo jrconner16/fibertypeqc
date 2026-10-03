@@ -38,24 +38,35 @@ quantification defaults). With this model the pipeline uses those values, does n
 
 ## Training and evidence
 
-- Trained on manually reviewed fibers from a private development cohort of four-marker sections,
-  with leave-one-mouse-out development evaluation and a separately locked final test.
+- Trained on manually reviewed fibers from a private development cohort of four-marker sections.
   Identifiers, labels, and results are private.
+- A group of mice was held out from training. So far the held-out mice have only been examined
+  with a targeted (non-random) blinded audit. **A blinded review of a random hold-out sample has
+  not been done yet**; it is the planned validation, and no accuracy figures are reported until
+  then.
 - This is a **locked development candidate**, not a validated general model. Intended for
   review-assisted analysis in which flagged fibers are inspected in the review workflow.
+
+## What to expect (qualitative, pending hold-out validation)
+
+- Type IIa calls appear robust.
+- The IIb/IIx split depends on the absence of stain and is partly subjective, for the model and
+  for a reviewer. Treat that split with more caution than the others.
+- Too few Type I fibers have been checked to characterize those calls.
 
 ## Reproducibility verification
 
 | Check | Result |
 |---|---|
 | Artifact and training manifest digests match the lock record | Pass |
-| Refit from the recorded training rows and recipe | 100% class agreement with the locked artifact on all training rows; all recorded evaluation groups reproduced (counts exact, accuracy and balanced accuracy to 4 decimals). Trees are not bit-identical across CPU platforms. |
-| Release pipeline features vs the historical training code, on the same regenerated sections and fixture masks | Bit-identical for all 19 features on 225,751 regions in 15 sections |
-| Release-pipeline features on new segmentations of 3 regenerated sections (3 mice) vs training-feature distributions | Max Kolmogorov–Smirnov distance 0.12–0.17 across all 19 features; controls with swapped marker channels give 0.86–0.98 and a different section 0.37–0.62. Approximate input-consistency check, not a reproduction. |
+| Refit from the recorded training rows and recipe reproduces the locked model's calls and its recorded development evaluation | Pass (trees are not bit-identical across CPU platforms) |
+| Release pipeline features match the historical training code on the same regenerated sections and fixture masks | Pass |
+| Release-pipeline features on new segmentations of regenerated sections are consistent with training-feature distributions (approximate input-consistency check) | Pass |
 
 The original training segmentation masks are no longer available, so per-fiber reproduction of the
 training features is not possible. The checks above verify the model-from-data link and that the
-release pipeline reproduces the training-time feature computation.
+release pipeline reproduces the training-time feature computation. They are software checks, not
+evidence of biological accuracy.
 
 ## Limitations
 
