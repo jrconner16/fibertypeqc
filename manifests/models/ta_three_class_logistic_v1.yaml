@@ -1,0 +1,48 @@
+# Private artifact: resolve with FIBERTYPEQC_MODEL_ROOT or pass the file path; verified by
+# artifact_sha256. feature_extraction pins the settings used to compute training features.
+manifest_version: 1
+model_id: ta_three_class_logistic_v1
+task: fiber_identity
+feature_schema_version: multiplanel_features.v1
+required_markers:
+- laminin
+- type_iia
+- type_iib
+outputs:
+- iia
+- iib
+- iix
+artifact: ta_three_class_logistic_v1.joblib
+artifact_sha256: 51243d3969bf140263b03c7b2c79ac790f4cff72454e758cc7f5447072f43b7e
+intended_use: Fiber-type model for three-marker panels (Type IIa, IIb, laminin) with IIx inferred
+  from absent IIa/IIb signal. Development candidate; review-assisted use only.
+features:
+- type_iib.mean
+- type_iia.mean
+- type_iia.p90
+- type_iia.coverage_high
+- type_iia.snr_mean
+- type_iia.snr_p90
+- type_iia.center_mean
+- type_iia.edge_mean
+- type_iib.p90
+- type_iib.coverage_high
+- type_iib.snr_mean
+- type_iib.snr_p90
+- type_iib.center_mean
+- type_iib.edge_mean
+feature_extraction:
+  coverage_quantile: 0.85
+  min_coverage: 0.09000000000000001
+  mixed_balance_tolerance: 0.132
+  percentile_q: 0.85
+  quantile: 0.625
+  threshold_mode: quantile
+  typing_bg_quantile: 0.02
+  typing_bg_sigma: 32.0
+  typing_erode_px: 2
+  typing_preprocess: tile_subtract
+  typing_smooth_sigma: 0.8999999999999999
+  typing_tile_size: 256
+  use_percentile_gate: true
+training_data_sha256: beb846f0711a3acccff604ea0bc82088142754ab12e4eddaeb5c4178f891e726

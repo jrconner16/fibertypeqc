@@ -10,6 +10,12 @@
 
 ### Added
 
+- **Three-marker model:** `ta_three_class_logistic_v1` (IIa, IIb, residual IIx) is registered for
+  laminin/IIa/IIb panels, with pinned feature extraction (tile background subtraction). The file
+  is distributed outside Git and verified by SHA-256; the model card
+  (`docs/model_cards/ta_three_class_logistic_v1.md`) makes no accuracy claims. The pipeline now
+  measures center/edge marker features whenever a model declares them (previously only with
+  `--export-diagnostics`).
 - **Reference snapshots:** `python -m fibertypeqc snapshot PROJECT --freeze|--check` records
   per-section fiber counts, class counts, and digests of masks and fiber calls, and checks a later
   run against them: identical masks must give identical calls; re-segmented sections must agree

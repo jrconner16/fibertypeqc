@@ -18,6 +18,20 @@ models:
     comparator: null
     evidence: manifests/models/quad_four_class_rf_v1.yaml
     limitations: Locked development candidate trained on one private cohort. IIx is residual inference from absent I/IIa/IIb signal. Features must be extracted with the pinned manifest settings. Review-assisted use only; not a validated general model.
+  - model_id: ta_three_class_logistic_v1
+    task: fiber_identity
+    status: released
+    required_markers: [laminin, type_iia, type_iib]
+    feature_schema: multiplanel_features.v1
+    artifact: ta_three_class_logistic_v1.joblib
+    artifact_location: private
+    artifact_sha256: 51243d3969bf140263b03c7b2c79ac790f4cff72454e758cc7f5447072f43b7e
+    manifest: manifests/models/ta_three_class_logistic_v1.yaml
+    development_groups: Private three-marker development sections with reviewed labels; identifiers remain internal.
+    evaluation_groups: Private leave-one-mouse-out development evaluation; a blinded random hold-out evaluation has not been done and no results are public.
+    comparator: rebaseline_tile_v2_p75p90_iib_iia_iix
+    evidence: manifests/models/ta_three_class_logistic_v1.yaml
+    limitations: Development candidate trained on one private cohort. IIx is residual inference from absent IIa/IIb signal. Features must be extracted with the pinned manifest settings. Review-assisted use only; not a validated general model.
   - model_id: synthetic_four_class_reference_v1
     task: fiber_identity
     status: exploratory
