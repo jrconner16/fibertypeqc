@@ -102,10 +102,12 @@ def _validate_provenance(
     project_ids = set(table["project_id"].dropna().astype(str))
     if project_ids != {project.project_id}:
         raise ValueError(
-            f"{label} project_id values {sorted(project_ids)} do not match {project.project_id!r}"
+            f"{label} project_id values {sorted(project_ids)} do not match "
+            f"{project.project_id!r}"
         )
     unknown_images = sorted(
-        set(table["image_id"].dropna().astype(str)) - {image.image_id for image in project.images}
+        set(table["image_id"].dropna().astype(str))
+        - {image.image_id for image in project.images}
     )
     if unknown_images:
         raise ValueError(f"{label} contains image IDs absent from the manifest: {unknown_images}")
@@ -253,7 +255,8 @@ def _validate_selection(
     schemas = set(table["schema_version"].dropna().astype(str))
     if schemas != {SECTION_SELECTION_SCHEMA_VERSION}:
         raise ValueError(
-            f"section_selection.csv has unsupported schema_version values {sorted(schemas)}"
+            "section_selection.csv has unsupported schema_version values "
+            f"{sorted(schemas)}"
         )
     project_ids = set(table["project_id"].dropna().astype(str))
     if project_ids != {project.project_id}:
@@ -262,12 +265,15 @@ def _validate_selection(
     for field in ("qc_version", "rules_version", "model_version"):
         values = set(out[field].dropna().astype(str))
         if len(values) > 1:
-            raise ValueError(f"section_selection.csv mixes {field} values: {sorted(values)}")
+            raise ValueError(
+                f"section_selection.csv mixes {field} values: {sorted(values)}"
+            )
     model_versions = set(out["model_version"].dropna().astype(str))
     if model_versions and model_versions != {project.model_version}:
         raise ValueError("section_selection.csv model_version does not match project.yaml")
     unknown_mice = sorted(
-        set(out["mouse_id"].dropna().astype(str)) - {image.mouse_id for image in project.images}
+        set(out["mouse_id"].dropna().astype(str))
+        - {image.mouse_id for image in project.images}
     )
     if unknown_mice:
         raise ValueError(
@@ -277,13 +283,17 @@ def _validate_selection(
         set(out["domain"].dropna().astype(str)) - {domain.value for domain in Domain}
     )
     if unknown_domains:
-        raise ValueError(f"section_selection.csv contains unknown domains: {unknown_domains}")
+        raise ValueError(
+            f"section_selection.csv contains unknown domains: {unknown_domains}"
+        )
     unknown_strategies = sorted(
         set(out["strategy"].dropna().astype(str))
         - {strategy.value for strategy in SelectionStrategy}
     )
     if unknown_strategies:
-        raise ValueError(f"section_selection.csv contains unknown strategies: {unknown_strategies}")
+        raise ValueError(
+            f"section_selection.csv contains unknown strategies: {unknown_strategies}"
+        )
     duplicates = out.duplicated(["mouse_id", "domain"], keep=False)
     if duplicates.any():
         raise ValueError("section_selection.csv contains duplicate mouse/domain rows")
@@ -313,7 +323,8 @@ def _validate_cross_table_provenance(
             observed = _single_value(table, field)
             if observed != expected:
                 raise ValueError(
-                    f"{label} {field} {observed!r} does not match image_qc.csv {expected!r}"
+                    f"{label} {field} {observed!r} does not match "
+                    f"image_qc.csv {expected!r}"
                 )
 
 
@@ -370,7 +381,9 @@ def load_dashboard_tables(
 
 
 def _selected_ids(selection: pd.DataFrame, mouse_id: str, domain: Domain) -> list[str]:
-    rows = selection[selection["mouse_id"].eq(mouse_id) & selection["domain"].eq(domain.value)]
+    rows = selection[
+        selection["mouse_id"].eq(mouse_id) & selection["domain"].eq(domain.value)
+    ]
     if rows.empty:
         return []
     value = rows.iloc[0]["selected_image_ids"]
@@ -415,9 +428,9 @@ def build_dashboard_model(
     domain_order = {domain.value: index for index, domain in enumerate(Domain)}
     section_rows["_image_order"] = section_rows["image_id"].map(manifest_order)
     section_rows["_domain_order"] = section_rows["domain"].map(domain_order)
-    section_rows = section_rows.sort_values(["_image_order", "_domain_order"], kind="stable").drop(
-        columns=["_image_order", "_domain_order"]
-    )
+    section_rows = section_rows.sort_values(
+        ["_image_order", "_domain_order"], kind="stable"
+    ).drop(columns=["_image_order", "_domain_order"])
 
     domain_rows = []
     for domain in Domain:
@@ -438,13 +451,15 @@ def build_dashboard_model(
     for mouse_id in mouse_order:
         for domain in Domain:
             rows = section_rows[
-                section_rows["mouse_id"].eq(mouse_id) & section_rows["domain"].eq(domain.value)
+                section_rows["mouse_id"].eq(mouse_id)
+                & section_rows["domain"].eq(domain.value)
             ]
             applicable = rows[rows["applicable"]]
             acceptable = applicable[~applicable["hard_fail"]]
             selected_ids = _selected_ids(selection, mouse_id, domain)
             selection_row = selection[
-                selection["mouse_id"].eq(mouse_id) & selection["domain"].eq(domain.value)
+                selection["mouse_id"].eq(mouse_id)
+                & selection["domain"].eq(domain.value)
             ].iloc[0]
             if applicable.empty:
                 readiness = "not_applicable"
@@ -468,9 +483,13 @@ def build_dashboard_model(
                     "pass_count": int(applicable["status"].eq("pass").sum()),
                     "review_count": int(applicable["status"].eq("review").sum()),
                     "fail_count": int(applicable["status"].eq("fail").sum()),
-                    "acceptable_image_ids": "|".join(acceptable["image_id"].astype(str).tolist()),
+                    "acceptable_image_ids": "|".join(
+                        acceptable["image_id"].astype(str).tolist()
+                    ),
                     "selected_image_ids": "|".join(selected_ids),
-                    "requires_manual_review": bool(selection_row["requires_manual_review"]),
+                    "requires_manual_review": bool(
+                        selection_row["requires_manual_review"]
+                    ),
                     "selection_reason_code": str(selection_row["reason_code"]),
                 }
             )
@@ -479,7 +498,8 @@ def build_dashboard_model(
     mouse_rows: list[dict[str, Any]] = []
     for mouse_id in mouse_order:
         rows = mouse_domain[
-            mouse_domain["mouse_id"].eq(mouse_id) & ~mouse_domain["readiness"].eq("not_applicable")
+            mouse_domain["mouse_id"].eq(mouse_id)
+            & ~mouse_domain["readiness"].eq("not_applicable")
         ]
         if rows["readiness"].eq("no_acceptable_section").any():
             readiness = "no_acceptable_section"
@@ -505,11 +525,17 @@ def build_dashboard_model(
         mouse_count=len(mouse_order),
         section_count=len(project.images),
         complete_mouse_count=int(mouse_table["readiness"].eq("complete").sum()),
-        targeted_review_mouse_count=int(mouse_table["readiness"].eq("targeted_review").sum()),
-        no_acceptable_mouse_count=int(mouse_table["readiness"].eq("no_acceptable_section").sum()),
+        targeted_review_mouse_count=int(
+            mouse_table["readiness"].eq("targeted_review").sum()
+        ),
+        no_acceptable_mouse_count=int(
+            mouse_table["readiness"].eq("no_acceptable_section").sum()
+        ),
         applicable_domain_rows=applicable_count,
         reviewed_domain_rows=reviewed_rows,
-        review_progress_fraction=(reviewed_rows / applicable_count if applicable_count else 0.0),
+        review_progress_fraction=(
+            reviewed_rows / applicable_count if applicable_count else 0.0
+        ),
         object_decision_count=object_count,
         region_count=region_count,
         reviewed_mask_count=mask_count,

@@ -57,7 +57,9 @@ POLICIES = {
 }
 EXCLUDING_DOMAIN_STATUSES = frozenset({DomainStatus.EXCLUDED, DomainStatus.FAIL})
 FIBER_DOMAINS = frozenset({Domain.FIBER_SEGMENTATION, Domain.FIBER_TYPING})
-FIBER_EXCLUDING_ACTIONS = frozenset({RegionAction.EXCLUDE_DOMAIN, RegionAction.IGNORE_FIBER_TYPING})
+FIBER_EXCLUDING_ACTIONS = frozenset(
+    {RegionAction.EXCLUDE_DOMAIN, RegionAction.IGNORE_FIBER_TYPING}
+)
 # Fiber-mask edits make these stale; finalizing would apply decisions to outdated features.
 FIBER_STALE_PRODUCTS = frozenset(
     {
@@ -189,7 +191,9 @@ def _region_effects(
     return excluded, unresolved, assignments
 
 
-def _image_exclusion(session: ReviewSession, image: ProjectImage, selected: set[str] | None) -> str:
+def _image_exclusion(
+    session: ReviewSession, image: ProjectImage, selected: set[str] | None
+) -> str:
     for domain in (Domain.FIBER_SEGMENTATION, Domain.FIBER_TYPING):
         status = session.get_status(image.image_id, domain)
         if status in EXCLUDING_DOMAIN_STATUSES:
@@ -257,9 +261,7 @@ def finalize_image(
 
     rows: list[dict[str, Any]] = []
     for fiber_id, model_call, is_flagged in zip(
-        predictions[id_column].astype(int),
-        predictions["fiber_type"].astype(str),
-        flagged,
+        predictions[id_column].astype(int), predictions["fiber_type"].astype(str), flagged,
         strict=True,
     ):
         decision = decisions.get(fiber_id)

@@ -45,13 +45,14 @@ def test_project_manifest_loads_and_resolves_paths(tmp_path: Path) -> None:
     assert project.project_id == "project_1"
     assert project.image("image_1").mouse_id == "mouse_1"
     assert project.image("image_1").raw_image_path == (tmp_path / "raw/image.tif").resolve()
-    assert (
-        project.image("image_1").outputs["fiber_labels"]
-        == (tmp_path / "predictions/image_1/labels.tif").resolve()
-    )
+    assert project.image("image_1").outputs["fiber_labels"] == (
+        tmp_path / "predictions/image_1/labels.tif"
+    ).resolve()
     reviewed = project.reviewed_mask_path("image_1", Domain.FIBER_SEGMENTATION)
     assert reviewed == (tmp_path / "review/reviewed_fiber_labels/labels.tif").resolve()
-    assert project.image("image_1").applicable_domains == {Domain.FIBER_SEGMENTATION}
+    assert project.image("image_1").applicable_domains == {
+        Domain.FIBER_SEGMENTATION
+    }
 
 
 def test_project_manifest_infers_and_accepts_explicit_domain_applicability(

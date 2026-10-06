@@ -75,13 +75,11 @@ def test_classification_fingerprint_uses_model_digest_not_path():
     moved = _manifest(classifier_path="/elsewhere/model.joblib")
     retrained = _manifest(classifier_sha256="d" * 64)
 
-    assert (
-        moved["stage_fingerprints"]["classification"]
-        == (_manifest()["stage_fingerprints"]["classification"])
+    assert moved["stage_fingerprints"]["classification"] == (
+        _manifest()["stage_fingerprints"]["classification"]
     )
-    assert (
-        retrained["stage_fingerprints"]["classification"]
-        != (_manifest()["stage_fingerprints"]["classification"])
+    assert retrained["stage_fingerprints"]["classification"] != (
+        _manifest()["stage_fingerprints"]["classification"]
     )
 
 

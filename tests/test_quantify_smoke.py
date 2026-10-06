@@ -402,7 +402,9 @@ def _typed_fibers(labels, needs_review):
 
 
 def test_uncertainty_rate_counts_unsure_fibers_regardless_of_class():
-    fibers = _typed_fibers(["iix", "iix", "iia", "uncertain"], [False, False, True, False])
+    fibers = _typed_fibers(
+        ["iix", "iix", "iia", "uncertain"], [False, False, True, False]
+    )
 
     qc = qc_flags_from_fibers(fibers, QCConfig(min_labels=1, max_uncertainty_rate=0.4))
 

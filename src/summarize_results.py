@@ -210,7 +210,9 @@ def load_conditions(project_path: Path) -> dict[str, dict[str, Any]]:
 
 def write_results(final_dir: Path, output_dir: Path, project_path: Path | None) -> dict[str, Any]:
     final_table_path = final_dir / "final_fiber_table.csv"
-    final = pd.read_csv(final_table_path, keep_default_na=False, na_values=[""], low_memory=False)
+    final = pd.read_csv(
+        final_table_path, keep_default_na=False, na_values=[""], low_memory=False
+    )
     conditions = load_conditions(project_path) if project_path is not None else None
     outputs = summarize(final, conditions)
     classes = outputs.pop("_classes")["fiber_class"].tolist()
