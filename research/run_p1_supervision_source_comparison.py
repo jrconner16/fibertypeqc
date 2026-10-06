@@ -1,4 +1,4 @@
-"""Run the bounded P1 existing-TA/Notch3 supervision-source comparison."""
+"""Run the bounded P1 existing-TA/Cohort B supervision-source comparison."""
 
 from __future__ import annotations
 
@@ -164,7 +164,7 @@ def run_comparison(
         existing, condition="existing_only", scope="grouped_resampling_existing"
     )
     notch_oof = _leave_one_group_out(
-        notch, condition="notch3_only", scope="grouped_resampling_notch3"
+        notch, condition="cohort_b_only", scope="grouped_resampling_cohort_b"
     )
     pooled_existing = _leave_one_group_out(
         existing,
@@ -175,16 +175,16 @@ def run_comparison(
     pooled_notch = _leave_one_group_out(
         notch,
         condition="pooled",
-        scope="grouped_resampling_notch3",
+        scope="grouped_resampling_cohort_b",
         pooled=existing,
     )
     for frame in [existing_oof, notch_oof, pooled_existing, pooled_notch]:
         prediction_frames.append(frame)
     for condition, train, test, scope in [
-        ("existing_to_notch3", existing, notch, "cross_cohort_notch3_development"),
-        ("notch3_to_existing", notch, existing, "cross_cohort_existing_development"),
+        ("existing_to_cohort_b", existing, notch, "cross_cohort_cohort_b_development"),
+        ("cohort_b_to_existing", notch, existing, "cross_cohort_existing_development"),
         ("existing_only", existing, protected, "protected_reporting_only"),
-        ("notch3_only", notch, protected, "protected_reporting_only"),
+        ("cohort_b_only", notch, protected, "protected_reporting_only"),
         (
             "pooled",
             pd.concat([existing, notch], ignore_index=True),
@@ -212,8 +212,8 @@ def run_comparison(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--existing-features", type=Path, required=True)
-    parser.add_argument("--notch3-development-features", type=Path, required=True)
-    parser.add_argument("--notch3-protected-features", type=Path, required=True)
+    parser.add_argument("--cohort-b-development-features", type=Path, required=True)
+    parser.add_argument("--cohort-b-protected-features", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     if args.output_dir.exists():
@@ -225,14 +225,14 @@ def main() -> None:
         fitting=True,
     )
     notch = _validate(
-        pd.read_csv(args.notch3_development_features, low_memory=False),
-        name="Notch3 development",
+        pd.read_csv(args.cohort_b_development_features, low_memory=False),
+        name="Cohort B development",
         authority="reviewed_myosight",
         fitting=True,
     )
     protected = _validate(
-        pd.read_csv(args.notch3_protected_features, low_memory=False),
-        name="Notch3 protected",
+        pd.read_csv(args.cohort_b_protected_features, low_memory=False),
+        name="Cohort B protected",
         authority="reviewed_myosight",
         fitting=False,
     )
@@ -244,8 +244,8 @@ def main() -> None:
     overall_metrics.to_csv(args.output_dir / "overall_metrics.csv", index=False)
     provenance = {
         "existing_features_sha256": _sha256(args.existing_features),
-        "notch3_development_features_sha256": _sha256(args.notch3_development_features),
-        "notch3_protected_features_sha256": _sha256(args.notch3_protected_features),
+        "cohort_b_development_features_sha256": _sha256(args.cohort_b_development_features),
+        "cohort_b_protected_features_sha256": _sha256(args.cohort_b_protected_features),
         "feature_columns": F1_COLUMNS,
         "model": (
             "StandardScaler + LogisticRegression(C=1.0, lbfgs, class_weight=balanced, "

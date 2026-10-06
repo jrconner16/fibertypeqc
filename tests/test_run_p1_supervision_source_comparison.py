@@ -29,10 +29,10 @@ def test_run_comparison_emits_grouped_cross_cohort_and_reporting_scopes():
 
     assert set(predictions["condition"]) == {
         "existing_only",
-        "notch3_only",
+        "cohort_b_only",
         "pooled",
-        "existing_to_notch3",
-        "notch3_to_existing",
+        "existing_to_cohort_b",
+        "cohort_b_to_existing",
     }
     assert "protected_reporting_only" in set(predictions["evaluation_scope"])
     assert len(metrics.loc[metrics["scope_type"].eq("overall")]) == 9

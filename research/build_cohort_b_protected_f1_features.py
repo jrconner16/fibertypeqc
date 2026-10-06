@@ -1,4 +1,4 @@
-"""Join protected Notch3 one-to-one MyoSight rows to frozen F1 diagnostics."""
+"""Join protected Cohort B one-to-one MyoSight rows to frozen F1 diagnostics."""
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def build_features(all_rois: pd.DataFrame, diagnostics_root: Path) -> pd.DataFra
             raise ValueError(f"Protected matches lack diagnostics for {image_id}.")
         frames.append(merged)
     output = pd.concat(frames, ignore_index=True).rename(columns={"myosight_label": "target_label"})
-    output.insert(0, "cohort_id", "notch3_ta")
+    output.insert(0, "cohort_id", "cohort_b_ta")
     output.insert(5, "label_authority", "reviewed_myosight")
     output.insert(6, "evidence_role", "protected_final_evaluation")
     output.insert(7, "supervision_role", "protected_final_evaluation")

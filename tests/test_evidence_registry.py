@@ -52,7 +52,7 @@ def test_synthetic_dataset_ledger_has_no_private_identifiers():
 
     assert raw["ledger_id"].startswith("synthetic_example")
     assert {row["cohort_id"] for row in raw["cohorts"]} == {"example_ta"}
-    assert "notch3" not in serialized
+    assert "cohort_b" not in serialized
     assert "jag" not in serialized
 
 

@@ -10,6 +10,9 @@
 
 ### Added
 
+- Research scripts, options, and labels that named a specific private cohort now use the neutral
+  name "cohort B" (`cohort_b`, `--cohort-b-…`). Research tooling only; the supported pipeline is
+  unaffected.
 - README rewritten around the release workflow (requirements, install check, inputs, end-to-end
   steps, outputs, models, QC, troubleshooting); `docs/quickstart.md` now covers single-image and
   historical commands; `ARCHITECTURE.md` and `AGENTS.md` describe the supported workflow; the

@@ -1,4 +1,4 @@
-"""Build protected Notch3 ROI supervision rows from fixed-mask matching outputs."""
+"""Build protected Cohort B ROI supervision rows from fixed-mask matching outputs."""
 
 from __future__ import annotations
 
