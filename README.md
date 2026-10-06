@@ -135,6 +135,21 @@ uv run python -m scripts.summarize_results --final-dir myproject/final \
 
 </details>
 
+## Check a run against a reference
+
+To confirm that a later run (new code version, another computer) reproduces an earlier one, freeze
+a snapshot of a project's batch outputs and check against it later:
+
+```bash
+uv run python -m fibertypeqc snapshot myproject/ --freeze    # writes myproject/reference_snapshot.json
+uv run python -m fibertypeqc snapshot myproject/ --check     # exit code 0 when every section matches
+```
+
+A section with an identical mask must have identical fiber calls. A re-segmented section (masks
+can differ slightly between devices) must agree on fiber count within 2% and on every class share
+within 2 percentage points; adjust with `--count-tolerance` and `--composition-tolerance`. Snapshots
+contain image IDs and counts from your data, so keep snapshots of private data private.
+
 ## Review
 
 The review workspace has four parts: cohort QC, per-section pass/fail/exclude, guided
