@@ -34,8 +34,8 @@ def _features() -> pd.DataFrame:
 
 def _predictions(features: pd.DataFrame) -> pd.DataFrame:
     result = features.loc[:, ["image_id", "group_id", "pipeline_label_id", "target_label"]].copy()
-    result.insert(0, "condition", "notch3_only")
-    result.insert(1, "evaluation_scope", "grouped_resampling_notch3")
+    result.insert(0, "condition", "cohort_b_only")
+    result.insert(1, "evaluation_scope", "grouped_resampling_cohort_b")
     result["predicted_label"] = result["target_label"]
     result["model_confidence"] = 0.9
     result["model_margin"] = 0.8

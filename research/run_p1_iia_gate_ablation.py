@@ -1,4 +1,4 @@
-"""Evaluate the frozen soft IIa gate on Notch3 leave-one-mouse-out predictions."""
+"""Evaluate the frozen soft IIa gate on Cohort B leave-one-mouse-out predictions."""
 
 from __future__ import annotations
 
@@ -82,8 +82,8 @@ def evaluate(
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     keys = ["image_id", "group_id", "pipeline_label_id", "target_label"]
     predictions = oof_predictions.loc[
-        (oof_predictions["condition"].eq("notch3_only"))
-        & (oof_predictions["evaluation_scope"].eq("grouped_resampling_notch3"))
+        (oof_predictions["condition"].eq("cohort_b_only"))
+        & (oof_predictions["evaluation_scope"].eq("grouped_resampling_cohort_b"))
     ].copy()
     if len(predictions) != len(features):
         raise ValueError("OOF prediction row count does not equal the development feature table.")

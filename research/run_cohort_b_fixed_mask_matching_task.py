@@ -1,4 +1,4 @@
-"""Run one protected Notch3 ROI-to-frozen-mask matching task."""
+"""Run one protected Cohort B ROI-to-frozen-mask matching task."""
 
 from __future__ import annotations
 

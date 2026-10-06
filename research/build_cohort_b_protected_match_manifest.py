@@ -1,4 +1,4 @@
-"""Resolve protected Notch3 fixed-mask ROI-matching inputs from private SSD packages."""
+"""Resolve protected Cohort B fixed-mask ROI-matching inputs from private SSD packages."""
 
 from __future__ import annotations
 

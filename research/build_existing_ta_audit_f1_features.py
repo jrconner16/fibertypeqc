@@ -100,7 +100,7 @@ def main() -> None:
         "groups": result["group_id"].nunique(),
         "class_counts": result["target_label"].value_counts().sort_index().to_dict(),
         "f1_columns": F1_COLUMNS,
-        "protected_notch3_rows_read": 0,
+        "protected_cohort_b_rows_read": 0,
     }
     args.provenance_output.write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n")
     print(f"rows: {len(result)}")

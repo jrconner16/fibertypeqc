@@ -1,4 +1,4 @@
-"""Fit the frozen development model once and evaluate it on sealed Notch3 holdouts."""
+"""Fit the frozen development model once and evaluate it on sealed Cohort B holdouts."""
 
 from __future__ import annotations
 

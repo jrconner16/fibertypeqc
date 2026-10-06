@@ -1,4 +1,4 @@
-"""Fit locked Notch3 feature sets once and characterize fixed-mask Jag transfer."""
+"""Fit locked Cohort B feature sets once and characterize fixed-mask Jag transfer."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from research.run_grouped_feature_ablation import (
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Fit the frozen Notch3 development recipe once, then apply it unchanged to the "
+            "Fit the frozen Cohort B development recipe once, then apply it unchanged to the "
             "original-Jag fixed-mask transfer ledger."
         )
     )
@@ -176,10 +176,10 @@ def main() -> None:
                 "feature_set": feature_set,
                 "feature_columns": columns,
                 "classes": classes,
-                "fit_scope": "all_notch3_development_rows",
+                "fit_scope": "all_cohort_b_development_rows",
                 "pipeline": model,
             },
-            args.output_dir / f"{feature_set}_notch3_fit.joblib",
+            args.output_dir / f"{feature_set}_cohort_b_fit.joblib",
         )
 
     all_predictions = pd.concat(predictions, ignore_index=True)
@@ -199,7 +199,7 @@ def main() -> None:
         "development_groups": int(development["group_id"].nunique()),
         "transfer_rows": int(len(transfer)),
         "transfer_images": int(transfer["image_id"].nunique()),
-        "transfer_fit": "fit once on all Notch3 development rows; no Jag rows used for fitting",
+        "transfer_fit": "fit once on all Cohort B development rows; no Jag rows used for fitting",
     }
     (args.output_dir / "run_provenance.json").write_text(
         json.dumps(provenance, indent=2, sort_keys=True) + "\n"

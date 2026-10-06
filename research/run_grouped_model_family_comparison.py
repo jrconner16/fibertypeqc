@@ -1,4 +1,4 @@
-"""Run predeclared classifier families on frozen F1 features with grouped Notch3 CV."""
+"""Run predeclared classifier families on frozen F1 features with grouped Cohort B CV."""
 
 from __future__ import annotations
 
