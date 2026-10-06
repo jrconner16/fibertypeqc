@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import webbrowser
 from pathlib import Path
 
 import numpy as np
@@ -127,7 +128,8 @@ def main(argv: list[str] | None = None) -> int:
     from src.review.channel_map_widget import ChannelMapWidget
     from src.review.dashboard_widget import CohortDashboardWidget
     from src.review.fiber_type_review import FiberTypeReviewController
-    from src.review.finalization import image_input_fingerprints
+    from src.review.finalization import FinalizationError, image_input_fingerprints
+    from src.review.finalize_action import finalize_and_report
     from src.review.guided_review_widget import GuidedReviewWidget
     from src.review.image_review_widget import ImageReviewWidget
     from src.review.nuclear_review_widget import NuclearReviewWidget
@@ -450,6 +452,22 @@ def main(argv: list[str] | None = None) -> int:
         else:
             open_image_review()
 
+    def finalize_and_open_report() -> None:
+        """Finalize with the current review state, build results, and open the report."""
+        from napari.utils.notifications import show_info, show_warning
+
+        try:
+            outcome = finalize_and_report(project, session, args.qc_dir)
+        except (FinalizationError, ValueError, OSError) as exc:
+            print(f"Finalization refused: {exc}", flush=True)
+            show_warning(f"Finalization refused: {exc}")
+            return
+        message = f"Finalized {outcome.summary()}. Report: {outcome.report_path}"
+        print(message, flush=True)
+        show_info(message)
+        if not webbrowser.open(outcome.report_path.as_uri()):
+            show_info(f"Open this file in a browser: {outcome.report_path}")
+
     guided_widget = GuidedReviewWidget(
         project,
         FiberTypeReviewController(session),
@@ -458,6 +476,7 @@ def main(argv: list[str] | None = None) -> int:
         show_section=show_section,
         show_region=open_region_review,
         fiber_qc=tables.fiber_qc,
+        finalize_requested=finalize_and_open_report,
         show_domain=show_domain,
         focus_current_object=focus_current_object,
     )
@@ -481,6 +500,8 @@ def main(argv: list[str] | None = None) -> int:
             channel_map_dock.raise_()
 
         workspace_menu.addAction("Restore review workspace", restore_workspace)
+        workspace_menu.addSeparator()
+        workspace_menu.addAction("Finalize and build report", finalize_and_open_report)
     napari.run()
     return 0
 

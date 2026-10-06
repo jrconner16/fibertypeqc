@@ -94,7 +94,8 @@ never modified.
 uv run python -m fibertypeqc status   myproject/   # where am I, and what is the next command
 uv run python -m fibertypeqc run      myproject/   # 1. segment, type, and QC every image (slow)
 uv run python -m fibertypeqc prepare  myproject/   # 2-3. build the review project, run project QC
-uv run python -m fibertypeqc review   myproject/   # 4. review in Napari (GUI); saves automatically
+uv run python -m fibertypeqc review   myproject/   # 4. review in Napari (GUI); saves automatically;
+                                                   #    "Finalize and build report" does step 5-6 there
 uv run python -m fibertypeqc finalize myproject/   # 5-6. finalized tables, summaries, HTML report
 ```
 

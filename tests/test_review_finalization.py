@@ -385,3 +385,59 @@ def test_project_without_review_session_finalizes_as_predicted(tmp_path, capsys)
     table = pd.read_csv(tmp_path / "f" / "final_fiber_table.csv")
     assert set(table["value_source"]) == {"predicted"}
     assert "no review session found" in capsys.readouterr().err
+
+
+def test_finalize_and_report_writes_tables_and_report_in_project_folder(tmp_path):
+    from src.review.finalize_action import finalize_and_report, output_directories
+
+    project = _project(tmp_path)
+    session = _session(project)
+    _decide(session, 1, "corrected", reviewed="iib")
+    _decide(session, 4, "excluded")
+    assert output_directories(project) == (tmp_path / "final", tmp_path / "results")
+
+    outcome = finalize_and_report(project, session)
+
+    assert outcome.report_path == tmp_path / "results" / "cohort_report.html"
+    assert outcome.report_path.is_file()
+    assert (tmp_path / "final" / "final_fiber_table.csv").is_file()
+    assert outcome.summary() == (
+        "1 section(s): 1 reviewed, 1 excluded, 0 unresolved, 1 flagged but not reviewed"
+    )
+
+
+def test_project_folder_convention_places_outputs_beside_the_review_folder(tmp_path):
+    from src.review.finalize_action import output_directories
+
+    folder = tmp_path / "study"
+    review = folder / "review"
+    review.mkdir(parents=True)
+    (folder / "fibertypeqc_project.yaml").write_text("schema_version: fibertypeqc_project.v1\n")
+    project = _project(review)
+
+    assert output_directories(project) == (folder / "final", folder / "results")
+
+
+def test_guided_review_finalize_button_calls_back(tmp_path, monkeypatch):
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    qtpy = pytest.importorskip("qtpy.QtWidgets")
+    from src.review.fiber_type_review import FiberTypeReviewController
+    from src.review.guided_review_widget import GuidedReviewWidget
+
+    application = qtpy.QApplication.instance() or qtpy.QApplication([])
+    project = _project(tmp_path)
+    session = _session(project)
+    calls = []
+
+    widget = GuidedReviewWidget(
+        project, FiberTypeReviewController(session), finalize_requested=lambda: calls.append(1)
+    )
+    widget.finalize_button.click()
+    application.processEvents()
+    hidden = GuidedReviewWidget(project, FiberTypeReviewController(session))
+
+    assert calls == [1]
+    assert not hidden.finalize_button.isVisibleTo(hidden)
+    for item in (widget, hidden):
+        item.close()
+        item.deleteLater()

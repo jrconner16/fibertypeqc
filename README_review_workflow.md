@@ -39,7 +39,10 @@ first opened, the reviewer records digests of its label mask and fiber table; if
 change, it warns, and finalization refuses that section rather than applying decisions to the wrong
 fibers.
 
-Then finalize and report (steps 5–6 of the end-to-end workflow). Fibers you did not review keep the
+When you are done (or want a look at interim results), click **Finalize and build report** in
+the Guided Review dock, or **Workspace → Finalize and build report**. It applies your decisions,
+writes the finalized tables and summaries, and opens the report; you can keep reviewing and do it
+again. The same thing from a terminal is `python -m fibertypeqc finalize PROJECT/`. Fibers you did not review keep the
 model call; flagged-but-unreviewed fibers are counted in the report.
 
 ## Legacy per-image reviewer (V1)
