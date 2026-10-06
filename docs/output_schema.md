@@ -231,7 +231,8 @@ original fiber-table columns unchanged, prefixed by `image_id`, `mouse_id`, `sec
 - `final_type`: the analysis value; empty when excluded or unresolved.
 - `value_source`: `predicted`, `reviewed`, `excluded`, or `unresolved`.
 - `exclusion_reason`: e.g. `image:fiber_typing:excluded`, `section_not_selected`,
-  `region:<action>:<region_id>`, `outside_analysis_roi`, `fiber_review`.
+  `region:<action>:<region_id>`, `outside_analysis_roi`, `fiber_review`, `edge_of_image`
+  (only with the opt-in `exclude_image_border_fibers` project setting).
 - `review_status`, `reviewer`, `decided_at`: the fiber-level decision, when one exists.
 - `flagged_unreviewed`: flagged by the model (`needs_review`) but not reviewed.
 - `roi_name`, `roi_role`, `roi_status`: analysis-ROI membership by fiber centroid
@@ -250,7 +251,7 @@ and warnings.
 `fiber_class`, `view` = `final` or `predicted`, `n_mice`, `mean_proportion`, `sd_proportion`).
 
 Per-row columns include `n_fibers_total`, `n_excluded` (and `n_excluded_image|section|region|
-outside_analysis_roi|fiber_review`), `n_analysis`, `n_resolved`, `n_unresolved`,
+outside_analysis_roi|fiber_review|edge_of_image`), `n_analysis`, `n_resolved`, `n_unresolved`,
 `unresolved_share`, `n_reviewed`, `n_corrected`, `n_flagged_unreviewed`, and per class
 `n_final_<class>`, `prop_final_<class>` (over resolved fibers), `prop_predicted_<class>` (over
 analysis fibers), plus median morphology (`median_area`, `median_area_um2`, `median_feret_*`,

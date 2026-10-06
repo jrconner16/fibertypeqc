@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from fibertypeqc.cohort_report import write_cohort_report
 from src.review.finalization import finalize_project
 from src.review.project import Project
@@ -48,6 +50,15 @@ def output_directories(project: Project) -> tuple[Path, Path]:
     return base / "final", base / "results"
 
 
+def excludes_image_border_fibers(project: Project) -> bool:
+    """The project folder's ``exclude_image_border_fibers`` option (off without a folder)."""
+    config = project.root.parent / PROJECT_FOLDER_CONFIG
+    if not config.is_file():
+        return False
+    raw = yaml.safe_load(config.read_text(encoding="utf-8"))
+    return bool(isinstance(raw, dict) and raw.get("exclude_image_border_fibers", False))
+
+
 def finalize_and_report(
     project: Project, session: ReviewSession, qc_dir: Path | None = None
 ) -> FinalizeOutcome:
@@ -59,6 +70,7 @@ def finalize_and_report(
         session,
         final_dir,
         section_selection_path=selection if selection.is_file() else None,
+        exclude_image_border_fibers=excludes_image_border_fibers(project),
     )
     write_results(final_dir, results_dir, project.manifest_path)
     report_path = write_cohort_report(results_dir)

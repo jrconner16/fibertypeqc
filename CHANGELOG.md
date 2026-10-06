@@ -10,6 +10,14 @@
 
 ### Added
 
+- **Reviewer:** an **Exclude (X)** button beside the type buttons; the view opens on the raw stain
+  channels with every fiber outlined in the color of its current call (model call or review
+  decision), with a legend in the dock. Fibers cut off by the image edge are left out of the
+  flagged queue and labelled in section review.
+- **Opt-in edge exclusion:** `exclude_image_border_fibers: true` in `fibertypeqc_project.yaml` (or
+  `finalize_review_project --exclude-image-border-fibers`) excludes fibers touching the image
+  edge at finalization (`exclusion_reason` `edge_of_image`, counted as `n_excluded_edge_of_image`
+  and shown in the report). Off by default; intended for cropped fields.
 - **Three-marker model:** `ta_three_class_logistic_v1` (IIa, IIb, residual IIx) is registered for
   laminin/IIa/IIb panels, with pinned feature extraction (tile background subtraction). The file
   is distributed outside Git and verified by SHA-256; the model card

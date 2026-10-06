@@ -117,6 +117,12 @@ def _centroids(labels: np.ndarray) -> dict[int, tuple[float, float]]:
     }
 
 
+def image_border_fiber_ids(labels: np.ndarray) -> set[int]:
+    """IDs of fibers with at least one pixel on the image edge."""
+    edge = np.concatenate((labels[0, :], labels[-1, :], labels[:, 0], labels[:, -1]))
+    return {int(value) for value in np.unique(edge) if value > 0}
+
+
 def _has_review_activity(session: ReviewSession, image_id: str) -> bool:
     return (
         any(decision.image_id == image_id for decision in session.object_decisions)
@@ -210,6 +216,7 @@ def finalize_image(
     *,
     selected_image_ids: set[str] | None = None,
     require_verified: bool = False,
+    exclude_image_border_fibers: bool = False,
 ) -> ImageFinalization:
     if "fiber_table" not in image.outputs or "fiber_labels" not in image.outputs:
         raise FinalizationError(f"{image.image_id}: fiber_table and fiber_labels are required.")
@@ -224,6 +231,8 @@ def finalize_image(
     id_column = _fiber_id_column(predictions)
     labels = np.asarray(tifffile.imread(image.outputs["fiber_labels"]), dtype=np.int64)
     centroids = _centroids(labels)
+    # Opt-in: fibers cut by the image edge (cropped fields) cannot be typed reliably.
+    border_ids = image_border_fiber_ids(labels) if exclude_image_border_fibers else set()
     missing = sorted(set(predictions[id_column].astype(int)) - set(centroids))
     if missing:
         raise FinalizationError(
@@ -282,6 +291,8 @@ def finalize_image(
             row.update(
                 final_type="", value_source="excluded", exclusion_reason=region_excluded[fiber_id]
             )
+        elif fiber_id in border_ids:
+            row.update(final_type="", value_source="excluded", exclusion_reason="edge_of_image")
         elif decision is not None:
             reviewed = normalize_review_label(decision.reviewed_fiber_type)
             status = decision.review_status
@@ -372,6 +383,7 @@ def finalize_project(
     *,
     section_selection_path: Path | None = None,
     require_verified: bool = False,
+    exclude_image_border_fibers: bool = False,
 ) -> dict[str, Any]:
     """Finalize every fiber-typing image and write tables plus a manifest."""
     if session.project_id != project.project_id:
@@ -399,6 +411,7 @@ def finalize_project(
             image,
             selected_image_ids=selected,
             require_verified=require_verified,
+            exclude_image_border_fibers=exclude_image_border_fibers,
         )
         for image in project.images
         if Domain.FIBER_TYPING in image.applicable_domains
@@ -418,6 +431,7 @@ def finalize_project(
         "review_schema_version": session.schema_version,
         "policies": POLICIES,
         "section_selection_applied": selected is not None,
+        "exclude_image_border_fibers": bool(exclude_image_border_fibers),
         "images": [
             {
                 "image_id": item.image_id,

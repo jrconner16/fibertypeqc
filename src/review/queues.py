@@ -104,6 +104,7 @@ REASON_LABELS = {
     "fiber.weak_laminin_rim": "faint laminin outline",
     "fiber.thick_laminin": "thick laminin",
     "fiber.object_missing_table_row": "fiber missing from the table",
+    "cut_by_image_edge": "cut off by the image edge",
 }
 
 
@@ -117,7 +118,8 @@ def load_fiber_type_rows(project: Project, fiber_qc: pd.DataFrame | None = None)
     """Load canonical object rows while retaining model outputs as read-only input.
 
     ``fiber_qc`` (the project QC fiber table) adds per-fiber technical review reasons such as
-    weak or thick laminin; they only affect which fibers are queued for review.
+    weak or thick laminin, and marks fibers that touch the image edge; both only affect which
+    fibers are queued for review.
     """
     records: list[dict[str, object]] = []
     for image in project.images:
@@ -174,11 +176,24 @@ def load_fiber_type_rows(project: Project, fiber_qc: pd.DataFrame | None = None)
                 "normalized_entropy",
                 "needs_review",
                 "typing_signal_qc_flags",
+                "technical_flags",
+                "touches_image_border",
             ]
         )
     if result.duplicated(["image_id", "fiber_id"]).any():
         raise ValueError("Fiber table IDs must be unique within each image")
     result["technical_flags"] = ""
+    result["touches_image_border"] = False
+    if fiber_qc is not None and "touches_image_border" in fiber_qc.columns and not result.empty:
+        on_edge = fiber_qc[fiber_qc["touches_image_border"].fillna(False).astype(bool)]
+        edge_keys = {
+            (str(image_id), int(fiber_id))
+            for image_id, fiber_id in zip(on_edge["image_id"], on_edge["fiber_id"], strict=True)
+        }
+        result["touches_image_border"] = [
+            (str(image_id), int(fiber_id)) in edge_keys
+            for image_id, fiber_id in zip(result["image_id"], result["fiber_id"], strict=True)
+        ]
     if fiber_qc is not None and not fiber_qc.empty and not result.empty:
         reasons = fiber_qc.loc[:, ["image_id", "fiber_id", "technical_reason_codes"]].copy()
         reasons["technical_reason_codes"] = reasons["technical_reason_codes"].fillna("").astype(str)
@@ -211,6 +226,11 @@ def build_fiber_type_queue(
         raise ValueError(f"Fiber rows are missing required columns: {missing}")
     work = rows.copy().sort_values(["image_id", "fiber_id"], kind="stable")
     reason = ""
+    on_edge = (
+        work.get("touches_image_border", pd.Series(False, index=work.index))
+        .fillna(False)
+        .astype(bool)
+    )
     if parsed_source is QueueSource.FLAGGED:
         flags = work.get("typing_signal_qc_flags", pd.Series("", index=work.index)).fillna("")
         needs_review = (
@@ -228,7 +248,9 @@ def build_fiber_type_queue(
                 for flagged, tech in zip(model_flagged, technical, strict=True)
             ]
         )
-        work = work[work["queue_reason"].ne("")]
+        # A fiber cut off by the image edge cannot be judged by eye, so it is not queued here;
+        # it stays reachable through "Review this section".
+        work = work[work["queue_reason"].ne("") & ~on_edge]
         reason = "flagged_by_model_or_qc"
     elif parsed_source is QueueSource.LOW_CONFIDENCE:
         work = work[work["confidence"].notna()].sort_values(
@@ -273,6 +295,11 @@ def build_fiber_type_queue(
         reason = f"random_audit:{parsed_scope.value}:seed={seed}"
     elif parsed_source is QueueSource.FULL_AUDIT:
         reason = "full_audit"
+        work = work.assign(
+            queue_reason=[
+                "full_audit|cut_by_image_edge" if edge else "full_audit" for edge in on_edge
+            ]
+        )
 
     return tuple(
         FiberQueueItem(

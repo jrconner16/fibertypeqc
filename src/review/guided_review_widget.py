@@ -20,6 +20,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from src.review.call_overlay import legend_html
 from src.review.fiber_type_review import FiberTypeReviewController
 from src.review.project import Project
 from src.review.queues import (
@@ -114,9 +115,14 @@ class GuidedReviewWidget(QWidget):
         self.undo_button.setEnabled(False)
         self.shortcut_label = QLabel(
             "Shortcuts: ←/→ navigate · F center fiber · K keep model · "
-            "1 I · 2 IIa · 3 IIb · 4 IIx · U undo"
+            "1 I · 2 IIa · 3 IIb · 4 IIx · X exclude · U undo"
         )
         self.shortcut_label.setWordWrap(True)
+        self.legend_label = QLabel(
+            legend_html(sorted(set(self.rows["model_fiber_type"].astype(str).str.lower())))
+        )
+        self.legend_label.setTextFormat(Qt.RichText)
+        self.legend_label.setWordWrap(True)
 
         self.plan_group = QGroupBox("What needs attention?")
         plan_layout = QVBoxLayout(self.plan_group)
@@ -151,6 +157,10 @@ class GuidedReviewWidget(QWidget):
                 lambda _checked=False, value=fiber_type: self._record_type(value)
             )
             primary.addWidget(button)
+        exclude = QPushButton("Exclude (X)")
+        exclude.setToolTip("Leave this fiber out of the results (damaged, cut off, not a fiber).")
+        exclude.clicked.connect(lambda: self._record_special(ObjectReviewStatus.EXCLUDED))
+        primary.addWidget(exclude)
         decision_layout.addLayout(primary)
         self.focus_button = QPushButton("Center current fiber (F)")
         self.focus_button.clicked.connect(self._focus_current_object)
@@ -166,7 +176,6 @@ class GuidedReviewWidget(QWidget):
         advanced_actions = QHBoxLayout()
         for label, decision_status in (
             ("Uncertain", ObjectReviewStatus.UNCERTAIN),
-            ("Exclude", ObjectReviewStatus.EXCLUDED),
             ("Unresolved", ObjectReviewStatus.UNRESOLVED),
         ):
             button = QPushButton(label)
@@ -213,6 +222,7 @@ class GuidedReviewWidget(QWidget):
         layout.addWidget(self.save_status)
         layout.addWidget(self.status)
         layout.addWidget(self.shortcut_label)
+        layout.addWidget(self.legend_label)
         layout.addStretch(1)
 
         self.start_flagged_button.clicked.connect(self.start_flagged_review)
@@ -235,6 +245,7 @@ class GuidedReviewWidget(QWidget):
         self._add_shortcut("2", lambda: self._record_type("iia"))
         self._add_shortcut("3", lambda: self._record_type("iib"))
         self._add_shortcut("4", lambda: self._record_type("iix"))
+        self._add_shortcut("X", lambda: self._record_special(ObjectReviewStatus.EXCLUDED))
         self._add_shortcut("U", self.undo)
         self._restore_saved_queue()
         self.tutorial_group.setVisible(not self._tutorial_seen())

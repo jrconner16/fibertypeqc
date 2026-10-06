@@ -441,3 +441,28 @@ def test_guided_review_finalize_button_calls_back(tmp_path, monkeypatch):
     for item in (widget, hidden):
         item.close()
         item.deleteLater()
+
+
+def test_image_edge_fibers_are_excluded_only_when_requested(tmp_path):
+    project = _project(tmp_path)
+    labels_path = tmp_path / "one" / "one_labels.tif"
+    labels = tifffile.imread(labels_path)
+    labels[0:2, 2:6] = 1  # fiber 1 now reaches the top edge
+    tifffile.imwrite(labels_path, labels)
+    session = _session(project)
+    _decide(session, 1, "corrected", "iib")
+
+    default = _by_id(finalize_image(project, session, project.images[0]))
+    opted_in = _by_id(
+        finalize_image(project, session, project.images[0], exclude_image_border_fibers=True)
+    )
+
+    assert default.loc[1, "value_source"] == "reviewed"
+    assert opted_in.loc[1, "value_source"] == "excluded"
+    assert opted_in.loc[1, "exclusion_reason"] == "edge_of_image"
+    assert opted_in.loc[1, "fiber_type"] == "iia"  # the model call is kept
+    assert set(opted_in.loc[[2, 3, 4], "value_source"]) == {"predicted"}
+    manifest = finalize_project(
+        project, session, tmp_path / "final", exclude_image_border_fibers=True
+    )
+    assert manifest["exclude_image_border_fibers"] is True

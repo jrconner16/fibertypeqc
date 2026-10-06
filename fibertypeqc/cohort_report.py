@@ -275,6 +275,7 @@ def build_cohort_report(results_dir: Path) -> str:
                 ("n_excluded_region", "Excl. region", "int"),
                 ("n_excluded_outside_analysis_roi", "Excl. outside ROI", "int"),
                 ("n_excluded_fiber_review", "Excl. by reviewer", "int"),
+                ("n_excluded_edge_of_image", "Excl. image edge", "int"),
             ],
         ),
         "<h2>Source tables</h2>",

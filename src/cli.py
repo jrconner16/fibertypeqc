@@ -71,6 +71,7 @@ class ProjectFolder:
     split_czi_scenes: bool
     reviewer: str
     display_downsample: int
+    exclude_image_border_fibers: bool = False
 
     @property
     def batch_dir(self) -> Path:
@@ -134,6 +135,7 @@ def load_project_folder(folder: Path) -> ProjectFolder:
         split_czi_scenes=bool(raw.get("split_czi_scenes", True)),
         reviewer=str(raw.get("reviewer", "") or ""),
         display_downsample=int(raw.get("display_downsample", 2)),
+        exclude_image_border_fibers=bool(raw.get("exclude_image_border_fibers", False)),
     )
 
 
@@ -295,7 +297,11 @@ def command_finalize(project: ProjectFolder) -> int:
         raise ProjectError("The review project is not built. Run: python -m fibertypeqc prepare")
     code = _run(
         "finalize_review_project",
-        ["--project", str(project.review_project), "--output-dir", str(project.final_dir)],
+        [
+            "--project", str(project.review_project),
+            "--output-dir", str(project.final_dir),
+            *(["--exclude-image-border-fibers"] if project.exclude_image_border_fibers else []),
+        ],  # fmt: skip
     )
     if code != 0:
         return code
