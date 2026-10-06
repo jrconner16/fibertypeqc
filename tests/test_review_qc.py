@@ -148,9 +148,7 @@ def test_qc_metrics_use_documented_denominators(tmp_path: Path) -> None:
     assert typing["mean_max_probability"] == pytest.approx(0.65)
     assert typing["mean_probability_margin"] == pytest.approx(0.30)
     assert typing["probability_coverage"] == pytest.approx(1.0)
-    expected_entropy = (
-        -(0.8 * math.log(0.8) + 0.2 * math.log(0.2)) / math.log(2) + 1.0
-    ) / 2
+    expected_entropy = (-(0.8 * math.log(0.8) + 0.2 * math.log(0.2)) / math.log(2) + 1.0) / 2
     assert typing["mean_normalized_entropy"] == pytest.approx(expected_entropy)
     assert typing["needs_review_fraction"] == pytest.approx(0.5)
     assert not typing["hard_fail"]
@@ -267,10 +265,7 @@ def test_versioned_custom_rule_can_change_review_status(tmp_path: Path) -> None:
     assert segmentation["qc_version"] == "custom_qc.v1"
     assert segmentation["rules_version"] == "custom_test_rules.v1"
     assert segmentation["status"] == "review"
-    assert (
-        segmentation["reason_codes"]
-        == "fiber_segmentation.custom_border_review"
-    )
+    assert segmentation["reason_codes"] == "fiber_segmentation.custom_border_review"
 
 
 def _selection_project(tmp_path: Path) -> Project:
@@ -349,15 +344,13 @@ def test_section_selection_strategies_and_no_passing_case(tmp_path: Path) -> Non
 
     all_passing = select_sections(project, image_qc, strategy="all_passing")
     mouse_1 = all_passing[
-        all_passing["mouse_id"].eq("mouse_1")
-        & all_passing["domain"].eq("fiber_segmentation")
+        all_passing["mouse_id"].eq("mouse_1") & all_passing["domain"].eq("fiber_segmentation")
     ].iloc[0]
     assert mouse_1["selected_image_ids"] == "pass_section|review_section"
 
     best = select_sections(project, image_qc, strategy="best_passing")
     mouse_1_best = best[
-        best["mouse_id"].eq("mouse_1")
-        & best["domain"].eq("fiber_segmentation")
+        best["mouse_id"].eq("mouse_1") & best["domain"].eq("fiber_segmentation")
     ].iloc[0]
     assert mouse_1_best["selected_image_ids"] == "pass_section"
 
@@ -365,19 +358,15 @@ def test_section_selection_strategies_and_no_passing_case(tmp_path: Path) -> Non
         project,
         image_qc,
         strategy="manual",
-        manual_selections={
-            "mouse_1": {"fiber_segmentation": ["review_section"]}
-        },
+        manual_selections={"mouse_1": {"fiber_segmentation": ["review_section"]}},
     )
     mouse_1_manual = manual[
-        manual["mouse_id"].eq("mouse_1")
-        & manual["domain"].eq("fiber_segmentation")
+        manual["mouse_id"].eq("mouse_1") & manual["domain"].eq("fiber_segmentation")
     ].iloc[0]
     assert mouse_1_manual["selected_image_ids"] == "review_section"
 
     mouse_2 = all_passing[
-        all_passing["mouse_id"].eq("mouse_2")
-        & all_passing["domain"].eq("fiber_segmentation")
+        all_passing["mouse_id"].eq("mouse_2") & all_passing["domain"].eq("fiber_segmentation")
     ].iloc[0]
     assert mouse_2["selected_image_ids"] == ""
     assert bool(mouse_2["requires_manual_review"])

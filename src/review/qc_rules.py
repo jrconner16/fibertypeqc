@@ -11,9 +11,7 @@ import yaml
 
 from src.review.schemas import Domain, parse_enum
 
-DEFAULT_RULES_PATH = (
-    Path(__file__).resolve().parents[2] / "configs" / "review_qc_rules.v1.yaml"
-)
+DEFAULT_RULES_PATH = Path(__file__).resolve().parents[2] / "configs" / "review_qc_rules.v1.yaml"
 
 
 class RuleSeverity(StrEnum):
@@ -109,8 +107,7 @@ def load_rule_config(path: Path | str = DEFAULT_RULES_PATH) -> QCRuleConfig:
     schema_version = data.get("schema_version")
     if schema_version != "review_qc_rules.v1":
         raise ValueError(
-            f"Unsupported QC rule schema_version {schema_version!r}; "
-            "expected 'review_qc_rules.v1'"
+            f"Unsupported QC rule schema_version {schema_version!r}; expected 'review_qc_rules.v1'"
         )
     rules_version = data.get("rules_version")
     qc_version = data.get("qc_version")

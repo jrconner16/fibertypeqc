@@ -302,9 +302,7 @@ def test_batch_defaults_to_registry_model_and_requires_panel(tmp_path, monkeypat
     assert "model 'quad_four_class_rf_v1' needs --panel-config" in error
 
 
-def test_batch_fails_before_processing_when_model_cannot_be_resolved(
-    tmp_path, monkeypatch, capsys
-):
+def test_batch_fails_before_processing_when_model_cannot_be_resolved(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("FIBERTYPEQC_MODEL_ROOT", raising=False)
     base = ["--input-dir", str(tmp_path), "--output-dir", str(tmp_path / "out")]
 

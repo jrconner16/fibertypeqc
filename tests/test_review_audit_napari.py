@@ -66,9 +66,7 @@ def test_load_or_create_review_table_coerces_blank_review_columns_to_strings(tmp
 
 def test_save_review_table_writes_csv(tmp_path):
     review_output = tmp_path / "audit_reviewed_img1.csv"
-    table = pd.DataFrame(
-        [{"image_id": "img1", "label": 1, "audit_corrected_type": "iix"}]
-    )
+    table = pd.DataFrame([{"image_id": "img1", "label": 1, "audit_corrected_type": "iix"}])
     _save_review_table(table, review_output)
     loaded = pd.read_csv(review_output)
     assert loaded.loc[0, "audit_corrected_type"] == "iix"

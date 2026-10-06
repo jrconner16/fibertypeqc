@@ -1,5 +1,6 @@
 # Three-marker panel: IIb, IIa, laminin in channels 0-2. IIx is inferred from absent IIa and IIb
-# signal. Works with the historical model rebaseline_tile_v2_p75p90_iib_iia_iix.
+# signal. Works with ta_three_class_logistic_v1 (and the retired historical model
+# rebaseline_tile_v2_p75p90_iib_iia_iix).
 channels:
   laminin: 2
   dapi: null

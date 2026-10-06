@@ -71,3 +71,19 @@ def test_model_file_path_is_identified_by_digest_regardless_of_name(tmp_path):
     assert resolved.artifact_path == renamed.resolve()
     assert resolved.manifest_path.name == "synthetic_four_class_rf.yaml"
     assert resolve_model_argument("synthetic_four_class_reference_v1").model_id == resolved.model_id
+
+
+def test_ta_three_class_model_manifest_matches_registry_and_requests_spatial_features():
+    from src.run_pipeline import needs_spatial_marker_features
+
+    manifest = load_model_manifest(REPO_ROOT / "manifests/models/ta_three_class_logistic_v1.yaml")
+    registry = yaml.safe_load((REPO_ROOT / "manifests/model_registry.v1.yaml").read_text())
+    entry = next(m for m in registry["models"] if m["model_id"] == manifest.model_id)
+
+    assert entry["artifact_sha256"] == manifest.artifact_sha256
+    assert entry["artifact_location"] == "private"
+    assert manifest.outputs == ("iia", "iib", "iix")
+    assert manifest.feature_extraction["typing_preprocess"] == "tile_subtract"
+    assert needs_spatial_marker_features(manifest.features)
+    quad = load_model_manifest(REPO_ROOT / "manifests/models/quad_four_class_rf_v1.yaml")
+    assert not needs_spatial_marker_features(quad.features)

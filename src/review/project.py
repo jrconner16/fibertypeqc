@@ -137,9 +137,7 @@ def _parse_image(
     for key, value in raw_outputs.items():
         if not isinstance(key, str) or not isinstance(value, str):
             raise ValueError(f"{context}.outputs must map string names to string paths")
-        outputs[key] = _resolve(
-            prediction_directory, value, f"{context}.outputs.{key}"
-        )
+        outputs[key] = _resolve(prediction_directory, value, f"{context}.outputs.{key}")
     raw_applicable_domains = raw.get("applicable_domains")
     if raw_applicable_domains is None:
         applicable_domains = {Domain.FIBER_SEGMENTATION}
@@ -237,8 +235,7 @@ def load_project(path: Path | str, *, validate_paths: bool = True) -> Project:
         for key, output_path in image.outputs.items():
             if _is_within(output_path, review_directory):
                 raise ValueError(
-                    f"Predicted output {key!r} must be outside the review directory: "
-                    f"{output_path}"
+                    f"Predicted output {key!r} must be outside the review directory: {output_path}"
                 )
 
     qc_version = data.get("qc_version", "")

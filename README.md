@@ -184,6 +184,7 @@ Column definitions: [docs/output_schema.md](docs/output_schema.md).
 | Model ID | Panel | Classes | Where the file is |
 |---|---|---|---|
 | `quad_four_class_rf_v1` (default) | laminin, Type I, IIa, IIb | I, IIa, IIb, IIx (inferred) | not in the repository; verified by SHA-256 |
+| `ta_three_class_logistic_v1` | laminin, IIa, IIb | IIa, IIb, IIx (inferred) | not in the repository; verified by SHA-256 |
 | `synthetic_four_class_reference_v1` | laminin, Type I, IIa, IIb | I, IIa, IIb, IIx | in the repository; synthetic test fixture only |
 | `rebaseline_tile_v2_p75p90_iib_iia_iix` | laminin, IIa, IIb | IIa, IIb, IIx (inferred) | in the repository; retired historical model |
 

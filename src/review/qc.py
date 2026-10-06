@@ -224,10 +224,7 @@ def _clean_id_table(
         return table.iloc[0:0].copy(), None, False
     numeric = pd.to_numeric(table[id_column], errors="coerce")
     valid_values = (
-        numeric.notna()
-        & np.isfinite(numeric)
-        & numeric.gt(0)
-        & numeric.eq(np.floor(numeric))
+        numeric.notna() & np.isfinite(numeric) & numeric.gt(0) & numeric.eq(np.floor(numeric))
     )
     valid_ids = numeric[valid_values].astype(np.int64)
     duplicates = valid_ids.duplicated(keep=False)
@@ -244,9 +241,7 @@ def _mask_geometry(labels: np.ndarray | None) -> tuple[np.ndarray, np.ndarray, s
     ids, counts = np.unique(labels[labels > 0], return_counts=True)
     if not ids.size:
         return ids.astype(np.int64), counts.astype(np.int64), set()
-    border_values = np.concatenate(
-        (labels[0, :], labels[-1, :], labels[:, 0], labels[:, -1])
-    )
+    border_values = np.concatenate((labels[0, :], labels[-1, :], labels[:, 0], labels[:, -1]))
     border_ids = {int(value) for value in np.unique(border_values) if value > 0}
     return ids.astype(np.int64), counts.astype(np.int64), border_ids
 
@@ -461,12 +456,8 @@ def _image_row(
         return row
 
     reasons = evaluate_rules(rules, domain, row)
-    hard_count = sum(
-        reason["severity"] == RuleSeverity.HARD_FAIL.value for reason in reasons
-    )
-    review_count = sum(
-        reason["severity"] == RuleSeverity.REVIEW.value for reason in reasons
-    )
+    hard_count = sum(reason["severity"] == RuleSeverity.HARD_FAIL.value for reason in reasons)
+    review_count = sum(reason["severity"] == RuleSeverity.REVIEW.value for reason in reasons)
     if hard_count:
         status = "fail"
         score = 0.0
@@ -506,9 +497,7 @@ def _fiber_metrics_and_rows(
         if labels is not None and laminin is not None and laminin.shape == labels.shape
         else {}
     )
-    clean_table, _, table_ids_valid = _clean_id_table(
-        table_artifact.table, ("fiber_id", "label")
-    )
+    clean_table, _, table_ids_valid = _clean_id_table(table_artifact.table, ("fiber_id", "label"))
     table_ids = (
         clean_table["_object_id"].to_numpy(dtype=np.int64)
         if "_object_id" in clean_table
@@ -579,11 +568,7 @@ def _fiber_metrics_and_rows(
                 float(parsed_needs_review[known].astype(bool).mean()) if known.any() else None
             )
         probability_rows = _probability_metrics_table(clean_table)
-        usable = [
-            values
-            for values in probability_rows
-            if values["max_probability"] is not None
-        ]
+        usable = [values for values in probability_rows if values["max_probability"] is not None]
         typing_metrics.update(
             {
                 "probability_row_count": len(usable),
@@ -718,9 +703,7 @@ def _nucleus_metrics_and_rows(
                 "nucleus_count": int(mask_ids.size),
                 "nucleus_pixel_count": int((labels > 0).sum()),
                 "nucleus_image_fraction": float((labels > 0).sum() / labels.size),
-                "median_nucleus_area_px": (
-                    float(np.median(areas)) if areas.size else None
-                ),
+                "median_nucleus_area_px": (float(np.median(areas)) if areas.size else None),
                 "nucleus_id_mismatch_fraction": (
                     _id_mismatch_fraction(mask_ids, table_ids)
                     if nuclei_table_artifact.table is not None
@@ -730,9 +713,7 @@ def _nucleus_metrics_and_rows(
         )
     if not clean_table.empty and association_available:
         statuses = clean_table["assignment_status"].fillna("").astype(str)
-        assigned_ids = pd.to_numeric(
-            clean_table["assigned_fiber_id"], errors="coerce"
-        ).fillna(0)
+        assigned_ids = pd.to_numeric(clean_table["assigned_fiber_id"], errors="coerce").fillna(0)
         unassigned = statuses.eq("unassigned_or_interstitial") | assigned_ids.eq(0)
         ambiguous = statuses.eq("ambiguous")
         overlaps = pd.to_numeric(clean_table["overlap_fraction"], errors="coerce")
@@ -744,9 +725,7 @@ def _nucleus_metrics_and_rows(
                     float(overlaps.mean()) if overlaps.notna().any() else None
                 ),
                 "assigned_nuclei_per_fiber": (
-                    float(statuses.eq("assigned").sum() / fiber_count)
-                    if fiber_count
-                    else None
+                    float(statuses.eq("assigned").sum() / fiber_count) if fiber_count else None
                 ),
             }
         )

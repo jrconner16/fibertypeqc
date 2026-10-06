@@ -80,9 +80,7 @@ def _manual_ids(
         raise ValueError(f"Manual selections for mouse {mouse_id!r} must be a mapping")
     values = mouse.get(domain.value, [])
     if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
-        raise ValueError(
-            f"Manual selection {mouse_id}.{domain.value} must be a list of image IDs"
-        )
+        raise ValueError(f"Manual selection {mouse_id}.{domain.value} must be a list of image IDs")
     return values
 
 
@@ -100,20 +98,15 @@ def select_sections(
         choices = ", ".join(item.value for item in SelectionStrategy)
         raise ValueError(f"strategy must be one of: {choices}; got {strategy!r}") from exc
     context = _validate_image_qc(image_qc)
-    manifest_order = {
-        image.image_id: index for index, image in enumerate(project.images)
-    }
+    manifest_order = {image.image_id: index for index, image in enumerate(project.images)}
     mouse_order = list(dict.fromkeys(image.mouse_id for image in project.images))
     rows: list[dict[str, Any]] = []
 
     for mouse_id in mouse_order:
-        mouse_image_ids = [
-            image.image_id for image in project.images if image.mouse_id == mouse_id
-        ]
+        mouse_image_ids = [image.image_id for image in project.images if image.mouse_id == mouse_id]
         for domain in Domain:
             candidates = image_qc[
-                image_qc["image_id"].isin(mouse_image_ids)
-                & image_qc["domain"].eq(domain.value)
+                image_qc["image_id"].isin(mouse_image_ids) & image_qc["domain"].eq(domain.value)
             ].copy()
             applicable = candidates[candidates["applicable"].astype(bool)].copy()
             eligible = applicable[~applicable["hard_fail"].astype(bool)].copy()

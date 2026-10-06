@@ -79,9 +79,7 @@ class CohortDashboardWidget(QWidget):
         self.domain_filter = QComboBox()
         self.domain_filter.addItems(["all", *(domain.value for domain in Domain)])
         self.status_filter = QComboBox()
-        self.status_filter.addItems(
-            ["all", "pass", "review", "fail", "not_applicable"]
-        )
+        self.status_filter.addItems(["all", "pass", "review", "fail", "not_applicable"])
 
         controls = QHBoxLayout()
         controls.addWidget(QLabel("Selection strategy"))
@@ -93,14 +91,10 @@ class CohortDashboardWidget(QWidget):
         controls.addStretch(1)
 
         self.domain_table = QTableWidget(0, 5)
-        self.domain_table.setHorizontalHeaderLabels(
-            ["Domain", "PASS", "REVIEW", "FAIL", "N/A"]
-        )
+        self.domain_table.setHorizontalHeaderLabels(["Domain", "PASS", "REVIEW", "FAIL", "N/A"])
         self.domain_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.domain_table.setSelectionMode(QTableWidget.NoSelection)
-        self.domain_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.Stretch
-        )
+        self.domain_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
 
         self.section_tree = QTreeWidget()
         self.section_tree.setColumnCount(7)

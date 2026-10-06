@@ -106,6 +106,11 @@ def _cleanup_outputs_for_retain_mode(
     return removed
 
 
+def needs_spatial_marker_features(features: tuple[str, ...] | None) -> bool:
+    """Center/edge marker features are only measured on request; a model may declare them."""
+    return any(name.endswith((".center_mean", ".edge_mean")) for name in (features or ()))
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Membrane preprocess -> Cellpose -> quantify/classify")
     p.add_argument("--input", type=Path, required=True, help="Input CZI/TIFF")
@@ -632,6 +637,10 @@ def main() -> None:
         and model_manifest.feature_schema_version == "multiplanel_features.v1"
     )
 
+    model_needs_spatial_features = semantic_candidate and needs_spatial_marker_features(
+        model_manifest.features
+    )
+
     run_nuclei = channel_cfg.dapi_channel is not None
     total_stages = 8 if run_nuclei else 7
     t_all = time.perf_counter()
@@ -908,7 +917,8 @@ def main() -> None:
             # They are not legacy classifiers and therefore must not be passed into
             # quantify_labels' legacy prediction path.
             classifier_path=None if semantic_candidate else args.classifier_path,
-            collect_spatial_marker_features=bool(args.export_diagnostics),
+            collect_spatial_marker_features=bool(args.export_diagnostics)
+            or model_needs_spatial_features,
         )
         if model_manifest is not None and model_manifest.feature_extraction is not None:
             # Reproduce the model's training features exactly: pinned values, no profile.
@@ -964,9 +974,7 @@ def main() -> None:
         residual_target_class = (
             channel_cfg.residual_target_class if channel_cfg.residual_inference_enabled else None
         )
-        qc_stats = qc_flags_from_fibers(
-            fibers, qc_cfg, residual_target_class=residual_target_class
-        )
+        qc_stats = qc_flags_from_fibers(fibers, qc_cfg, residual_target_class=residual_target_class)
         postrun_qc_path = output_dir / f"{stem}_postrun_qc.json"
         postrun_qc_stats = {**qc_stats, "n_labels": len(fibers)}
         postrun_report = build_qc_report(

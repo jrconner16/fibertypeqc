@@ -69,7 +69,4 @@ def test_split_reviewed_benchmark_preserves_round2_pool_intent():
         out.loc[out["image_id"] == "img1", "manual_supervision_split"].iloc[0]
         == "manual_eval_holdout"
     )
-    assert (
-        out.loc[out["image_id"] == "img2", "manual_supervision_split"].iloc[0]
-        == "manual_train"
-    )
+    assert out.loc[out["image_id"] == "img2", "manual_supervision_split"].iloc[0] == "manual_train"
