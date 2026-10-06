@@ -87,49 +87,71 @@ slide_B,mouse_2,images/slide_B.czi,mdx
 
 ## End-to-end workflow
 
-Each step reads the previous step's files and writes new ones. Predictions are never modified.
+Put everything for one study in a **project folder** with a small config file:
 
-```bash
-# 1. Segment, type, and QC every image.
-#    --split-czi-scenes: each Zeiss scene in a CZI becomes its own section (<image>_section-NN).
-#    Tissue pieces imaged within one scene stay together.
-uv run python -m scripts.run_batch \
-  --input-dir images/ --panel-config my_panel.yaml --split-czi-scenes \
-  --model /path/to/quad_four_class_rf_v1.joblib --output-dir runs/batch1
-
-# 2. Build a review project from the batch and the sample sheet.
-uv run python -m scripts.make_review_project \
-  --batch-dir runs/batch1 --sample-sheet samples.csv \
-  --panel-config my_panel.yaml --project-dir review/batch1
-
-# 3. Project QC and section selection.
-uv run python -m scripts.generate_review_qc --project review/batch1/project.yaml
-
-# 4. Review in Napari (GUI). Decisions save automatically under review/batch1/review/.
-uv run python -m scripts.review_project_napari \
-  --project review/batch1/project.yaml --reviewer YOUR_NAME --display-downsample 2
-
-# 5. Finalize review decisions into analysis-ready tables.
-uv run python -m scripts.finalize_review_project \
-  --project review/batch1/project.yaml --output-dir review/batch1/final
-
-# 6. Image, mouse, and cohort tables plus the HTML report.
-uv run python -m scripts.summarize_results \
-  --final-dir review/batch1/final --project review/batch1/project.yaml \
-  --output-dir review/batch1/results
+```
+myproject/
+  fibertypeqc_project.yaml
+  panel.yaml
+  samples.csv
 ```
 
-Then open `review/batch1/results/cohort_report.html`.
+```yaml
+# myproject/fibertypeqc_project.yaml  (paths are relative to this folder)
+schema_version: fibertypeqc_project.v1
+images: /path/to/images            # folder of .czi / .tif files
+panel: panel.yaml
+sample_sheet: samples.csv
+model: /path/to/quad_four_class_rf_v1.joblib   # or a registered model ID
+split_czi_scenes: true             # each Zeiss scene in a CZI becomes its own section
+```
+
+Then run the steps. Each reads the previous step's files and writes new ones; predictions are
+never modified.
+
+```bash
+uv run python -m fibertypeqc status   myproject/   # where am I, and what is the next command
+uv run python -m fibertypeqc run      myproject/   # 1. segment, type, and QC every image (slow)
+uv run python -m fibertypeqc prepare  myproject/   # 2-3. build the review project, run project QC
+uv run python -m fibertypeqc review   myproject/   # 4. review in Napari (GUI); saves automatically
+uv run python -m fibertypeqc finalize myproject/   # 5-6. finalized tables, summaries, HTML report
+```
+
+Then open `myproject/results/cohort_report.html`. The folder ends up with `batch/` (masks, fiber
+tables), `review/` (QC and saved decisions), `final/`, and `results/`.
 
 Notes:
 
-- Step 1 is the slow one (Cellpose); run it on a GPU node or as a batch job for many images. It
-  checks the model, panel, and inputs before processing and stops with one message if something is
-  missing. Steps 2–6 take seconds to minutes and can be re-run at any time.
-- Steps 5 and 6 work before any review; every fiber then keeps its model prediction.
-- Keep run outputs on storage with room: label masks and exported scenes are about the size of the
-  raw images.
-- `make_review_project` never overwrites an existing project; use a new `--project-dir` to rebuild.
+- `run` is the slow step (Cellpose); use a GPU node or a batch job for many images. It checks the
+  model, panel, and inputs before processing and stops with one message if something is missing.
+  Extra options are passed through, e.g. `run myproject/ --reuse-artifacts auto` to reuse masks
+  from an earlier run. The other steps take seconds to minutes and can be re-run at any time.
+- `finalize` works before any review; every fiber then keeps its model prediction.
+- `prepare` keeps an existing review project (and its decisions) rather than rebuilding it.
+- With split CZIs, tissue pieces imaged within one Zeiss scene stay together in one section.
+- Keep the project folder on storage with room: masks and exported scenes are about the size of
+  the raw images.
+
+<details>
+<summary>The individual commands behind each step</summary>
+
+```bash
+uv run python -m scripts.run_batch --input-dir images/ --panel-config panel.yaml \
+  --split-czi-scenes --model MODEL --output-dir myproject/batch
+uv run python -m scripts.make_review_project --batch-dir myproject/batch \
+  --sample-sheet samples.csv --panel-config panel.yaml --project-dir myproject/review
+uv run python -m scripts.generate_review_qc --project myproject/review/project.yaml
+uv run python -m scripts.review_project_napari --project myproject/review/project.yaml \
+  --reviewer YOUR_NAME --display-downsample 2
+uv run python -m scripts.finalize_review_project --project myproject/review/project.yaml \
+  --output-dir myproject/final
+uv run python -m scripts.summarize_results --final-dir myproject/final \
+  --project myproject/review/project.yaml --output-dir myproject/results
+```
+
+`make_review_project` never overwrites an existing project.
+
+</details>
 
 ## Review
 
@@ -143,10 +165,10 @@ reason. Full guide: [README_review_workflow.md](README_review_workflow.md).
 
 | Step | Output | Notes |
 |---|---|---|
-| 1 | per image: `*_cellpose_labels.tif`, `*_fibers.csv`, `*_summary.csv`, `*_run.json`, QC JSON, `*_result_report.html` | `*_fibers.csv` holds the model's call, probabilities, confidence, and margin; it is never modified later |
-| 3 | `qc/image_qc.csv`, `fiber_qc.csv`, `section_selection.csv` | technical QC and which sections are used |
-| 5 | `<image_id>_fibers_finalized.csv`, `final_fiber_table.csv`, `finalization_manifest.json` | every model column plus `final_type` and `value_source` (`predicted`, `reviewed`, `excluded`, `unresolved`) |
-| 6 | `image_summary.csv`, `mouse_summary.csv`, `cohort_summary.csv`, `roi_summary.csv`, `cohort_report.html` | CSVs are the source of truth; the report is built only from them |
+| `run` | per image: `*_cellpose_labels.tif`, `*_fibers.csv`, `*_summary.csv`, `*_run.json`, QC JSON, `*_result_report.html` | `*_fibers.csv` holds the model's call, probabilities, confidence, and margin; it is never modified later |
+| `prepare` | `qc/image_qc.csv`, `fiber_qc.csv`, `section_selection.csv` | technical QC and which sections are used |
+| `finalize` | `<image_id>_fibers_finalized.csv`, `final_fiber_table.csv`, `finalization_manifest.json` | every model column plus `final_type` and `value_source` (`predicted`, `reviewed`, `excluded`, `unresolved`) |
+| `finalize` | `image_summary.csv`, `mouse_summary.csv`, `cohort_summary.csv`, `roi_summary.csv`, `cohort_report.html` | CSVs are the source of truth; the report is built only from them |
 
 How final values are decided:
 
@@ -187,10 +209,12 @@ Per image, written to `*_postrun_qc.json` and the summary. A warning never remov
 
 ## Troubleshooting
 
-- **`No module named 'scripts'`, or the wrong Python version**: you are not in the repository root.
+- **`No module named …`, or the wrong Python version**: you are not in the repository root.
+- **Not sure what to run next**: `uv run python -m fibertypeqc status myproject/`.
 - **"distributed privately" / "not a registered model"**: pass `--model /path/to/model.joblib` or
   set `FIBERTYPEQC_MODEL_ROOT`; the file must be the registered model (checked by SHA-256).
-- **"contains N scenes"**: add `--split-czi-scenes` to `run_batch`.
+- **"contains N scenes"**: set `split_czi_scenes: true` in the project config (or add
+  `--split-czi-scenes` to `run_batch`).
 - **"non-channel dimensions (Z=…)"**: project or split Z/T stacks into single-plane multichannel
   images first. TIFFs without channel metadata need ImageJ axes such as `CYX`.
 - **Batch reports fewer sections than expected**: sections are Zeiss scenes; the batch log prints
