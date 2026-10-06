@@ -10,6 +10,10 @@
 
 ### Added
 
+- **Reference snapshots:** `python -m fibertypeqc snapshot PROJECT --freeze|--check` records
+  per-section fiber counts, class counts, and digests of masks and fiber calls, and checks a later
+  run against them: identical masks must give identical calls; re-segmented sections must agree
+  within stated tolerances.
 - **Finalize from the reviewer:** a "Finalize and build report" button in the Guided Review dock
   and Workspace menu applies the current review state, writes finalized tables and summaries, and
   opens the report (outputs follow the project-folder layout).

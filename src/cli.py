@@ -45,6 +45,12 @@ from fibertypeqc.panel_presets import (
     preset_path,
     write_panel,
 )
+from src.reference_snapshot import (
+    DEFAULT_COMPOSITION_TOLERANCE,
+    DEFAULT_COUNT_TOLERANCE,
+)
+from src.reference_snapshot import check as check_snapshot
+from src.reference_snapshot import freeze as freeze_snapshot
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_NAME = "fibertypeqc_project.yaml"
@@ -460,6 +466,28 @@ def check_sample_sheet(project: ProjectFolder) -> None:
         )
 
 
+def command_snapshot(project: ProjectFolder, args: argparse.Namespace) -> int:
+    path = (args.file or project.root / "reference_snapshot.json").expanduser()
+    try:
+        if args.freeze:
+            snapshot = freeze_snapshot(project.batch_dir, path)
+            print(f"Froze {len(snapshot['sections'])} section(s) to {path}")
+            return 0
+        checks = check_snapshot(
+            project.batch_dir,
+            path,
+            count_tolerance=args.count_tolerance,
+            composition_tolerance=args.composition_tolerance,
+        )
+    except (OSError, ValueError) as exc:
+        raise ProjectError(str(exc)) from exc
+    for item in checks:
+        print(f"{'PASS' if item.passed else 'FAIL'} [{item.level}] {item.image_id}: {item.detail}")
+    failed = sum(not item.passed for item in checks)
+    print(f"{len(checks) - failed}/{len(checks)} section(s) match the reference")
+    return 1 if failed else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m fibertypeqc",
@@ -475,6 +503,27 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         step = steps.add_parser(name, help=text)
         step.add_argument("project", type=Path, help="Project folder")
+    snapshot = steps.add_parser(
+        "snapshot",
+        help="Freeze the batch outputs as a reference, or check this run against one",
+        description=(
+            "Record per-section fiber counts, class counts, and digests of masks and fiber calls "
+            "(--freeze), or compare this project's batch outputs with a frozen snapshot (--check). "
+            "Identical masks must give identical calls; re-segmented sections must agree within "
+            "the tolerances."
+        ),
+    )
+    snapshot.add_argument("project", type=Path, help="Project folder")
+    mode = snapshot.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--freeze", action="store_true", help="Write a new snapshot")
+    mode.add_argument("--check", action="store_true", help="Compare with an existing snapshot")
+    snapshot.add_argument(
+        "--file", type=Path, help="Snapshot file (default: PROJECT/reference_snapshot.json)"
+    )
+    snapshot.add_argument("--count-tolerance", type=float, default=DEFAULT_COUNT_TOLERANCE)
+    snapshot.add_argument(
+        "--composition-tolerance", type=float, default=DEFAULT_COMPOSITION_TOLERANCE
+    )
     init = steps.add_parser(
         "init",
         help="Create a project folder: config, panel file, and a sample-sheet template",
@@ -509,6 +558,8 @@ def main(argv: list[str] | None = None) -> int:
         project = load_project_folder(args.project)
         if args.step == "status":
             return command_status(project)
+        if args.step == "snapshot":
+            return command_snapshot(project, args)
         if args.step == "run":
             return command_run(project, extra)
         if args.step == "prepare":
