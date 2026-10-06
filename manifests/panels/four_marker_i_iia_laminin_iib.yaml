@@ -1,4 +1,5 @@
-# Synthetic four-marker panel used for public configuration examples.
+# Four-marker panel: Type I, IIa, laminin, IIb in channels 0-3. IIx is inferred from absent
+# I, IIa, and IIb signal. Works with the default model quad_four_class_rf_v1.
 channels:
   laminin: 2
   dapi: null
@@ -8,7 +9,6 @@ channels:
   type_iix: null
   emhc: null
 
-# IIx is inferred from absent I, IIa, and IIb signal, matching the paired example model's outputs.
 classification:
   residual_inference:
     enabled: true

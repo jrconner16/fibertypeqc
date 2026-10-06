@@ -31,7 +31,7 @@ results:
 
 - macOS or Linux; a GPU is optional but speeds up Cellpose.
 - [`uv`](https://docs.astral.sh/uv/) (it installs the pinned Python 3.11 and all dependencies).
-- A panel file describing which channel holds which marker (see [Inputs](#inputs-you-provide)).
+- To know which channel holds which stain in your images (see [Set up a project](#set-up-a-project)).
 - The model file for your panel.
 
 ## Install and check
@@ -50,61 +50,42 @@ results on synthetic images and checks the outputs; it should end with `referenc
 It tests the software, not biological accuracy. On shared or HPC filesystems see
 [README_uv_setup.md](README_uv_setup.md).
 
-## Inputs you provide
+## Set up a project
 
-**Panel file** (`my_panel.yaml`): the channel index of each marker, counting from 0. For the
-four-marker panel, with IIx inferred from the absence of Type I, IIa, and IIb:
+One command creates a project folder for a study. It asks which staining panel you used (or lets
+you enter the channel for each stain), finds your images, and writes three small files:
 
-```yaml
-channels:
-  laminin: 2
-  dapi: null
-  type_i: 0
-  type_iia: 1
-  type_iib: 3
-  type_iix: null
-  emhc: null
-classification:
-  residual_inference:
-    enabled: true
-    target_class: iix
-    requires_negative_markers: [i, iia, iib]
+```bash
+uv run python -m fibertypeqc init myproject/ --images /path/to/images
 ```
-
-Details: [docs/panel_schema.md](docs/panel_schema.md).
-
-**Sample sheet** (`samples.csv`): one row per input image. `image_id` is the file name without its
-extension. Any extra column (here `genotype`) becomes a condition for cohort summaries.
-
-```csv
-image_id,mouse_id,raw_image_path,genotype
-slide_A,mouse_1,images/slide_A.czi,wt
-slide_B,mouse_2,images/slide_B.czi,mdx
-```
-
-**Model**: either pass the file, `--model /path/to/quad_four_class_rf_v1.joblib`, or set
-`export FIBERTYPEQC_MODEL_ROOT=/folder/containing/the/model` once and omit `--model`.
-
-## End-to-end workflow
-
-Put everything for one study in a **project folder** with a small config file:
 
 ```
 myproject/
-  fibertypeqc_project.yaml
-  panel.yaml
-  samples.csv
+  fibertypeqc_project.yaml   # images folder, panel, sample sheet, model
+  panel.yaml                 # which channel holds which stain
+  samples.csv                # one row per image: fill in mouse_id (and any group columns)
 ```
 
-```yaml
-# myproject/fibertypeqc_project.yaml  (paths are relative to this folder)
-schema_version: fibertypeqc_project.v1
-images: /path/to/images            # folder of .czi / .tif files
-panel: panel.yaml
-sample_sheet: samples.csv
-model: /path/to/quad_four_class_rf_v1.joblib   # or a registered model ID
-split_czi_scenes: true             # each Zeiss scene in a CZI becomes its own section
+Then open `samples.csv` and fill in `mouse_id` for each image. Any other column you add or fill
+(for example `group` or `genotype`) becomes a condition for cohort summaries. If mouse IDs are in
+your file names, `--mouse-id-pattern` fills them in, e.g. `--mouse-id-pattern '^(m\d+)_'`.
+
+To run unattended, give everything as options:
+
+```bash
+uv run python -m fibertypeqc init myproject/ --images /path/to/images \
+  --panel four_marker_i_iia_laminin_iib --model /path/to/quad_four_class_rf_v1.joblib --yes
 ```
+
+**Panel presets** (`manifests/panels/`): `four_marker_i_iia_laminin_iib` (Type I, IIa, laminin,
+IIb in channels 0–3; IIx inferred) and `three_marker_iib_iia_laminin` (IIb, IIa, laminin; IIx
+inferred). Channels count from 0. If your channel order differs, choose "custom" in the wizard or
+edit `panel.yaml`; details in [docs/panel_schema.md](docs/panel_schema.md).
+
+**Model**: a registered model ID, or the path to your model file. With an ID for a model that is
+not in the repository, set `export FIBERTYPEQC_MODEL_ROOT=/folder/containing/the/model`.
+
+## End-to-end workflow
 
 Then run the steps. Each reads the previous step's files and writes new ones; predictions are
 never modified.

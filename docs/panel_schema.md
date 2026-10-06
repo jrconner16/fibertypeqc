@@ -1,5 +1,8 @@
 # Panel Schema
 
+Ready-made panels are in `manifests/panels/`; `python -m fibertypeqc init` writes a panel file from
+a preset or from the channel you give for each stain.
+
 FiberTypeQC supports a panel-aware channel schema alongside the frozen `type1/type2` baseline.
 
 This document defines the config contract for `--panel-config` (preferred) and
