@@ -10,6 +10,13 @@
 
 ### Added
 
+- **`python -m fibertypeqc init`** creates a project folder: it asks for (or takes as options) the
+  images folder, a panel preset or per-stain channels, and the model, and writes the config,
+  `panel.yaml`, and a `samples.csv` template (`--mouse-id-pattern` fills mouse IDs from file names).
+  `prepare` and `status` say plainly when `mouse_id` still needs filling in.
+- **Panel presets** in `manifests/panels/` (`four_marker_i_iia_laminin_iib`,
+  `three_marker_iib_iia_laminin`); a project config may name a preset directly. The example
+  four-marker panel now enables IIx inference, matching its paired example model.
 - **Project folders and one command:** `python -m fibertypeqc {status,run,prepare,review,finalize}
   PROJECT/` runs the workflow from a folder containing `fibertypeqc_project.yaml` (images folder,
   panel, sample sheet, model). Outputs go to `batch/`, `review/`, `final/`, and `results/` inside

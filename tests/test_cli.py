@@ -136,3 +136,101 @@ def test_review_requires_qc(tmp_path, capsys, step):
 
     assert cli.main([step, str(root)]) == 2
     assert "QC has not run yet" in capsys.readouterr().err
+
+
+def _images(tmp_path: Path, names=("m1_s1", "m2_s1")) -> Path:
+    import numpy as np
+    import tifffile
+
+    folder = tmp_path / "raw"
+    folder.mkdir()
+    for name in names:
+        tifffile.imwrite(
+            folder / f"{name}.tif",
+            np.zeros((4, 8, 8), dtype=np.uint16),
+            imagej=True,
+            metadata={"axes": "CYX"},
+        )
+    (folder / "notes.txt").write_text("not an image")
+    return folder
+
+
+def test_init_unattended_writes_config_panel_and_sample_sheet(tmp_path, capsys):
+    images = _images(tmp_path)
+    root = tmp_path / "study"
+
+    code = cli.main(
+        ["init", str(root), "--images", str(images), "--panel", "four_marker_i_iia_laminin_iib",
+         "--model", "quad_four_class_rf_v1", "--mouse-id-pattern", r"^(m\d+)_", "--yes"]
+    )  # fmt: skip
+
+    assert code == 0
+    project = cli.load_project_folder(root)
+    assert project.images == images and project.model == "quad_four_class_rf_v1"
+    panel = yaml.safe_load((root / "panel.yaml").read_text())
+    assert panel["channels"]["type_iib"] == 3
+    assert panel["classification"]["residual_inference"]["target_class"] == "iix"
+    sheet = pd.read_csv(root / "samples.csv", keep_default_na=False)
+    assert sheet["image_id"].tolist() == ["m1_s1", "m2_s1"]
+    assert sheet["mouse_id"].tolist() == ["m1", "m2"]
+    assert "fill in mouse_id" not in capsys.readouterr().out
+    assert cli.main(["init", str(root), "--images", str(images), "--yes"]) == 2  # already exists
+
+
+def test_init_interactive_custom_panel(tmp_path, monkeypatch, capsys):
+    images = _images(tmp_path, names=("slide",))
+    answers = iter(
+        [str(images), "3", "2", "0", "1", "3", "", "", "", "/models/quad.joblib"]
+    )  # images, custom panel, laminin, I, IIa, IIb, IIx, DAPI, eMHC, model
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    root = tmp_path / "study"
+
+    assert cli.main(["init", str(root)]) == 0
+
+    output = capsys.readouterr().out
+    assert "slide.tif has 4 channel(s)" in output
+    assert "fill in mouse_id for 1 image(s)" in output
+    panel = yaml.safe_load((root / "panel.yaml").read_text())
+    assert panel["channels"] == {
+        "laminin": 2, "dapi": None, "type_i": 0, "type_iia": 1, "type_iib": 3, "type_iix": None,
+        "emhc": None,
+    }  # fmt: skip
+    assert panel["classification"]["residual_inference"]["requires_negative_markers"] == [
+        "i", "iia", "iib",
+    ]  # fmt: skip
+    assert cli.load_project_folder(root).model == "/models/quad.joblib"
+
+
+def test_init_reports_missing_inputs(tmp_path, capsys):
+    assert cli.main(["init", str(tmp_path / "a"), "--yes"]) == 2
+    assert "--images is required" in capsys.readouterr().err
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert cli.main(["init", str(tmp_path / "b"), "--images", str(empty), "--yes"]) == 2
+    assert "No .czi/.tif/.tiff files" in capsys.readouterr().err
+    images = _images(tmp_path)
+    assert cli.main(["init", str(tmp_path / "c"), "--images", str(images), "--yes"]) == 2
+    assert "--panel is required" in capsys.readouterr().err
+
+
+def test_prepare_stops_until_mouse_ids_are_filled(tmp_path, capsys, monkeypatch):
+    images = _images(tmp_path)
+    root = tmp_path / "study"
+    cli.main(["init", str(root), "--images", str(images), "--panel",
+              "four_marker_i_iia_laminin_iib", "--yes"])  # fmt: skip
+    (root / "batch").mkdir()
+    (root / "batch/batch_summary.csv").write_text("image_name,status\nm1_s1,success\n")
+    monkeypatch.setattr(cli, "_run", lambda module, arguments: 0)
+    capsys.readouterr()
+
+    assert cli.main(["prepare", str(root)]) == 2
+    assert "Fill in mouse_id" in capsys.readouterr().err
+    assert cli.main(["status", str(root)]) == 0
+    assert "Fill in mouse_id" in capsys.readouterr().out
+
+
+def test_config_may_name_a_panel_preset(tmp_path):
+    root = _project(tmp_path, panel="three_marker_iib_iia_laminin")
+
+    assert cli.load_project_folder(root).panel.name == "three_marker_iib_iia_laminin.yaml"
