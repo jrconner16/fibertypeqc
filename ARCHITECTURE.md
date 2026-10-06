@@ -16,7 +16,8 @@ scripts.run_batch -> scripts.make_review_project -> scripts.generate_review_qc
   -> scripts.review_project_napari -> scripts.finalize_review_project -> scripts.summarize_results
 ```
 
-Public command wrappers live in `scripts/`:
+`python -m fibertypeqc <step> PROJECT/` (`src/cli.py`) runs these steps on a project folder using
+its `fibertypeqc_project.yaml`. Public command wrappers live in `scripts/`:
 
 - `run_batch.py` / `run_pipeline.py`: segmentation, panel-specific fiber typing, per-image QC, and
   provenance for many images or one.

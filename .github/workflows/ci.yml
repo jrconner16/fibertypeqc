@@ -51,6 +51,7 @@ jobs:
           uv run --frozen python -m scripts.summarize_results --help
           uv run --frozen python -m scripts.make_review_project --help
           uv run --frozen python -m scripts.generate_review_qc --help
+          uv run --frozen python -m fibertypeqc --help
 
       - name: Run fast tests
         run: uv run --frozen pytest -m "not integration" -q

@@ -10,6 +10,11 @@
 
 ### Added
 
+- **Project folders and one command:** `python -m fibertypeqc {status,run,prepare,review,finalize}
+  PROJECT/` runs the workflow from a folder containing `fibertypeqc_project.yaml` (images folder,
+  panel, sample sheet, model). Outputs go to `batch/`, `review/`, `final/`, and `results/` inside
+  it; `status` reports the current stage and the next command. The `scripts.*` commands are
+  unchanged underneath.
 - Research scripts, options, and labels that named a specific private cohort now use the neutral
   name "cohort B" (`cohort_b`, `--cohort-b-…`). Research tooling only; the supported pipeline is
   unaffected.
