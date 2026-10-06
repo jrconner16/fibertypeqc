@@ -45,6 +45,7 @@ class GuidedReviewWidget(QWidget):
         show_section: Callable[[], None] | None = None,
         show_region: Callable[[], None] | None = None,
         fiber_qc: pd.DataFrame | None = None,
+        finalize_requested: Callable[[], None] | None = None,
         show_domain: Callable[[Domain], None] | None = None,
         focus_current_object: Callable[[], None] | None = None,
         parent: QWidget | None = None,
@@ -123,6 +124,15 @@ class GuidedReviewWidget(QWidget):
         plan_layout.addWidget(self.start_flagged_button)
         plan_layout.addWidget(self.review_section_button)
         plan_layout.addWidget(self.cohort_qc_button)
+        self.finalize_button = QPushButton("Finalize and build report")
+        self.finalize_button.setToolTip(
+            "Apply your decisions and exclusions, write the result tables, and open the report. "
+            "Predictions are not modified; you can keep reviewing and finalize again."
+        )
+        self.finalize_button.setVisible(finalize_requested is not None)
+        if finalize_requested is not None:
+            self.finalize_button.clicked.connect(lambda _checked=False: finalize_requested())
+        plan_layout.addWidget(self.finalize_button)
 
         self.decision_group = QGroupBox("Current fiber")
         decision_layout = QVBoxLayout(self.decision_group)

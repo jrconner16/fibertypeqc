@@ -10,6 +10,9 @@
 
 ### Added
 
+- **Finalize from the reviewer:** a "Finalize and build report" button in the Guided Review dock
+  and Workspace menu applies the current review state, writes finalized tables and summaries, and
+  opens the report (outputs follow the project-folder layout).
 - **`python -m fibertypeqc init`** creates a project folder: it asks for (or takes as options) the
   images folder, a panel preset or per-stain channels, and the model, and writes the config,
   `panel.yaml`, and a `samples.csv` template (`--mouse-id-pattern` fills mouse IDs from file names).
