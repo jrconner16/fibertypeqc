@@ -109,6 +109,9 @@ Notes:
   Extra options are passed through, e.g. `run myproject/ --reuse-artifacts auto` to reuse masks
   from an earlier run. The other steps take seconds to minutes and can be re-run at any time.
 - `finalize` works before any review; every fiber then keeps its model prediction.
+- For cropped fields, add `exclude_image_border_fibers: true` to `fibertypeqc_project.yaml` to
+  leave fibers cut off by the image edge out of the results (counted in the report). Off by
+  default.
 - `prepare` keeps an existing review project (and its decisions) rather than rebuilding it.
 - With split CZIs, tissue pieces imaged within one Zeiss scene stay together in one section.
 - Keep the project folder on storage with room: masks and exported scenes are about the size of

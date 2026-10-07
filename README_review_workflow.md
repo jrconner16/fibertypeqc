@@ -23,10 +23,16 @@ workspace** brings back closed docks):
    fiber segmentation or fiber typing removes the whole section at finalization.
 3. **Guided fiber review** — start **Review flagged fibers** (or **Review this section**). One
    fiber at a time, outlined in cyan. Keys: `K` keep the model call, `1`/`2`/`3`/`4` = I/IIa/IIb/IIx,
-   Left/Right to move, `F` to center, `U` to undo. Uncertain/exclude are under **Advanced review
-   options**. The flagged queue also includes fibers with a faint or unusually thick laminin
-   outline (from project QC); "Why shown" names the reason. These are prompts to look, not
-   exclusions. Decisions save immediately and resume where you left off.
+   `X` exclude, Left/Right to move, `F` to center, `U` to undo. Uncertain/unresolved are under
+   **Advanced review options**. The view opens on the raw stain channels with every fiber outlined
+   in the color of its current call (the model call, or your decision once made; legend in the
+   dock); toggle the `review_fiber_calls` layer to hide it. The flagged queue also includes fibers
+   with a faint or unusually thick laminin outline (from project QC); "Why shown" names the
+   reason. These are prompts to look, not exclusions. Fibers cut off by the image edge are left
+   out of the flagged queue because they cannot be judged by eye; they still appear in **Review
+   this section**, and keep their model call unless the project sets
+   `exclude_image_border_fibers: true` (README, "Finalize"). Decisions save immediately and resume where
+   you left off.
 4. **Regions** — draw a polygon in the yellow *Region shapes* layer, pick a domain and action, and
    apply. *Exclude all analysis* / *ignore fiber typing* removes the fibers whose centers fall
    inside (folds, tears, bad staining); *unresolved* marks them unresolved. **Analysis ROI** with a

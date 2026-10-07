@@ -7,6 +7,7 @@ import webbrowser
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from src.generate_review_qc import load_manual_selections
 from src.review.dashboard import build_dashboard_model, load_dashboard_tables
@@ -124,6 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     import napari
 
     from src.io_utils import load_multichannel_image
+    from src.review.call_overlay import call_color_dict, current_calls, model_calls_from_table
     from src.review.channel_display import channel_displays, stain_composite
     from src.review.channel_map_widget import ChannelMapWidget
     from src.review.dashboard_widget import CohortDashboardWidget
@@ -224,6 +226,40 @@ def main(argv: list[str] | None = None) -> int:
             coordinates.append(coordinates[0])
         return {"type": "Polygon", "coordinates": [coordinates]}
 
+    image_model_calls: dict[int, str] = {}
+
+    def _call_colormap(image_id: str):
+        from napari.utils.colormaps import DirectLabelColormap
+
+        calls = current_calls(image_model_calls, session.object_decisions, image_id)
+        return DirectLabelColormap(color_dict=call_color_dict(calls))
+
+    def _add_call_overlay(image, labels: np.ndarray) -> None:
+        """Outline every fiber in the color of its current call (model call or review)."""
+        nonlocal image_model_calls
+        table_path = image.outputs.get("fiber_table")
+        if table_path is None:
+            return
+        image_model_calls = model_calls_from_table(pd.read_csv(table_path, low_memory=False))
+        layer = viewer.add_labels(
+            labels,
+            name="review_fiber_calls",
+            opacity=1.0,
+            colormap=_call_colormap(image.image_id),
+        )
+        layer.contour = 2
+        try:
+            layer.editable = False
+        except AttributeError:
+            pass
+
+    def _refresh_call_overlay(image_id: str) -> None:
+        try:
+            layer = viewer.layers["review_fiber_calls"]
+        except KeyError:
+            return
+        layer.colormap = _call_colormap(image_id)
+
     def show_image(image_id: str) -> None:
         nonlocal loaded_image_id
         for layer in list(viewer.layers):
@@ -261,10 +297,12 @@ def main(argv: list[str] | None = None) -> int:
         raw, labels = downsample_review_data(raw, labels, args.display_downsample)
         displays = channel_displays(project.panel_manifest, raw.shape[0])
         channel_map_widget.set_displays(displays)
+        # The raw channels are the default view; the fixed composite stays available but hidden.
         viewer.add_image(
             stain_composite(raw, displays),
             name="review_stain_composite",
             rgb=True,
+            visible=False,
         )
         for display in displays:
             viewer.add_image(
@@ -272,10 +310,10 @@ def main(argv: list[str] | None = None) -> int:
                 name=f"review_raw_{display.role}_ch{display.channel}",
                 colormap=display.colormap,
                 blending="additive",
-                visible=False,
             )
         if labels is not None:
-            viewer.add_labels(labels, name="review_fiber_labels", opacity=0.25)
+            viewer.add_labels(labels, name="review_fiber_labels", opacity=0.25, visible=False)
+            _add_call_overlay(image, labels)
             viewer.add_image(
                 np.zeros((*labels.shape, 4), dtype=np.float32),
                 name="review_fiber_selected_outline",
@@ -336,6 +374,7 @@ def main(argv: list[str] | None = None) -> int:
         controller.set_image(image_id)
         if loaded_image_id != image_id:
             show_image(image_id)
+        _refresh_call_overlay(image_id)
         try:
             selected = viewer.layers["review_fiber_selected_outline"]
             labels = viewer.layers["review_fiber_labels"]

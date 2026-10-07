@@ -58,8 +58,9 @@ call, `1`/`2`/`3`/`4` for I/IIa/IIb/IIx, `F` to center the current fiber, and
 The persistent navigator moves between cohort QC, the current section, and
 domain-specific review. If a dock is closed accidentally, reopen it from the
 Napari **Workspace** menu; **Restore review workspace** returns the Guided
-Review dock and channel map without restarting. Raw data opens as a
-panel-aware stain composite with individually toggleable, color-named layers.
+Review dock and channel map without restarting. Raw data opens as individually
+toggleable, color-named stain channels (a fixed composite layer is available, hidden),
+with fibers outlined in the color of their current call.
 choices do not modify predictions or review data.
 The compact, fixed-width Channel Map identifies each role and source channel.
 These display choices do not modify predictions or review data.

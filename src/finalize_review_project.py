@@ -45,6 +45,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Refuse images whose review session has no recorded input fingerprints.",
     )
+    parser.add_argument(
+        "--exclude-image-border-fibers",
+        action="store_true",
+        help=(
+            "Exclude fibers touching the image edge from the results (reason edge_of_image). "
+            "Intended for cropped fields, where edge fibers are cut off. Off by default."
+        ),
+    )
     return parser
 
 
@@ -82,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
             args.output_dir,
             section_selection_path=selection if selection.is_file() else None,
             require_verified=args.require_verified,
+            exclude_image_border_fibers=args.exclude_image_border_fibers,
         )
     except FinalizationError as exc:
         print(f"Finalization refused: {exc}", file=sys.stderr)

@@ -86,7 +86,14 @@ def _group_summary(group: pd.DataFrame, classes: list[str]) -> dict[str, Any]:
         "n_corrected": int(group["is_corrected"].sum()),
         "n_flagged_unreviewed": int((analysis["flagged_unreviewed"]).sum()),
     }
-    for prefix in ("image", "section", "region", "outside_analysis_roi", "fiber_review"):
+    for prefix in (
+        "image",
+        "section",
+        "region",
+        "outside_analysis_roi",
+        "fiber_review",
+        "edge_of_image",
+    ):
         row[f"n_excluded_{prefix}"] = int(excluded["exclusion_reason"].str.startswith(prefix).sum())
     for name in classes:
         row[f"n_final_{name}"] = int((resolved["final_class"] == name).sum())
