@@ -506,6 +506,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("prepare", "Build the review project and run project QC"),
         ("review", "Open the Napari review workspace (extra options go to the reviewer)"),
         ("finalize", "Finalize review decisions and build result tables and the report"),
+        ("reference", "Export blind reference labels (from review --blind) for benchmarking"),
     ):
         step = steps.add_parser(name, help=text)
         step.add_argument("project", type=Path, help="Project folder")
@@ -572,6 +573,14 @@ def main(argv: list[str] | None = None) -> int:
             return command_prepare(project)
         if args.step == "review":
             return command_review(project, extra)
+        if args.step == "reference":
+            return _run(
+                "export_reference",
+                [
+                    "--project", str(project.review_project),
+                    "--output-dir", str(project.root / "reference_export"),
+                ],  # fmt: skip
+            )
         return command_finalize(project)
     except ProjectError as exc:
         print(f"Error: {exc}", file=sys.stderr)

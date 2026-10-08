@@ -9,6 +9,14 @@
   dashboard withheld. Labels are saved per reviewer under `review/reference/<reviewer>/`, apart
   from review decisions, and are never applied at finalization. Plans: every fiber in the current
   section, or a reproducible random sample.
+- **Reference fields:** in blind mode, draw shapes in the `review_analysis_rois` layer and choose
+  **Label every fiber in my drawn fields**; the shapes are saved as reference fields and every
+  fiber whose center is inside one is queued. Random-sample settings are saved, so reopening
+  rebuilds the same sample.
+- **Reference export:** `python -m fibertypeqc reference PROJECT` writes `reference_export/`
+  with one table of all reviewers' blind labels (model output kept in separate `model_*`
+  columns), field coverage (which drawn fields are exhaustively labelled), reviewer agreement
+  (percent and Cohen's kappa on shared fibers), review time, and a manifest with file digests.
 - **Review time:** every review session (blind or guided) writes a row to `review_sessions.csv`
   beside its review state with decision count and active seconds; gaps longer than two minutes
   are not counted, and the cutoff is recorded.
