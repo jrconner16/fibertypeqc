@@ -1,0 +1,25 @@
+# Declared recipe for the model improver. Candidates, settings, validation, and the promotion rule
+# are fixed here before any labels are seen; change them only by adding a new recipe version.
+recipe_id: improver_recipe.v1
+validation: leave_one_mouse_out
+minimum_labels_per_class: 10
+candidates:
+  logistic:
+    family: multinomial_logistic_regression
+    parameters: {C: 1.0, max_iter: 5000, class_weight: balanced, random_state: 20261008}
+  random_forest:
+    family: random_forest
+    parameters:
+      {n_estimators: 400, min_samples_leaf: 2, class_weight: balanced, random_state: 20261008}
+  gradient_boosting:
+    # scikit-learn's histogram gradient boosting: no extra dependency and no GPU.
+    family: histogram_gradient_boosting
+    parameters:
+      {max_iter: 300, learning_rate: 0.05, max_depth: 6, min_samples_leaf: 5,
+       l2_regularization: 1.0, class_weight: balanced, random_state: 20261008}
+# A candidate is recommended over the current model only if all of these hold on held-out mice.
+promotion_rule:
+  minimum_mice: 3
+  minimum_median_mouse_macro_f1_gain: 0.02
+  minimum_fraction_of_mice_not_worse: 0.67
+  maximum_class_recall_drop: 0.05

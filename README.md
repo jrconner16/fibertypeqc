@@ -144,6 +144,21 @@ uv run python -m scripts.summarize_results --final-dir myproject/final \
 
 </details>
 
+## Adapt the model from your review
+
+If the model does poorly on your images, your review decisions can train a replacement:
+
+```bash
+uv run python -m fibertypeqc improve myproject/
+```
+
+This compares three candidate model types with the current model on held-out mice, using only the
+fibers you reviewed, and saves each candidate with a manifest in `myproject/models/`. It prints a
+recommendation from a rule fixed in advance (`manifests/improver/recipe.v1.yaml`) and never
+changes the model your project uses. It needs reviewed fibers from at least three mice and ten per
+class. The comparison is between models on reviewed fibers, which are mostly hard cases; it is
+not an accuracy estimate.
+
 ## Check a run against a reference
 
 To confirm that a later run (new code version, another computer) reproduces an earlier one, freeze
