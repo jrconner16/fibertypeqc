@@ -40,7 +40,7 @@ workspace** brings back closed docks):
    (every fiber) or **Label a random sample**. These labels are saved per reviewer under
    `review/reference/<reviewer>/`, separately from review decisions, and finalization never uses
    them. Each session's decision count and active time are written to `review_sessions.csv`.
-   To label a region exhaustively, draw shapes in the cyan `review_analysis_rois` layer and choose
+   To label a region exhaustively, draw shapes in the orange `review_analysis_rois` layer and choose
    **Label every fiber in my drawn fields**. `python -m fibertypeqc reference PROJECT` then
    exports all reviewers' labels, field coverage, reviewer agreement, and review time to
    `reference_export/`.

@@ -28,7 +28,7 @@ To draw anatomical subregions, such as four quadrants of a QUAD section, draw
 the polygon in the editable yellow **Region shapes** layer, choose **Analysis
 ROI**, and provide both an ROI name (for example, `quad_1`) and role (for
 example, `quadrant`). Applying it autosaves the ROI, then renders it in the
-separate cyan `review_analysis_rois` layer.
+separate orange `review_analysis_rois` layer.
 
 ROIs remain geometry and metadata until finalization. The headless assignment
 contract uses fiber/object centroids and reports one of `assigned`, `outside`,

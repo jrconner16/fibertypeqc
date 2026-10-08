@@ -177,7 +177,7 @@ class GuidedReviewWidget(QWidget):
         plan_layout.addWidget(self.random_sample_button)
         self.field_button = QPushButton("Label every fiber in my drawn fields")
         self.field_button.setToolTip(
-            "Draw one or more shapes in the cyan 'review_analysis_rois' layer on this section, "
+            "Draw one or more shapes in the orange 'review_analysis_rois' layer on this section, "
             "then click here. Every fiber whose center is inside a shape is queued, and the "
             "shapes are saved as reference fields."
         )

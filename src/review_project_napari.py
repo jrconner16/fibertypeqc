@@ -396,8 +396,9 @@ def main(argv: list[str] | None = None) -> int:
             _region_shape_data(image_id, RegionKind.ANALYSIS_ROI),
             name="review_analysis_rois",
             shape_type="polygon",
-            edge_color="cyan",
-            face_color=[0.0, 1.0, 1.0, 0.06],
+            # Orange, not cyan: cyan is the selected-fiber outline.
+            edge_color="orange",
+            face_color=[1.0, 0.65, 0.0, 0.06],
             edge_width=2,
         )
         viewer.add_image(
