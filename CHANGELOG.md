@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Model improver:** `python -m fibertypeqc improve PROJECT` turns your review decisions into
+  candidate models. It recomputes the current model's features on the reviewed sections' existing
+  masks, evaluates a logistic, a random-forest, and a gradient-boosting candidate on held-out mice
+  beside the current model's own calls, and writes each candidate with a manifest under
+  `PROJECT/models/improve_<time>/`. A declared recipe (`manifests/improver/recipe.v1.yaml`) fixes
+  the candidates and the promotion rule; the command recommends a candidate only if the rule is
+  met and never changes the active model.
 - **Blind reference labelling:** `python -m fibertypeqc review PROJECT --blind --reviewer NAME`
   opens the reviewer with model calls, confidence, QC reasons, the call overlay, and the cohort
   dashboard withheld. Labels are saved per reviewer under `review/reference/<reviewer>/`, apart

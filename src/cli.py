@@ -507,6 +507,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("review", "Open the Napari review workspace (extra options go to the reviewer)"),
         ("finalize", "Finalize review decisions and build result tables and the report"),
         ("reference", "Export blind reference labels (from review --blind) for benchmarking"),
+        ("improve", "Build and evaluate candidate models from your review decisions"),
     ):
         step = steps.add_parser(name, help=text)
         step.add_argument("project", type=Path, help="Project folder")
@@ -573,6 +574,15 @@ def main(argv: list[str] | None = None) -> int:
             return command_prepare(project)
         if args.step == "review":
             return command_review(project, extra)
+        if args.step == "improve":
+            arguments = [
+                "--project", str(project.review_project),
+                "--panel-config", str(project.panel),
+                "--output-dir", str(project.root / "models"),
+            ]  # fmt: skip
+            if project.model:
+                arguments += ["--model", project.model]
+            return _run("improve_model", arguments)
         if args.step == "reference":
             return _run(
                 "export_reference",
