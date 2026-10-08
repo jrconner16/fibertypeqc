@@ -50,6 +50,11 @@ results on synthetic images and checks the outputs; it should end with `referenc
 It tests the software, not biological accuracy. On shared or HPC filesystems see
 [README_uv_setup.md](README_uv_setup.md).
 
+## Try the demo
+
+[docs/demo.md](docs/demo.md) walks through the whole workflow on four small cropped fields, from
+download to the HTML report, with a finished example project to compare against.
+
 ## Set up a project
 
 One command creates a project folder for a study. It asks which staining panel you used (or lets

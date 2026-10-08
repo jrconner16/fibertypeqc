@@ -10,6 +10,9 @@
 
 ### Added
 
+- **Demo:** `docs/demo.md` walks through run, review, finalize, and the report on four cropped
+  fields distributed as a release download, with a finished example project and a reference
+  snapshot.
 - **Reviewer:** an **Exclude (X)** button beside the type buttons; the view opens on the raw stain
   channels with every fiber outlined in the color of its current call (model call or review
   decision), with a legend in the dock. Fibers cut off by the image edge are left out of the
