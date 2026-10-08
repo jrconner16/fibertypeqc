@@ -138,7 +138,6 @@ class GuidedReviewWidget(QWidget):
         self.finalize_button.setVisible(finalize_requested is not None)
         if finalize_requested is not None:
             self.finalize_button.clicked.connect(lambda _checked=False: finalize_requested())
-        plan_layout.addWidget(self.finalize_button)
 
         self.decision_group = QGroupBox("Current fiber")
         decision_layout = QVBoxLayout(self.decision_group)
@@ -219,6 +218,8 @@ class GuidedReviewWidget(QWidget):
         layout.addLayout(navigation)
         layout.addWidget(self.advanced_toggle)
         layout.addWidget(self.advanced_group)
+        # Outside the plan box, which is hidden once a review is started or resumed.
+        layout.addWidget(self.finalize_button)
         layout.addWidget(self.save_status)
         layout.addWidget(self.status)
         layout.addWidget(self.shortcut_label)

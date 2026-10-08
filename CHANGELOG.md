@@ -13,7 +13,8 @@
 - **Reviewer:** an **Exclude (X)** button beside the type buttons; the view opens on the raw stain
   channels with every fiber outlined in the color of its current call (model call or review
   decision), with a legend in the dock. Fibers cut off by the image edge are left out of the
-  flagged queue and labelled in section review.
+  flagged queue and labelled in section review. "Finalize and build report" stays visible
+  after a review is started or resumed (it was hidden with the plan box).
 - **Opt-in edge exclusion:** `exclude_image_border_fibers: true` in `fibertypeqc_project.yaml` (or
   `finalize_review_project --exclude-image-border-fibers`) excludes fibers touching the image
   edge at finalization (`exclusion_reason` `edge_of_image`, counted as `n_excluded_edge_of_image`
