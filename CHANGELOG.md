@@ -10,6 +10,11 @@
 
 ### Added
 
+- **Reviewer workspace:** panels can be hidden but no longer deleted, so the Workspace menu always
+  brings them back; "Restore review workspace" returns to the starting panels, layer toggles, and
+  zoom; opening Region or Nuclei review no longer reloads the image; the cohort dashboard opens
+  as a tab; the advanced-options toggle shows its label and the color legend sits with the
+  decision buttons.
 - **Reviewer:** an **Exclude (X)** button beside the type buttons; the view opens on the raw stain
   channels with every fiber outlined in the color of its current call (model call or review
   decision), with a legend in the dock. Fibers cut off by the image edge are left out of the
