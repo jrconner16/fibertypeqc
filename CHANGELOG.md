@@ -1,15 +1,23 @@
 # Changelog
 
-## Unreleased: v0.3.0.dev0
+## v0.3.0
 
-### Development status
+### Release summary
 
-- Current development version after the published v0.2.0 release.
-- The frozen default classifier and review-assisted public workflow remain unchanged.
-- Candidate-model evaluation, review-policy research, and cohort-specific tools remain experimental.
+- Project-folder workflow (`python -m fibertypeqc`) from images to a cohort report, with
+  project-based review and finalization that never overwrites model calls.
+- Models are panel-specific and distributed as release downloads: `quad_four_class_rf_v1`
+  (default, four-marker panels) and `ta_three_class_logistic_v1` (three-marker panels). Neither
+  has been validated on a random hold-out sample; their model cards make no accuracy claims.
+- A demo data set and walkthrough (`docs/demo.md`).
+- Research and study tooling in `research/` remains experimental and outside the supported
+  surface.
 
 ### Added
 
+- **Demo:** `docs/demo.md` walks through run, review, finalize, and the report on four cropped
+  fields distributed as a release download, with a finished example project and a reference
+  snapshot.
 - **Reviewer workspace:** panels can be hidden but no longer deleted, so the Workspace menu always
   brings them back; "Restore review workspace" returns to the starting panels, layer toggles, and
   zoom; opening Region or Nuclei review no longer reloads the image; the cohort dashboard opens

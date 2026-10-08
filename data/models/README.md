@@ -1,6 +1,7 @@
 # Models
 
-The v0.3.0.dev0 development workflow exposes one frozen default classifier:
+This folder holds one historical (retired) classifier; current models are release downloads
+(see the README, "Models"):
 
 `rebaseline_tile_v2_p75p90_iib_iia_iix.joblib`
 
