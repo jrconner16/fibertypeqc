@@ -159,6 +159,17 @@ changes the model your project uses. It needs reviewed fibers from at least thre
 class. The comparison is between models on reviewed fibers, which are mostly hard cases; it is
 not an accuracy estimate.
 
+To switch the project to a candidate, and to undo that:
+
+```bash
+uv run python -m fibertypeqc promote myproject/ logistic      # add --override if not recommended
+uv run python -m fibertypeqc promote myproject/ --rollback
+```
+
+Switching re-types every section on its existing mask (no segmentation), keeps your review
+decisions, archives the previous outputs under `myproject/models/history/`, and records the change
+in `myproject/models/model_history.csv`.
+
 ## Check a run against a reference
 
 To confirm that a later run (new code version, another computer) reproduces an earlier one, freeze

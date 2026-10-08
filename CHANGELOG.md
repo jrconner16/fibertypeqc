@@ -11,6 +11,15 @@
   `PROJECT/models/improve_<time>/`. A declared recipe (`manifests/improver/recipe.v1.yaml`) fixes
   the candidates and the promotion rule; the command recommends a candidate only if the rule is
   met and never changes the active model.
+- **Explicit promotion and rollback:** `python -m fibertypeqc promote PROJECT CANDIDATE` switches a
+  project to a candidate from `improve`. It refuses a candidate the improver did not recommend
+  unless `--override` is given (recorded), archives the current outputs and review state,
+  re-types every section on its existing mask, restates review decisions against the new calls
+  without changing any reviewer label, rebuilds QC, and logs the change in
+  `models/model_history.csv`. `promote PROJECT --rollback` restores the previous model's outputs,
+  QC, and review state exactly.
+- `--model` accepts an unregistered model file when a manifest of the same name beside it records
+  the file's SHA-256 (how candidates are run).
 - **Blind reference labelling:** `python -m fibertypeqc review PROJECT --blind --reviewer NAME`
   opens the reviewer with model calls, confidence, QC reasons, the call overlay, and the cohort
   dashboard withheld. Labels are saved per reviewer under `review/reference/<reviewer>/`, apart
