@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Blind reference labelling:** `python -m fibertypeqc review PROJECT --blind --reviewer NAME`
+  opens the reviewer with model calls, confidence, QC reasons, the call overlay, and the cohort
+  dashboard withheld. Labels are saved per reviewer under `review/reference/<reviewer>/`, apart
+  from review decisions, and are never applied at finalization. Plans: every fiber in the current
+  section, or a reproducible random sample.
+- **Review time:** every review session (blind or guided) writes a row to `review_sessions.csv`
+  beside its review state with decision count and active seconds; gaps longer than two minutes
+  are not counted, and the cutoff is recorded.
+- The reviewer only offers the classes the project's model produces (a three-class project no
+  longer shows a Type I button).
+
 ## v0.3.0
 
 ### Release summary
