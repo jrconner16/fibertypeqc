@@ -20,6 +20,10 @@
   QC, and review state exactly.
 - `--model` accepts an unregistered model file when a manifest of the same name beside it records
   the file's SHA-256 (how candidates are run).
+- **Evaluation roles:** an optional `evaluation_roles.csv` (`mouse_id`, `role` = `pool` or `test`)
+  beside `fibertypeqc_project.yaml` keeps training and test mice apart: blind labelling only
+  offers test mice, guided review only pool mice, and the model improver trains only on pool
+  mice. Without the file nothing is restricted.
 - **Blind reference labelling:** `python -m fibertypeqc review PROJECT --blind --reviewer NAME`
   opens the reviewer with model calls, confidence, QC reasons, the call overlay, and the cohort
   dashboard withheld. Labels are saved per reviewer under `review/reference/<reviewer>/`, apart

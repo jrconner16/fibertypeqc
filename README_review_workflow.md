@@ -44,6 +44,9 @@ workspace** brings back closed docks):
    **Label every fiber in my drawn fields**. `python -m fibertypeqc reference PROJECT` then
    exports all reviewers' labels, field coverage, reviewer agreement, and review time to
    `reference_export/`.
+   For an evaluation, add `evaluation_roles.csv` (`mouse_id`, `role` = `pool` or `test`) beside
+   `fibertypeqc_project.yaml`: blind labelling is then limited to test mice, and guided review
+   and `improve` to pool mice.
 4. **Regions** — draw a polygon in the yellow *Region shapes* layer, pick a domain and action, and
    apply. *Exclude all analysis* / *ignore fiber typing* removes the fibers whose centers fall
    inside (folds, tears, bad staining); *unresolved* marks them unresolved. **Analysis ROI** with a

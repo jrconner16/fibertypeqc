@@ -27,6 +27,7 @@ from sklearn.preprocessing import StandardScaler
 from fibertypeqc.artifacts import file_sha256, git_commit
 from src.fiber_type_labels import normalize_review_label
 from src.review.project import Project
+from src.review.roles import POOL, allowed_images
 from src.review.schemas import ObjectReviewStatus
 from src.review.session import ReviewSession
 from src.review.storage import atomic_write_dataframe
@@ -261,6 +262,12 @@ def improve(
     classes = [str(value) for value in base_manifest["outputs"]]
     feature_names = [str(value) for value in base_manifest["features"]]
     labels, skipped = review_labels(session, classes)
+    pool_images = allowed_images(project, POOL)
+    if pool_images is not None:
+        # Test mice are never trained on, even if someone reviewed them.
+        outside = ~labels["image_id"].isin(pool_images)
+        skipped["not_pool_mice"] = int(outside.sum())
+        labels = labels[~outside]
     table = build_training_table(project, labels, features_by_image, feature_names)
     counts = table["label"].value_counts().reindex(classes, fill_value=0)
     minimum = int(recipe["minimum_labels_per_class"])
