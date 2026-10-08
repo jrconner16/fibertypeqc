@@ -106,6 +106,7 @@ class GuidedReviewWidget(QWidget):
             button = QToolButton()
             button.setText(label)
             button.clicked.connect(callback)
+            button.setVisible(not (blind and label == "Cohort"))  # the dashboard shows results
             navigator.addWidget(button)
         navigator.addStretch(1)
         self.navigator = navigator
@@ -129,8 +130,7 @@ class GuidedReviewWidget(QWidget):
         self.start_flagged_button = QPushButton("Review flagged fibers")
         self.review_section_button = QPushButton("Review this section")
         self.cohort_qc_button = QPushButton("View cohort QC")
-        self.change_plan_button = QToolButton()
-        self.change_plan_button.setText("Change review plan")
+        self.change_plan_button = QPushButton("Change review plan")
         self.details = QLabel()
         self.details.setWordWrap(True)
         self.save_status = QLabel()
@@ -139,9 +139,20 @@ class GuidedReviewWidget(QWidget):
         self.status.setWordWrap(True)
         self.undo_button = QPushButton("Undo last decision")
         self.undo_button.setEnabled(False)
+        class_keys = " · ".join(
+            f"{key} {name}"
+            for key, name, value in (
+                ("1", "I", "i"),
+                ("2", "IIa", "iia"),
+                ("3", "IIb", "iib"),
+                ("4", "IIx", "iix"),
+            )
+            if value in self.classes
+        )
         self.shortcut_label = QLabel(
-            "Shortcuts: ←/→ navigate · F center fiber · K keep model · "
-            "1 I · 2 IIa · 3 IIb · 4 IIx · X exclude · U undo"
+            "Shortcuts: ←/→ navigate · F center fiber · "
+            + ("" if blind else "K keep model · ")
+            + f"{class_keys} · X exclude · U undo"
         )
         self.shortcut_label.setWordWrap(True)
         self.legend_label = QLabel(
@@ -151,7 +162,7 @@ class GuidedReviewWidget(QWidget):
         self.legend_label.setWordWrap(True)
         self.legend_label.setVisible(not blind)
 
-        self.plan_group = QGroupBox("What needs attention?")
+        self.plan_group = QGroupBox("Labelling plan" if blind else "What needs attention?")
         plan_layout = QVBoxLayout(self.plan_group)
         plan_layout.addWidget(self.plan_message)
         plan_layout.addWidget(self.start_flagged_button)
@@ -543,8 +554,9 @@ class GuidedReviewWidget(QWidget):
     def refresh(self, *, notify: bool = False) -> None:
         item = self.controller.current_item
         count = len(self.controller.queue)
-        self.plan_group.setVisible(not self._review_started)
-        self.change_plan_button.setVisible(self._review_started)
+        # In blind mode the three labelling plans stay on screen, so switching is one click.
+        self.plan_group.setVisible(self.blind or not self._review_started)
+        self.change_plan_button.setVisible(self._review_started and not self.blind)
         self.advanced_toggle.setVisible(self._review_started)
         self.advanced_group.setVisible(self._review_started and self.advanced_toggle.isChecked())
         saved_count = len(self.controller.session.object_decisions)
@@ -575,7 +587,9 @@ class GuidedReviewWidget(QWidget):
             f"{self.controller.session.queue_position + 1}/{count}"
         )
         self.plan_message.setText(
-            f"{count} fibers are in the current plan. Start with flagged fibers, "
+            f"{count} fibers are in the current plan. Switch plans with the buttons below."
+            if self.blind
+            else f"{count} fibers are in the current plan. Start with flagged fibers, "
             "or review every fiber in the current section."
         )
         if self.blind:
