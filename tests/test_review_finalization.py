@@ -435,8 +435,11 @@ def test_guided_review_finalize_button_calls_back(tmp_path, monkeypatch):
     widget.finalize_button.click()
     application.processEvents()
     hidden = GuidedReviewWidget(project, FiberTypeReviewController(session))
+    widget.start_section_review()  # the plan box hides once a review is under way
 
     assert calls == [1]
+    assert not widget.plan_group.isVisibleTo(widget)
+    assert widget.finalize_button.isVisibleTo(widget)
     assert not hidden.finalize_button.isVisibleTo(hidden)
     for item in (widget, hidden):
         item.close()
