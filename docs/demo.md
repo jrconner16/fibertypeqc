@@ -58,6 +58,10 @@ Choose **Review flagged fibers**. Each fiber is outlined in the color of its cur
 (IIa green, IIb magenta, IIx orange), over the raw stain channels. Keys: `K` keep the model call,
 `2`/`3`/`4` = IIa/IIb/IIx, `X` exclude, Left/Right to move, `U` undo. Decisions save as you go.
 
+![The review workspace on a demo field: fibers outlined by their current call over the raw stain channels](../demo_screenshots/demo_review_workspace.png)
+
+*The review workspace on `demo_section_a`. Panel layout may differ slightly between versions.*
+
 Fibers cut off by the image edge are not queued: you cannot judge a fiber you cannot see whole.
 Because these are cropped fields, the demo project also sets `exclude_image_border_fibers: true`,
 which leaves those fibers out of the results (off by default for whole sections).
