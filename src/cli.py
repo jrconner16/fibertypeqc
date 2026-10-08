@@ -511,6 +511,23 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         step = steps.add_parser(name, help=text)
         step.add_argument("project", type=Path, help="Project folder")
+    promote = steps.add_parser(
+        "promote",
+        help="Switch the project to a candidate model from 'improve' (or undo with --rollback)",
+        description=(
+            "Archive the current outputs and review state, re-type every section with the "
+            "candidate on the existing masks, carry review decisions forward, and record the "
+            "change. Nothing is switched unless you run this."
+        ),
+    )
+    promote.add_argument("project", type=Path, help="Project folder")
+    promote.add_argument("candidate", nargs="?", help="Candidate name (e.g. logistic) or file")
+    promote.add_argument(
+        "--override",
+        action="store_true",
+        help="Switch even though 'improve' did not recommend this candidate (recorded)",
+    )
+    promote.add_argument("--rollback", action="store_true", help="Undo the most recent switch")
     snapshot = steps.add_parser(
         "snapshot",
         help="Freeze the batch outputs as a reference, or check this run against one",
@@ -574,6 +591,19 @@ def main(argv: list[str] | None = None) -> int:
             return command_prepare(project)
         if args.step == "review":
             return command_review(project, extra)
+        if args.step == "promote":
+            arguments = ["--project-root", str(project.root), "--panel-config", str(project.panel)]
+            if args.rollback:
+                return _run("promote_model", [*arguments, "--rollback"])
+            if args.candidate:
+                arguments += ["--candidate", args.candidate]
+            if args.override:
+                arguments.append("--override")
+            code = _run("promote_model", arguments)
+            if code != 0:
+                return code
+            # Project QC is computed from the model's outputs, so it is rebuilt for the new model.
+            return _run("generate_review_qc", ["--project", str(project.review_project)])
         if args.step == "improve":
             arguments = [
                 "--project", str(project.review_project),

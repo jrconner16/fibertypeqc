@@ -104,7 +104,9 @@ def resolve_model_argument(
     """Resolve ``--model``: a registered model ID or a path to a registered model file.
 
     A file is identified by its SHA-256 against the registry, so it is verified and uses the
-    registered manifest (including pinned feature extraction) regardless of its file name.
+    registered manifest (including pinned feature extraction) regardless of its file name. A file
+    that is not registered is accepted only with a manifest of the same name beside it
+    (``model.joblib`` + ``model.yaml``) that records the file's SHA-256.
     """
     if not _looks_like_path(value):
         return resolve_model(value, repo_root=repo_root, model_root=model_root)
@@ -124,6 +126,21 @@ def resolve_model_argument(
                 artifact_path=path.resolve(),
                 manifest_path=repo_root / str(entry["manifest"]),
             )
+    # A locally built model (for example an improver candidate) is identified by the manifest
+    # saved beside it, provided that manifest records this exact file.
+    sidecar = path.with_suffix(".yaml")
+    if sidecar.is_file():
+        raw = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
+        if isinstance(raw, dict) and str(raw.get("artifact_sha256", "")).lower() == digest:
+            return ResolvedModel(
+                model_id=str(raw["model_id"]),
+                artifact_path=path.resolve(),
+                manifest_path=sidecar.resolve(),
+            )
+        raise ValueError(
+            f"--model file {path.name} does not match the manifest beside it ({sidecar.name}); "
+            "the model file or its manifest has changed."
+        )
     raise ValueError(
         f"--model file {path.name} (sha256 {digest[:12]}…) is not a registered model. "
         f"Registered models: {', '.join(sorted(registered_model_ids(repo_root)))}."
