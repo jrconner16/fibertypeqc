@@ -19,6 +19,14 @@ from src.review.section_selection import SelectionStrategy
 from src.review.session import ReviewSession
 from src.review.storage import load_session
 
+# Layer toggles at startup and after "Restore review workspace"; raw channels are on.
+DEFAULT_LAYER_VISIBILITY = {
+    "review_stain_composite": False,
+    "review_fiber_labels": False,
+    "review_fiber_calls": True,
+    "review_fiber_selected_outline": True,
+}
+
 
 def downsample_review_data(
     raw: np.ndarray,
@@ -142,6 +150,16 @@ def main(argv: list[str] | None = None) -> int:
     from src.typing_display import normalize_for_display
 
     viewer = napari.Viewer(title=f"FiberTypeQC project: {project.project_name}")
+
+    def _keep_dock(dock):
+        """Make a panel hide-only: napari's X button deletes a panel, which broke the menu."""
+        try:
+            dock._close_btn = False
+            dock.titleBarWidget().close_button.hide()
+        except AttributeError:
+            pass
+        return dock
+
     widget = CohortDashboardWidget(
         project,
         tables,
@@ -149,12 +167,13 @@ def main(argv: list[str] | None = None) -> int:
         manual_selections=manual,
         session=session,
     )
-    dashboard_dock = viewer.window.add_dock_widget(widget, area="right", name="Cohort Dashboard")
+    # Tabbed with the layer panels so the dashboard gets the full column height.
+    dashboard_dock = _keep_dock(
+        viewer.window.add_dock_widget(widget, area="right", name="Cohort Dashboard", tabify=True)
+    )
     channel_map_widget = ChannelMapWidget()
-    channel_map_dock = viewer.window.add_dock_widget(
-        channel_map_widget,
-        area="right",
-        name="Channel Map",
+    channel_map_dock = _keep_dock(
+        viewer.window.add_dock_widget(channel_map_widget, area="right", name="Channel Map")
     )
     controller = ImageReviewController(project, tables.image_qc, session)
     nuclear_controller = NuclearReviewController(project, session)
@@ -398,17 +417,13 @@ def main(argv: list[str] | None = None) -> int:
         selected_geometry=_selected_region_geometry,
         regions_changed=_refresh_region_shapes,
     )
-    region_review_dock = viewer.window.add_dock_widget(
-        region_widget,
-        area="left",
-        name="Region Review",
+    region_review_dock = _keep_dock(
+        viewer.window.add_dock_widget(region_widget, area="left", name="Region Review")
     )
     region_review_dock.hide()
     review_widget = ImageReviewWidget(controller, image_changed=show_image)
-    image_review_dock = viewer.window.add_dock_widget(
-        review_widget,
-        area="left",
-        name="Image Review (advanced)",
+    image_review_dock = _keep_dock(
+        viewer.window.add_dock_widget(review_widget, area="left", name="Image Review (advanced)")
     )
     image_review_dock.hide()
 
@@ -452,11 +467,15 @@ def main(argv: list[str] | None = None) -> int:
         review_changed=_refresh_nuclei_layers,
         add_enabled=args.display_downsample == 1,
     )
-    nuclear_review_dock = viewer.window.add_dock_widget(
-        nuclear_widget,
-        area="left",
-        name="Nuclei Review",
+    nuclear_review_dock = _keep_dock(
+        viewer.window.add_dock_widget(nuclear_widget, area="left", name="Nuclei Review")
     )
+    has_nuclei = any("nuclei_labels" in image.outputs for image in project.images)
+
+    def _ensure_image_loaded() -> None:
+        # Reloading rebuilds every layer and resets the layer toggles; only do it when needed.
+        if loaded_image_id != controller.current_image_id:
+            show_image(controller.current_image_id)
     nuclear_review_dock.hide()
 
     def open_dashboard() -> None:
@@ -473,17 +492,25 @@ def main(argv: list[str] | None = None) -> int:
         open_image_review()
 
     def open_region_review() -> None:
-        show_image(controller.current_image_id)
+        _ensure_image_loaded()
         region_review_dock.show()
         region_review_dock.raise_()
 
     def open_nuclei_review() -> None:
+        if not has_nuclei:
+            from napari.utils.notifications import show_info
+
+            show_info("This project has no nuclei segmentation to review.")
+            return
         controller.set_domain(Domain.NUCLEI)
-        show_image(controller.current_image_id)
+        _ensure_image_loaded()
         nuclear_review_dock.show()
         nuclear_review_dock.raise_()
 
     def show_domain(domain: Domain) -> None:
+        if domain is Domain.NUCLEI and not has_nuclei:
+            open_nuclei_review()  # explains that there is nothing to review
+            return
         controller.set_domain(domain)
         review_widget.refresh(notify=True)
         if domain is Domain.NUCLEI:
@@ -519,7 +546,9 @@ def main(argv: list[str] | None = None) -> int:
         show_domain=show_domain,
         focus_current_object=focus_current_object,
     )
-    guided_dock = viewer.window.add_dock_widget(guided_widget, area="left", name="Guided Review")
+    guided_dock = _keep_dock(
+        viewer.window.add_dock_widget(guided_widget, area="left", name="Guided Review")
+    )
     dashboard_dock.hide()
 
     qt_window = getattr(viewer.window, "_qt_window", None)
@@ -529,14 +558,30 @@ def main(argv: list[str] | None = None) -> int:
         workspace_menu.addAction("Show Cohort QC", open_dashboard)
         workspace_menu.addAction("Show Image Controls", open_image_review)
         workspace_menu.addAction("Show Region Review", open_region_review)
-        workspace_menu.addAction("Show Nuclei Review", open_nuclei_review)
+        nuclei_action = workspace_menu.addAction("Show Nuclei Review", open_nuclei_review)
+        nuclei_action.setEnabled(has_nuclei)
         workspace_menu.addAction("Show Channel Map", channel_map_dock.show)
 
         def restore_workspace() -> None:
-            guided_dock.show()
-            guided_dock.raise_()
-            channel_map_dock.show()
-            channel_map_dock.raise_()
+            """Return to the starting layout: panels, layer toggles, and zoom."""
+            for dock in (
+                dashboard_dock,
+                image_review_dock,
+                region_review_dock,
+                nuclear_review_dock,
+            ):
+                dock.setFloating(False)
+                dock.hide()
+            for dock in (guided_dock, channel_map_dock):
+                dock.setFloating(False)
+                dock.show()
+                dock.raise_()
+            for layer in viewer.layers:
+                if layer.name in DEFAULT_LAYER_VISIBILITY:
+                    layer.visible = DEFAULT_LAYER_VISIBILITY[layer.name]
+                elif layer.name.startswith("review_raw_"):
+                    layer.visible = True
+            viewer.reset_view()
 
         workspace_menu.addAction("Restore review workspace", restore_workspace)
         workspace_menu.addSeparator()
