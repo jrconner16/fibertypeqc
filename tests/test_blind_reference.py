@@ -109,3 +109,126 @@ def test_class_buttons_follow_the_projects_classes(tmp_path, monkeypatch):
     application.processEvents()
     widget.close()
     widget.deleteLater()
+
+
+def _blind_session(project, reviewer, labels, fields=()):
+    """Save a reviewer's blind labels ({fiber_id: label}) and optional field polygons."""
+    from src.review.finalization import image_input_fingerprints
+    from src.review.schemas import FiberTypeDecision, ObjectReviewStatus, RegionAnnotation
+    from src.review.session import ReviewSession
+    from src.review.storage import save_session
+    from tests.test_review_finalization import MODEL_CALLS
+
+    view = project.for_reference(reviewer)
+    session = ReviewSession(
+        project_id=project.project_id, model_version=project.model_version, reviewer=reviewer
+    )
+    session.record_input_fingerprints("one", image_input_fingerprints(project.images[0]))
+    for fiber_id, label in labels.items():
+        session.record_fiber_type_decision(
+            FiberTypeDecision(
+                image_id="one",
+                fiber_id=fiber_id,
+                model_fiber_type=MODEL_CALLS[fiber_id],
+                reviewed_fiber_type=label,
+                review_status=ObjectReviewStatus.CORRECTED,
+                queue_source="full_audit",
+                reviewer=reviewer,
+            )
+        )
+    for index, (x0, y0, x1, y1) in enumerate(fields, start=1):
+        ring = [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]
+        session.add_region(
+            RegionAnnotation(
+                region_id=f"{reviewer}-{index}",
+                image_id="one",
+                geometry={"type": "Polygon", "coordinates": [ring]},
+                domain="fiber_typing",
+                action="analysis_roi",
+                reason_code="",
+                kind="analysis_roi",
+                name=f"field_{index}",
+                role="reference_field",
+            )
+        )
+    save_session(view.review_state_path, session)
+    return view
+
+
+def test_reference_export_reports_fields_agreement_and_keeps_model_separate(tmp_path):
+    from src.review.reference import export_reference
+
+    project = _project(tmp_path)
+    # Fibers 1 and 2 sit in the top half (y < 10); the field covers exactly those two.
+    _blind_session(project, "a", {1: "iia", 2: "iix", 3: "i"}, fields=[(0, 0, 20, 10)])
+    _blind_session(project, "b", {1: "iia", 2: "iib"}, fields=[(0, 0, 20, 10), (0, 10, 20, 20)])
+
+    manifest = export_reference(project, tmp_path / "reference_export")
+    labels = pd.read_csv(tmp_path / "reference_export" / "reference_labels.csv")
+    fields = pd.read_csv(tmp_path / "reference_export" / "reference_fields.csv")
+    agreement = pd.read_csv(tmp_path / "reference_export" / "reviewer_agreement.csv")
+
+    assert manifest["reviewers"] == {"a": 3, "b": 2}
+    assert manifest["n_fibers_labelled"] == 3
+    a1 = labels[(labels.reviewer == "a") & (labels.fiber_id == 1)].iloc[0]
+    assert (a1.reference_label, a1.model_fiber_type, a1.sampling) == (
+        "iia",
+        "iia",
+        "reference_field",
+    )
+    a3 = labels[(labels.reviewer == "a") & (labels.fiber_id == 3)].iloc[0]
+    assert a3.sampling == "whole_section" and bool(a3.inputs_unchanged)
+    assert labels["blind"].all()
+    by_field = fields.set_index(["reviewer", "field_name"])
+    assert bool(by_field.loc[("a", "field_1"), "exhaustive"])
+    assert bool(by_field.loc[("b", "field_1"), "exhaustive"])
+    assert not bool(by_field.loc[("b", "field_2"), "exhaustive"])  # fibers 3 and 4 unlabelled
+    assert agreement.loc[0, "n_shared_fibers"] == 2
+    assert agreement.loc[0, "agreement"] == 0.5
+    assert agreement.loc[0, "cohen_kappa"] == pytest.approx(1 / 3)
+    assert not project.review_state_path.exists()
+
+
+def test_reference_export_needs_blind_labels(tmp_path):
+    from src.review.reference import export_reference
+
+    with pytest.raises(ValueError, match="No blind reference labels"):
+        export_reference(_project(tmp_path), tmp_path / "out")
+
+
+def test_blind_field_queue_and_saved_sample_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    qtpy = pytest.importorskip("qtpy.QtWidgets")
+    from src.review.fiber_type_review import FiberTypeReviewController
+    from src.review.guided_review_widget import GuidedReviewWidget
+    from src.review.session import ReviewSession
+
+    application = qtpy.QApplication.instance() or qtpy.QApplication([])
+    reference = _project(tmp_path).for_reference("rev")
+
+    def new_widget():
+        session = ReviewSession(project_id=reference.project_id, model_version="model.v1")
+        session.current_image_id = "one"
+        return GuidedReviewWidget(
+            reference,
+            FiberTypeReviewController(session),
+            blind=True,
+            reference_field_fibers=lambda image_id, capture: {2, 4},
+        )
+
+    widget = new_widget()
+    widget.start_field_review()
+    assert [item.fiber_id for item in widget.controller.queue] == [2, 4]
+    assert widget.controller.session.active_queue == "reference_fields"
+    widget.seed_spin.setValue(7)
+    widget.sample_spin.setValue(3)
+    widget.start_random_sample()
+    sample = [item.fiber_id for item in widget.controller.queue]
+    widget.close()
+
+    reopened = new_widget()
+    reopened.start_random_sample()
+    application.processEvents()
+    assert (reopened.seed_spin.value(), reopened.sample_spin.value()) == (7, 3)
+    assert [item.fiber_id for item in reopened.controller.queue] == sample
+    reopened.close()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 
 import pandas as pd
@@ -51,6 +52,7 @@ class GuidedReviewWidget(QWidget):
         show_domain: Callable[[Domain], None] | None = None,
         focus_current_object: Callable[[], None] | None = None,
         blind: bool = False,
+        reference_field_fibers: Callable[[str, bool], set[int]] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -58,6 +60,8 @@ class GuidedReviewWidget(QWidget):
         self.controller = controller
         # Blind reference labelling: nothing derived from the model is shown or offered.
         self.blind = blind
+        # (image_id, capture drawn shapes?) -> IDs of fibers inside the reviewer's drawn fields.
+        self.reference_field_fibers = reference_field_fibers
         self.object_changed = object_changed
         self.show_dashboard = show_dashboard
         self.show_section = show_section
@@ -160,6 +164,15 @@ class GuidedReviewWidget(QWidget):
         self.random_sample_button.setVisible(blind)
         self.random_sample_button.clicked.connect(self.start_random_sample)
         plan_layout.addWidget(self.random_sample_button)
+        self.field_button = QPushButton("Label every fiber in my drawn fields")
+        self.field_button.setToolTip(
+            "Draw one or more shapes in the cyan 'review_analysis_rois' layer on this section, "
+            "then click here. Every fiber whose center is inside a shape is queued, and the "
+            "shapes are saved as reference fields."
+        )
+        self.field_button.setVisible(blind and reference_field_fibers is not None)
+        self.field_button.clicked.connect(self.start_field_review)
+        plan_layout.addWidget(self.field_button)
         plan_layout.addWidget(self.review_section_button)
         plan_layout.addWidget(self.cohort_qc_button)
         self.cohort_qc_button.setVisible(not blind)
@@ -293,6 +306,7 @@ class GuidedReviewWidget(QWidget):
                 self._add_shortcut(key, lambda value=fiber_type: self._record_type(value))
         self._add_shortcut("X", lambda: self._record_special(ObjectReviewStatus.EXCLUDED))
         self._add_shortcut("U", self.undo)
+        self._load_sample_settings()
         self._restore_saved_queue()
         self.tutorial_group.setVisible(not self._tutorial_seen())
         self.refresh()
@@ -310,6 +324,27 @@ class GuidedReviewWidget(QWidget):
         self._review_started = True
         self._set_queue(QueueSource.RANDOM_AUDIT)
         self.status.setText("Started a random sample.")
+
+    def _field_queue(self, capture: bool) -> tuple:
+        image_id = self.controller.session.current_image_id
+        if not image_id or self.reference_field_fibers is None:
+            return ()
+        inside = self.reference_field_fibers(image_id, capture)
+        rows = self.rows[self.rows["image_id"].eq(image_id) & self.rows["fiber_id"].isin(inside)]
+        return build_fiber_type_queue(rows, QueueSource.FULL_AUDIT)
+
+    def start_field_review(self) -> None:
+        queue = self._field_queue(capture=True)
+        if not queue:
+            self.status.setText(
+                "No fibers found in drawn fields. Draw a shape in the 'review_analysis_rois' "
+                "layer on this section first."
+            )
+            return
+        self._review_started = True
+        self.controller.set_queue(queue, "reference_fields")
+        self.status.setText(f"Started labelling {len(queue)} fibers in the drawn fields.")
+        self.refresh(notify=True)
 
     def start_section_review(self) -> None:
         self._review_started = True
@@ -331,6 +366,13 @@ class GuidedReviewWidget(QWidget):
             self._set_queue(
                 source,
                 notify=False,
+                position=self.controller.session.queue_position,
+            )
+            return
+        if name == "reference_fields":
+            self.controller.set_queue(
+                self._field_queue(capture=False),
+                name,
                 position=self.controller.session.queue_position,
             )
             return
@@ -408,6 +450,8 @@ class GuidedReviewWidget(QWidget):
         notify: bool = True,
         position: int = 0,
     ) -> None:
+        if source is QueueSource.RANDOM_AUDIT:
+            self._save_sample_settings()
         queue = build_fiber_type_queue(
             self.rows,
             source,
@@ -420,6 +464,35 @@ class GuidedReviewWidget(QWidget):
         self.queue_combo.setCurrentText(source.value)
         self.queue_combo.blockSignals(False)
         self.refresh(notify=notify)
+
+    @property
+    def _sample_settings_path(self):
+        return self.project.review_directory / "random_sample_settings.json"
+
+    def _save_sample_settings(self) -> None:
+        self._sample_settings_path.parent.mkdir(parents=True, exist_ok=True)
+        self._sample_settings_path.write_text(
+            json.dumps(
+                {
+                    "seed": self.seed_spin.value(),
+                    "sample_size": self.sample_spin.value(),
+                    "scope": self.scope_combo.currentText(),
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def _load_sample_settings(self) -> None:
+        """Restore the last random sample's settings so reopening rebuilds the same sample."""
+        if not self._sample_settings_path.is_file():
+            return
+        try:
+            saved = json.loads(self._sample_settings_path.read_text(encoding="utf-8"))
+            self.seed_spin.setValue(int(saved["seed"]))
+            self.sample_spin.setValue(int(saved["sample_size"]))
+            self.scope_combo.setCurrentText(str(saved["scope"]))
+        except (ValueError, KeyError, TypeError):
+            return
 
     def _keep_model_call(self) -> None:
         if self.blind:

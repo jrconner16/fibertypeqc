@@ -425,6 +425,61 @@ def main(argv: list[str] | None = None) -> int:
                 viewer.camera.center = tuple(float(values.mean()) for values in coordinates)
         review_widget.refresh()
 
+    def reference_field_fibers(image_id: str, capture: bool) -> set[int]:
+        """Fibers inside the reviewer's drawn reference fields on one section.
+
+        With ``capture``, the shapes currently drawn in the analysis-ROI layer replace this
+        section's saved reference fields first.
+        """
+        import tifffile
+
+        from src.review.reference import (
+            REFERENCE_FIELD_ROLE,
+            fiber_centroids,
+            fibers_by_field,
+            reference_fields,
+        )
+
+        if capture and loaded_image_id == image_id:
+            try:
+                shapes = viewer.layers["review_analysis_rois"]
+            except KeyError:
+                shapes = None
+            if shapes is not None:
+                for region in reference_fields(session, image_id):
+                    region_controller.save(region_controller.remove_region(region.region_id))
+                number = 0
+                for points in shapes.data:
+                    points = np.asarray(points)
+                    if points.ndim != 2 or points.shape[1] != 2 or len(points) < 3:
+                        continue
+                    ring = [
+                        [float(x * args.display_downsample), float(y * args.display_downsample)]
+                        for y, x in points
+                    ]
+                    if ring[0] != ring[-1]:
+                        ring.append(ring[0])
+                    number += 1
+                    region_controller.save(
+                        region_controller.add_region(
+                            image_id=image_id,
+                            geometry={"type": "Polygon", "coordinates": [ring]},
+                            domain=Domain.FIBER_TYPING,
+                            action="analysis_roi",
+                            kind=RegionKind.ANALYSIS_ROI,
+                            name=f"field_{number}",
+                            role=REFERENCE_FIELD_ROLE,
+                        )
+                    )
+                _refresh_region_shapes()
+                region_widget.refresh()
+        fields = reference_fields(session, image_id)
+        labels_path = project.image(image_id).outputs.get("fiber_labels")
+        if not fields or labels_path is None:
+            return set()
+        centroids = fiber_centroids(np.asarray(tifffile.imread(labels_path)))
+        return set(fibers_by_field(fields, centroids))
+
     def focus_current_object() -> None:
         item = guided_widget.controller.current_item
         if item is not None:
@@ -566,6 +621,7 @@ def main(argv: list[str] | None = None) -> int:
         show_domain=show_domain,
         focus_current_object=focus_current_object,
         blind=args.blind,
+        reference_field_fibers=reference_field_fibers if args.blind else None,
     )
     guided_dock = _keep_dock(
         viewer.window.add_dock_widget(guided_widget, area="left", name="Guided Review")
