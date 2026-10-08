@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +58,9 @@ class Project:
     manifest_path: Path
     images: tuple[ProjectImage, ...]
     qc_version: str = ""
+    # Where review state is kept, relative to the project root. Blind reference labelling uses
+    # its own directory per reviewer so it can never mix with (or be applied as) review decisions.
+    review_subdirectory: str = "review"
 
     @property
     def root(self) -> Path:
@@ -64,7 +68,14 @@ class Project:
 
     @property
     def review_directory(self) -> Path:
-        return self.root / "review"
+        return self.root / self.review_subdirectory
+
+    def for_reference(self, reviewer: str) -> Project:
+        """This project with review state redirected to ``reference/<reviewer>/``."""
+        name = re.sub(r"[^A-Za-z0-9_.-]+", "_", reviewer.strip()).strip("._")
+        if not name:
+            raise ValueError("Blind reference review needs a reviewer name (letters or digits)")
+        return replace(self, review_subdirectory=f"reference/{name}")
 
     @property
     def review_state_path(self) -> Path:

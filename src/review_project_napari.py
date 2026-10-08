@@ -95,6 +95,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--reviewer", default="", help="Optional reviewer name stored in events.")
     parser.add_argument(
+        "--blind",
+        action="store_true",
+        help=(
+            "Blind reference labelling: model calls, confidence, and QC reasons are hidden, and "
+            "labels are saved per reviewer under reference/<reviewer>/, separate from review "
+            "decisions and never applied at finalization. Requires --reviewer."
+        ),
+    )
+    parser.add_argument(
         "--display-downsample",
         type=int,
         default=1,
@@ -108,6 +117,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.display_downsample < 1:
         raise ValueError("--display-downsample must be at least 1")
     project = load_project(args.project)
+    if args.blind:
+        if not args.reviewer.strip():
+            raise SystemExit("--blind requires --reviewer NAME")
+        qc_dir = args.qc_dir if args.qc_dir is not None else project.root / "qc"
+        # From here on every save goes to the reviewer's reference directory.
+        project = project.for_reference(args.reviewer)
+        args.qc_dir = qc_dir
     tables = load_dashboard_tables(project, args.qc_dir)
     manual = load_manual_selections(args.manual_selection)
     session = (
@@ -149,7 +165,8 @@ def main(argv: list[str] | None = None) -> int:
     from src.review.storage import save_session
     from src.typing_display import normalize_for_display
 
-    viewer = napari.Viewer(title=f"FiberTypeQC project: {project.project_name}")
+    title = "FiberTypeQC BLIND reference labelling" if args.blind else "FiberTypeQC project"
+    viewer = napari.Viewer(title=f"{title}: {project.project_name}")
 
     def _keep_dock(dock):
         """Make a panel hide-only: napari's X button deletes a panel, which broke the menu."""
@@ -332,7 +349,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         if labels is not None:
             viewer.add_labels(labels, name="review_fiber_labels", opacity=0.25, visible=False)
-            _add_call_overlay(image, labels)
+            if not args.blind:
+                _add_call_overlay(image, labels)
             viewer.add_image(
                 np.zeros((*labels.shape, 4), dtype=np.float32),
                 name="review_fiber_selected_outline",
@@ -479,6 +497,8 @@ def main(argv: list[str] | None = None) -> int:
     nuclear_review_dock.hide()
 
     def open_dashboard() -> None:
+        if args.blind:
+            return
         dashboard_dock.show()
         dashboard_dock.raise_()
 
@@ -542,9 +562,10 @@ def main(argv: list[str] | None = None) -> int:
         show_section=show_section,
         show_region=open_region_review,
         fiber_qc=tables.fiber_qc,
-        finalize_requested=finalize_and_open_report,
+        finalize_requested=None if args.blind else finalize_and_open_report,
         show_domain=show_domain,
         focus_current_object=focus_current_object,
+        blind=args.blind,
     )
     guided_dock = _keep_dock(
         viewer.window.add_dock_widget(guided_widget, area="left", name="Guided Review")
@@ -555,7 +576,8 @@ def main(argv: list[str] | None = None) -> int:
     if qt_window is not None:
         workspace_menu = qt_window.menuBar().addMenu("Workspace")
         workspace_menu.addAction("Show Guided Review", guided_dock.show)
-        workspace_menu.addAction("Show Cohort QC", open_dashboard)
+        cohort_action = workspace_menu.addAction("Show Cohort QC", open_dashboard)
+        cohort_action.setEnabled(not args.blind)  # the dashboard shows model results
         workspace_menu.addAction("Show Section Review", open_image_review)
         workspace_menu.addAction("Show Region Review", open_region_review)
         nuclei_action = workspace_menu.addAction("Show Nuclei Review", open_nuclei_review)
@@ -602,7 +624,10 @@ def main(argv: list[str] | None = None) -> int:
 
         workspace_menu.addAction("Restore review workspace", restore_workspace)
         workspace_menu.addSeparator()
-        workspace_menu.addAction("Finalize and build report", finalize_and_open_report)
+        finalize_action = workspace_menu.addAction(
+            "Finalize and build report", finalize_and_open_report
+        )
+        finalize_action.setEnabled(not args.blind)
     napari.run()
     return 0
 

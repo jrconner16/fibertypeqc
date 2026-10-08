@@ -31,6 +31,7 @@ from src.review.queues import (
     load_fiber_type_rows,
 )
 from src.review.schemas import Domain, ObjectReviewStatus, Scope
+from src.review.timing import ReviewTimer
 
 
 class GuidedReviewWidget(QWidget):
@@ -49,11 +50,14 @@ class GuidedReviewWidget(QWidget):
         finalize_requested: Callable[[], None] | None = None,
         show_domain: Callable[[Domain], None] | None = None,
         focus_current_object: Callable[[], None] | None = None,
+        blind: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.project = project
         self.controller = controller
+        # Blind reference labelling: nothing derived from the model is shown or offered.
+        self.blind = blind
         self.object_changed = object_changed
         self.show_dashboard = show_dashboard
         self.show_section = show_section
@@ -61,12 +65,30 @@ class GuidedReviewWidget(QWidget):
         self.show_domain = show_domain
         self.focus_current_object = focus_current_object
         self.rows = load_fiber_type_rows(project, fiber_qc)
+        # Only offer the classes this project's model produces (class names only; no calls).
+        self.classes = set(self.rows["model_fiber_type"].astype(str).str.lower()) & {
+            "i",
+            "iia",
+            "iib",
+            "iix",
+        } or {"i", "iia", "iib", "iix"}
+        self.timer = ReviewTimer(
+            project.review_directory,
+            reviewer=controller.session.reviewer,
+            mode="blind_reference" if blind else "guided_review",
+        )
         self._review_started = bool(self.controller.session.active_queue)
         self._settings = QSettings("FiberTypeQC", "FiberTypeQC")
         self.setMinimumWidth(410)
 
         self.context = QLabel()
         self.context.setWordWrap(True)
+        self.blind_banner = QLabel(
+            "BLIND reference labelling: model calls are hidden. Labels are saved separately "
+            "for this reviewer and are not applied to results."
+        )
+        self.blind_banner.setWordWrap(True)
+        self.blind_banner.setVisible(blind)
         self.navigator_group = QGroupBox("Navigate review")
         navigator = QHBoxLayout(self.navigator_group)
         for label, callback in (
@@ -123,13 +145,24 @@ class GuidedReviewWidget(QWidget):
         )
         self.legend_label.setTextFormat(Qt.RichText)
         self.legend_label.setWordWrap(True)
+        self.legend_label.setVisible(not blind)
 
         self.plan_group = QGroupBox("What needs attention?")
         plan_layout = QVBoxLayout(self.plan_group)
         plan_layout.addWidget(self.plan_message)
         plan_layout.addWidget(self.start_flagged_button)
+        self.start_flagged_button.setVisible(not blind)
+        self.random_sample_button = QPushButton("Label a random sample")
+        self.random_sample_button.setToolTip(
+            "A reproducible random sample across the project; change its size, seed, and scope "
+            "under Advanced review options."
+        )
+        self.random_sample_button.setVisible(blind)
+        self.random_sample_button.clicked.connect(self.start_random_sample)
+        plan_layout.addWidget(self.random_sample_button)
         plan_layout.addWidget(self.review_section_button)
         plan_layout.addWidget(self.cohort_qc_button)
+        self.cohort_qc_button.setVisible(not blind)
         self.finalize_button = QPushButton("Finalize and build report")
         self.finalize_button.setToolTip(
             "Apply your decisions and exclusions, write the result tables, and open the report. "
@@ -145,6 +178,7 @@ class GuidedReviewWidget(QWidget):
         decision_layout.addWidget(self.legend_label)
         primary = QHBoxLayout()
         keep = QPushButton("Keep model call (K)")
+        keep.setVisible(not blind)
         primary.addWidget(keep)
         for label, fiber_type in (
             ("I (1)", "i"),
@@ -156,6 +190,7 @@ class GuidedReviewWidget(QWidget):
             button.clicked.connect(
                 lambda _checked=False, value=fiber_type: self._record_type(value)
             )
+            button.setVisible(fiber_type in self.classes)
             primary.addWidget(button)
         exclude = QPushButton("Exclude (X)")
         exclude.setToolTip("Leave this fiber out of the results (damaged, cut off, not a fiber).")
@@ -187,7 +222,14 @@ class GuidedReviewWidget(QWidget):
             advanced_actions.addWidget(button)
         advanced_layout.addLayout(advanced_actions)
         self.queue_combo = QComboBox()
-        self.queue_combo.addItems([source.value for source in QueueSource])
+        self.queue_combo.addItems(
+            [
+                source.value
+                for source in QueueSource
+                # Every other queue is ordered by model confidence or QC flags.
+                if not blind or source in (QueueSource.RANDOM_AUDIT, QueueSource.FULL_AUDIT)
+            ]
+        )
         self.seed_spin = QSpinBox()
         self.seed_spin.setRange(0, 2_147_483_647)
         self.sample_spin = QSpinBox()
@@ -212,6 +254,7 @@ class GuidedReviewWidget(QWidget):
         navigation.addWidget(next_button)
 
         layout = QVBoxLayout(self)
+        layout.addWidget(self.blind_banner)
         layout.addWidget(self.context)
         layout.addWidget(self.navigator_group)
         layout.addWidget(self.tutorial_group)
@@ -243,11 +286,11 @@ class GuidedReviewWidget(QWidget):
         self._add_shortcut("Left", lambda: self._move(-1))
         self._add_shortcut("Right", lambda: self._move(1))
         self._add_shortcut("F", self._focus_current_object)
-        self._add_shortcut("K", self._keep_model_call)
-        self._add_shortcut("1", lambda: self._record_type("i"))
-        self._add_shortcut("2", lambda: self._record_type("iia"))
-        self._add_shortcut("3", lambda: self._record_type("iib"))
-        self._add_shortcut("4", lambda: self._record_type("iix"))
+        if not blind:
+            self._add_shortcut("K", self._keep_model_call)
+        for key, fiber_type in (("1", "i"), ("2", "iia"), ("3", "iib"), ("4", "iix")):
+            if fiber_type in self.classes:
+                self._add_shortcut(key, lambda value=fiber_type: self._record_type(value))
         self._add_shortcut("X", lambda: self._record_special(ObjectReviewStatus.EXCLUDED))
         self._add_shortcut("U", self.undo)
         self._restore_saved_queue()
@@ -262,6 +305,11 @@ class GuidedReviewWidget(QWidget):
     def _add_shortcut(self, sequence: str, callback: Callable[[], None]) -> None:
         shortcut = QShortcut(QKeySequence(sequence), self, activated=callback)
         self.shortcuts.append(shortcut)
+
+    def start_random_sample(self) -> None:
+        self._review_started = True
+        self._set_queue(QueueSource.RANDOM_AUDIT)
+        self.status.setText("Started a random sample.")
 
     def start_section_review(self) -> None:
         self._review_started = True
@@ -298,7 +346,9 @@ class GuidedReviewWidget(QWidget):
             return
         # A new session needs a count for the plan chooser, but must not acquire
         # an active queue merely by opening the dock.
-        self.controller.queue = build_fiber_type_queue(self.rows, QueueSource.FLAGGED)
+        self.controller.queue = build_fiber_type_queue(
+            self.rows, QueueSource.FULL_AUDIT if self.blind else QueueSource.FLAGGED
+        )
 
     def _change_plan(self) -> None:
         self._review_started = False
@@ -372,6 +422,8 @@ class GuidedReviewWidget(QWidget):
         self.refresh(notify=notify)
 
     def _keep_model_call(self) -> None:
+        if self.blind:
+            return
         self._record_special(ObjectReviewStatus.ACCEPTED)
 
     def _record_type(self, fiber_type: str) -> None:
@@ -386,6 +438,7 @@ class GuidedReviewWidget(QWidget):
             event = self.controller.decide(fiber_type, status=status)
             self.controller.save(self.project, event)
             self.undo_button.setEnabled(True)
+            self.timer.activity(decision=True)
             self.controller.move(1)
             self.controller.save(self.project)
             self.status.setText("Autosaved. Moved to the next fiber; Undo is available.")
@@ -398,6 +451,7 @@ class GuidedReviewWidget(QWidget):
             event = self.controller.undo_last_decision()
             self.controller.save(self.project, event)
             self.undo_button.setEnabled(False)
+            self.timer.activity()
             self.status.setText("Restored the previous decision.")
             self.refresh(notify=True)
         except ValueError as exc:
@@ -409,6 +463,7 @@ class GuidedReviewWidget(QWidget):
         except ValueError as exc:
             self.status.setText(str(exc))
             return
+        self.timer.activity()
         self.controller.save(self.project)
         self.refresh(notify=True)
 
@@ -426,7 +481,9 @@ class GuidedReviewWidget(QWidget):
         if not self._review_started:
             self.context.setText("Fiber typing · Choose a review plan")
             self.plan_message.setText(
-                f"{count} flagged fibers are ready for review. "
+                "Label every fiber in the current section, or a random sample across the project."
+                if self.blind
+                else f"{count} flagged fibers are ready for review. "
                 "Start there, review the current section, or inspect cohort QC."
             )
             self.decision_group.setEnabled(False)
@@ -448,6 +505,12 @@ class GuidedReviewWidget(QWidget):
             f"{count} fibers are in the current plan. Start with flagged fibers, "
             "or review every fiber in the current section."
         )
+        if self.blind:
+            note = " | cut off by the image edge" if "cut_by_image_edge" in item.reason_code else ""
+            self.details.setText(f"Fiber {item.fiber_id}{note}")
+            if notify and self.object_changed is not None:
+                self.object_changed(item.image_id, item.fiber_id)
+            return
         values = [
             f"Model call: {item.model_fiber_type.upper()}",
             f"Why shown: {describe_reason(item.reason_code)}",

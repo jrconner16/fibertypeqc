@@ -33,6 +33,13 @@ workspace** brings back closed docks):
    this section**, and keep their model call unless the project sets
    `exclude_image_border_fibers: true` (README, "Finalize"). Decisions save immediately and resume where
    you left off.
+   **Blind reference labelling.** To label fibers without seeing the model's answer (for an
+   accuracy reference, or a second reviewer), start the reviewer with
+   `python -m fibertypeqc review PROJECT --blind --reviewer NAME`. Model calls, confidence, QC
+   reasons, the call overlay, and the cohort dashboard are withheld; choose **Review this section**
+   (every fiber) or **Label a random sample**. These labels are saved per reviewer under
+   `review/reference/<reviewer>/`, separately from review decisions, and finalization never uses
+   them. Each session's decision count and active time are written to `review_sessions.csv`.
 4. **Regions** — draw a polygon in the yellow *Region shapes* layer, pick a domain and action, and
    apply. *Exclude all analysis* / *ignore fiber typing* removes the fibers whose centers fall
    inside (folds, tears, bad staining); *unresolved* marks them unresolved. **Analysis ROI** with a
