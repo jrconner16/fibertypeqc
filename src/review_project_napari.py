@@ -556,11 +556,27 @@ def main(argv: list[str] | None = None) -> int:
         workspace_menu = qt_window.menuBar().addMenu("Workspace")
         workspace_menu.addAction("Show Guided Review", guided_dock.show)
         workspace_menu.addAction("Show Cohort QC", open_dashboard)
-        workspace_menu.addAction("Show Image Controls", open_image_review)
+        workspace_menu.addAction("Show Section Review", open_image_review)
         workspace_menu.addAction("Show Region Review", open_region_review)
         nuclei_action = workspace_menu.addAction("Show Nuclei Review", open_nuclei_review)
         nuclei_action.setEnabled(has_nuclei)
         workspace_menu.addAction("Show Channel Map", channel_map_dock.show)
+
+        def _layer_docks() -> list:
+            """napari's own layer list and layer controls panels."""
+            qt_viewer = getattr(viewer.window, "_qt_viewer", None)
+            docks = [
+                getattr(qt_viewer, name, None) for name in ("dockLayerControls", "dockLayerList")
+            ]
+            return [dock for dock in docks if dock is not None]
+
+        def show_layer_panels() -> None:
+            for dock in _layer_docks():
+                dock.setFloating(False)
+                dock.show()
+                dock.raise_()
+
+        workspace_menu.addAction("Show Layers", show_layer_panels)
 
         def restore_workspace() -> None:
             """Return to the starting layout: panels, layer toggles, and zoom."""
@@ -576,6 +592,7 @@ def main(argv: list[str] | None = None) -> int:
                 dock.setFloating(False)
                 dock.show()
                 dock.raise_()
+            show_layer_panels()
             for layer in viewer.layers:
                 if layer.name in DEFAULT_LAYER_VISIBILITY:
                     layer.visible = DEFAULT_LAYER_VISIBILITY[layer.name]
