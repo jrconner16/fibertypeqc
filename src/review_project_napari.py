@@ -220,18 +220,28 @@ def main(argv: list[str] | None = None) -> int:
             )
         return data
 
+    def _set_polygons(layer, polygons: list[np.ndarray]) -> None:
+        # Saved regions are polygons. Assigning them over shapes drawn as rectangles or
+        # ellipses makes napari reject the vertex count, so replace the shapes outright.
+        layer.selected_data = set(range(layer.nshapes))
+        layer.remove_selected()
+        if polygons:
+            layer.add(polygons, shape_type="polygon")
+
     def _refresh_region_shapes() -> None:
         try:
             shapes = viewer.layers["review_region_shapes"]
         except KeyError:
             return
-        shapes.data = _region_shape_data(controller.current_image_id, RegionKind.REVIEW)
+        _set_polygons(shapes, _region_shape_data(controller.current_image_id, RegionKind.REVIEW))
         try:
             rois = viewer.layers["review_analysis_rois"]
         except KeyError:
             rois = None
         if rois is not None:
-            rois.data = _region_shape_data(controller.current_image_id, RegionKind.ANALYSIS_ROI)
+            _set_polygons(
+                rois, _region_shape_data(controller.current_image_id, RegionKind.ANALYSIS_ROI)
+            )
         try:
             coverage = viewer.layers["review_region_coverage"]
         except KeyError:
@@ -453,6 +463,8 @@ def main(argv: list[str] | None = None) -> int:
                     points = np.asarray(points)
                     if points.ndim != 2 or points.shape[1] != 2 or len(points) < 3:
                         continue
+                    if (np.ptp(points, axis=0) < 5).any():
+                        continue  # a stray click, not a field
                     ring = [
                         [float(x * args.display_downsample), float(y * args.display_downsample)]
                         for y, x in points
