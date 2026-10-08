@@ -142,6 +142,7 @@ class GuidedReviewWidget(QWidget):
         self.decision_group = QGroupBox("Current fiber")
         decision_layout = QVBoxLayout(self.decision_group)
         decision_layout.addWidget(self.details)
+        decision_layout.addWidget(self.legend_label)
         primary = QHBoxLayout()
         keep = QPushButton("Keep model call (K)")
         primary.addWidget(keep)
@@ -170,6 +171,8 @@ class GuidedReviewWidget(QWidget):
         self.advanced_toggle.setText("Advanced review options")
         self.advanced_toggle.setCheckable(True)
         self.advanced_toggle.setArrowType(Qt.RightArrow)
+        # Without this the tool button shows only its arrow, with no label.
+        self.advanced_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.advanced_group = QGroupBox()
         advanced_layout = QVBoxLayout(self.advanced_group)
         advanced_actions = QHBoxLayout()
@@ -216,15 +219,14 @@ class GuidedReviewWidget(QWidget):
         layout.addWidget(self.change_plan_button)
         layout.addWidget(self.decision_group)
         layout.addLayout(navigation)
-        layout.addWidget(self.advanced_toggle)
-        layout.addWidget(self.advanced_group)
-        # Outside the plan box, which is hidden once a review is started or resumed.
-        layout.addWidget(self.finalize_button)
         layout.addWidget(self.save_status)
         layout.addWidget(self.status)
-        layout.addWidget(self.shortcut_label)
-        layout.addWidget(self.legend_label)
+        layout.addWidget(self.advanced_toggle)
+        layout.addWidget(self.advanced_group)
         layout.addStretch(1)
+        layout.addWidget(self.shortcut_label)
+        # Outside the plan box, which is hidden once a review is started or resumed.
+        layout.addWidget(self.finalize_button)
 
         self.start_flagged_button.clicked.connect(self.start_flagged_review)
         self.review_section_button.clicked.connect(self.start_section_review)

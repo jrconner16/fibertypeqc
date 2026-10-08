@@ -13,7 +13,7 @@ Default fiber-type model for FiberTypeQC release runs on four-marker panels.
 | Estimator | scikit-learn `RandomForestClassifier` (400 trees, `min_samples_leaf=3`, balanced class weights) |
 | Features | 19 `multiplanel_features.v1` features: fiber area plus mean, p75, p90, high-signal coverage, and two SNR summaries for each of Type I, IIa, and IIb |
 | Manifest | [`manifests/models/quad_four_class_rf_v1.yaml`](../../manifests/models/quad_four_class_rf_v1.yaml) |
-| Artifact | Not distributed in Git. Set `FIBERTYPEQC_MODEL_ROOT` to a directory containing `quad_four_class_rf_v1.joblib`; the pipeline verifies its SHA-256 against the manifest and registry. |
+| Artifact | Not in Git; download it from the [releases page](https://github.com/jrconner16/fibertypeqc/releases). Set `FIBERTYPEQC_MODEL_ROOT` to a directory containing `quad_four_class_rf_v1.joblib`; the pipeline verifies its SHA-256 against the manifest and registry. |
 
 ## Use
 

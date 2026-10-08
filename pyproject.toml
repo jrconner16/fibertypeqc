@@ -1,6 +1,6 @@
 [project]
 name = "fibertypeqc"
-version = "0.3.0.dev0"
+version = "0.3.0"
 description = "Alpha workflow for muscle fiber segmentation, fiber typing, QC review, and CSV export."
 readme = "README.md"
 requires-python = ">=3.11,<3.12"

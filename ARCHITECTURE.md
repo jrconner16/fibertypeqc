@@ -7,7 +7,7 @@ FiberTypeQC is currently a runnable research application, not an installable pac
 small public facade over implementation in `src/`; a packaging rewrite is not part of the current
 cleanup work.
 
-The latest published release is v0.2.0. The working development version is v0.3.0.dev0.
+The latest published release is v0.3.0.
 
 ## Supported workflow
 

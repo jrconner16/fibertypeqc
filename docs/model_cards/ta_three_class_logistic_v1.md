@@ -13,7 +13,7 @@ Fiber-type model for three-marker panels (laminin, Type IIa, Type IIb).
 | Estimator | scikit-learn pipeline: `StandardScaler` then multinomial `LogisticRegression` (`C=1.0`, balanced class weights) |
 | Features | 14 `multiplanel_features.v1` features: mean, p90, high-signal coverage, two SNR summaries, and center and edge means for each of Type IIa and IIb |
 | Manifest | [`manifests/models/ta_three_class_logistic_v1.yaml`](../../manifests/models/ta_three_class_logistic_v1.yaml) |
-| Artifact | Not distributed in Git. Pass the file with `--model PATH`, or set `FIBERTYPEQC_MODEL_ROOT` to a directory containing `ta_three_class_logistic_v1.joblib`; the pipeline verifies its SHA-256 against the manifest and registry. |
+| Artifact | Not in Git; download it from the [releases page](https://github.com/jrconner16/fibertypeqc/releases). Pass the file with `--model PATH`, or set `FIBERTYPEQC_MODEL_ROOT` to a directory containing `ta_three_class_logistic_v1.joblib`; the pipeline verifies its SHA-256 against the manifest and registry. |
 
 ## Use
 

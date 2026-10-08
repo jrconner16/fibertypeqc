@@ -15,14 +15,15 @@ tables and a cohort report:
 
 ## Status
 
-Development version `0.3.0.dev0`, preparing a release candidate. Read this before relying on
-results:
+Version `0.3.0`. Read this before relying on results:
 
 - **Models are panel-specific.** A model only works on the staining panel it was trained on, and
   the pipeline refuses a mismatched panel. The default model, `quad_four_class_rf_v1`, is for
   four-marker panels (laminin, Type I, IIa, IIb; IIx inferred from absent signal).
-- **The default model is not in this repository** because it was trained on unpublished data. You
-  need the model file from the maintainers; the pipeline verifies it by its SHA-256.
+- **Model files are release downloads, not part of this repository.** Get
+  `quad_four_class_rf_v1.joblib` or `ta_three_class_logistic_v1.joblib` from the
+  [releases page](https://github.com/jrconner16/fibertypeqc/releases) and pass the file with
+  `--model` (or name it in the project config); the pipeline verifies it by its SHA-256.
 - **The default model is not yet validated on a random hold-out sample.** See its
   [model card](docs/model_cards/quad_four_class_rf_v1.md). Use it for review-assisted analysis.
 - Without a model for your panel you can still run segmentation, QC, and the synthetic reference.
@@ -191,8 +192,8 @@ Column definitions: [docs/output_schema.md](docs/output_schema.md).
 
 | Model ID | Panel | Classes | Where the file is |
 |---|---|---|---|
-| `quad_four_class_rf_v1` (default) | laminin, Type I, IIa, IIb | I, IIa, IIb, IIx (inferred) | not in the repository; verified by SHA-256 |
-| `ta_three_class_logistic_v1` | laminin, IIa, IIb | IIa, IIb, IIx (inferred) | not in the repository; verified by SHA-256 |
+| `quad_four_class_rf_v1` (default) | laminin, Type I, IIa, IIb | I, IIa, IIb, IIx (inferred) | release download; verified by SHA-256 |
+| `ta_three_class_logistic_v1` | laminin, IIa, IIb | IIa, IIb, IIx (inferred) | release download; verified by SHA-256 |
 | `synthetic_four_class_reference_v1` | laminin, Type I, IIa, IIb | I, IIa, IIb, IIx | in the repository; synthetic test fixture only |
 | `rebaseline_tile_v2_p75p90_iib_iia_iix` | laminin, IIa, IIb | IIa, IIb, IIx (inferred) | in the repository; retired historical model |
 
