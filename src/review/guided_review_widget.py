@@ -31,6 +31,7 @@ from src.review.queues import (
     describe_reason,
     load_fiber_type_rows,
 )
+from src.review.roles import POOL, TEST, allowed_images
 from src.review.schemas import Domain, ObjectReviewStatus, Scope
 from src.review.timing import ReviewTimer
 
@@ -69,6 +70,11 @@ class GuidedReviewWidget(QWidget):
         self.show_domain = show_domain
         self.focus_current_object = focus_current_object
         self.rows = load_fiber_type_rows(project, fiber_qc)
+        # With evaluation roles, blind labelling sees only test mice and guided review only pool
+        # mice, so reference labels and training labels can never come from the same animals.
+        self.allowed_images = allowed_images(project, TEST if blind else POOL)
+        if self.allowed_images is not None:
+            self.rows = self.rows[self.rows["image_id"].isin(self.allowed_images)]
         # Only offer the classes this project's model produces (class names only; no calls).
         self.classes = set(self.rows["model_fiber_type"].astype(str).str.lower()) & {
             "i",
@@ -345,6 +351,8 @@ class GuidedReviewWidget(QWidget):
         return build_fiber_type_queue(rows, QueueSource.FULL_AUDIT)
 
     def start_field_review(self) -> None:
+        if not self._section_allowed():
+            return
         queue = self._field_queue(capture=True)
         if not queue:
             self.status.setText(
@@ -357,7 +365,20 @@ class GuidedReviewWidget(QWidget):
         self.status.setText(f"Started labelling {len(queue)} fibers in the drawn fields.")
         self.refresh(notify=True)
 
+    def _section_allowed(self) -> bool:
+        image_id = self.controller.session.current_image_id
+        if self.allowed_images is None or image_id in self.allowed_images:
+            return True
+        wanted, mode = ("test", "Blind labelling") if self.blind else ("pool", "Guided review")
+        self.status.setText(
+            f"{mode} is limited to {wanted} mice in this project, and this section is not one. "
+            "Choose another section (see evaluation_roles.csv)."
+        )
+        return False
+
     def start_section_review(self) -> None:
+        if not self._section_allowed():
+            return
         self._review_started = True
         image_id = self.controller.session.current_image_id
         section_rows = self.rows[self.rows["image_id"].eq(image_id)]

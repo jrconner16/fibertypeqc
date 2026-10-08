@@ -232,3 +232,36 @@ def test_blind_field_queue_and_saved_sample_settings(tmp_path, monkeypatch):
     assert (reopened.seed_spin.value(), reopened.sample_spin.value()) == (7, 3)
     assert [item.fiber_id for item in reopened.controller.queue] == sample
     reopened.close()
+
+
+def test_roles_limit_blind_labelling_to_test_mice_and_review_to_pool_mice(tmp_path, monkeypatch):
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    qtpy = pytest.importorskip("qtpy.QtWidgets")
+    from src.review.fiber_type_review import FiberTypeReviewController
+    from src.review.guided_review_widget import GuidedReviewWidget
+    from src.review.roles import allowed_images, load_roles
+    from src.review.session import ReviewSession
+
+    application = qtpy.QApplication.instance() or qtpy.QApplication([])
+    folder = tmp_path / "project"
+    (folder / "review").mkdir(parents=True)
+    project = _project(folder / "review", image_ids=("one", "two"))
+    assert load_roles(project) == {} and allowed_images(project, "test") is None
+    (folder / "evaluation_roles.csv").write_text("mouse_id,role\nmouse_a,pool\n")
+    assert allowed_images(project, "pool") == {"one", "two"}
+    assert allowed_images(project, "test") == set()
+
+    session = ReviewSession(project_id=project.project_id, model_version="model.v1")
+    session.current_image_id = "one"
+    blind = GuidedReviewWidget(
+        project.for_reference("r"), FiberTypeReviewController(session), blind=True
+    )
+    blind.start_section_review()
+    application.processEvents()
+    assert blind.rows.empty and not blind.controller.queue
+    assert "limited to test mice" in blind.status.text()
+    blind.close()
+
+    (folder / "evaluation_roles.csv").write_text("mouse_id,role\nmouse_a,sealed\n")
+    with pytest.raises(ValueError, match="'pool' or 'test'"):
+        load_roles(project)

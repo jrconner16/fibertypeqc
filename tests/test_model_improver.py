@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import joblib
@@ -32,7 +33,7 @@ BASE_MANIFEST = {
 }
 
 
-def _fixture(mice=4, per_class=12, wrong_every=3):
+def _fixture(mice=4, per_class=12, wrong_every=3, root=None):
     """Separable synthetic fibers; the 'current model' miscalls every ``wrong_every``-th fiber."""
     rng = np.random.default_rng(0)
     session = ReviewSession(project_id="p", model_version="base_model", reviewer="r")
@@ -62,7 +63,10 @@ def _fixture(mice=4, per_class=12, wrong_every=3):
                 )
         features[image_id] = pd.DataFrame(rows)
     project = SimpleNamespace(
-        project_id="p", image=lambda image_id: SimpleNamespace(mouse_id=mouse_of[image_id])
+        project_id="p",
+        root=root / "review" if root is not None else Path("no_such_project/review"),
+        images=[SimpleNamespace(image_id=i, mouse_id=m) for i, m in mouse_of.items()],
+        image=lambda image_id: SimpleNamespace(mouse_id=mouse_of[image_id]),
     )
     return project, session, features
 
@@ -159,3 +163,18 @@ def test_default_recipe_declares_candidates_and_rule():
 
     assert set(recipe["candidates"]) == {"logistic", "random_forest", "gradient_boosting"}
     assert recipe["promotion_rule"]["minimum_mice"] == 3
+
+
+def test_improver_trains_only_on_pool_mice_when_roles_are_declared(tmp_path):
+    project, session, features = _fixture(mice=5, root=tmp_path)
+    roles = "mouse_id,role\n" + "".join(
+        f"mouse_{n},{'test' if n == 4 else 'pool'}\n" for n in range(5)
+    )
+    (tmp_path / "evaluation_roles.csv").write_text(roles)
+
+    result = improve(project, session, features, BASE_MANIFEST, tmp_path / "run")
+
+    assert result["n_mice"] == 4 and result["n_labels"] == 144
+    assert result["labels_left_out"]["not_pool_mice"] == 36
+    rows = pd.read_csv(tmp_path / "run" / "training_rows.csv")
+    assert "mouse_4" not in set(rows["mouse_id"])
