@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from hashlib import sha256
 
 import pandas as pd
 from qtpy.QtCore import QSettings, Qt
@@ -54,6 +55,7 @@ class GuidedReviewWidget(QWidget):
         focus_current_object: Callable[[], None] | None = None,
         blind: bool = False,
         reference_field_fibers: Callable[[str, bool | str], set[int]] | None = None,
+        show_image: Callable[[str], None] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -63,6 +65,7 @@ class GuidedReviewWidget(QWidget):
         self.blind = blind
         # (image_id, capture drawn shapes?) -> IDs of fibers inside the reviewer's drawn fields.
         self.reference_field_fibers = reference_field_fibers
+        self.show_image = show_image
         self.object_changed = object_changed
         self.show_dashboard = show_dashboard
         self.show_section = show_section
@@ -75,6 +78,15 @@ class GuidedReviewWidget(QWidget):
         self.allowed_images = allowed_images(project, TEST if blind else POOL)
         if self.allowed_images is not None:
             self.rows = self.rows[self.rows["image_id"].isin(self.allowed_images)]
+        # Blind mode never shows section or mouse names (they can carry genotype, age, or
+        # treatment). Sections get neutral numbers in an order unrelated to their names.
+        blind_images = sorted(
+            self.allowed_images
+            if self.allowed_images is not None
+            else {image.image_id for image in project.images},
+            key=lambda image_id: sha256(f"{project.project_id}:{image_id}".encode()).hexdigest(),
+        )
+        self.section_codes = {image_id: n for n, image_id in enumerate(blind_images, start=1)}
         # Only offer the classes this project's model produces (class names only; no calls).
         self.classes = set(self.rows["model_fiber_type"].astype(str).str.lower()) & {
             "i",
@@ -112,7 +124,8 @@ class GuidedReviewWidget(QWidget):
             button = QToolButton()
             button.setText(label)
             button.clicked.connect(callback)
-            button.setVisible(not (blind and label == "Cohort"))  # the dashboard shows results
+            # Blind mode hides every panel that names sections or mice or shows model results.
+            button.setVisible(not blind)
             navigator.addWidget(button)
         navigator.addStretch(1)
         self.navigator = navigator
@@ -195,6 +208,13 @@ class GuidedReviewWidget(QWidget):
         self.auto_field_button.setVisible(blind and reference_field_fibers is not None)
         self.auto_field_button.clicked.connect(self.start_auto_field_review)
         plan_layout.addWidget(self.auto_field_button)
+        self.next_section_button = QPushButton("Go to next section")
+        self.next_section_button.setToolTip(
+            "Open the next section (shown by number only) for field labelling."
+        )
+        self.next_section_button.setVisible(blind and show_image is not None)
+        self.next_section_button.clicked.connect(self.go_to_next_section)
+        plan_layout.addWidget(self.next_section_button)
         self.field_button = QPushButton("Label every fiber in my drawn fields")
         self.field_button.setToolTip(
             "Draw one or more shapes in the orange 'review_analysis_rois' layer on this section, "
@@ -363,6 +383,17 @@ class GuidedReviewWidget(QWidget):
         self._set_queue(QueueSource.RANDOM_AUDIT)
         self.status.setText("Started a random sample.")
 
+    def go_to_next_section(self) -> None:
+        """Open the next section in the neutral blind order."""
+        order = sorted(self.section_codes, key=self.section_codes.get)
+        if not order or self.show_image is None:
+            return
+        current = self.controller.session.current_image_id
+        index = (order.index(current) + 1) % len(order) if current in order else 0
+        self.controller.session.current_image_id = order[index]
+        self.show_image(order[index])
+        self.status.setText(f"Showing section {index + 1} of {len(order)}.")
+
     def start_auto_field_review(self) -> None:
         if not self._section_allowed():
             return
@@ -415,7 +446,11 @@ class GuidedReviewWidget(QWidget):
         wanted, mode = ("test", "Blind labelling") if self.blind else ("pool", "Guided review")
         self.status.setText(
             f"{mode} is limited to {wanted} mice in this project, and this section is not one. "
-            "Choose another section (see evaluation_roles.csv)."
+            + (
+                "Use 'Go to next section'."
+                if self.blind
+                else "Choose another section (see evaluation_roles.csv)."
+            )
         )
         return False
 
@@ -647,8 +682,13 @@ class GuidedReviewWidget(QWidget):
             self.decision_group.setEnabled(False)
             return
         self.decision_group.setEnabled(True)
+        where = (
+            f"Section {self.section_codes.get(item.image_id, '?')} of {len(self.section_codes)}"
+            if self.blind
+            else f"{item.mouse_id} · {item.image_id}"
+        )
         self.context.setText(
-            f"{item.mouse_id} · {item.image_id} · Fiber typing · "
+            f"{where} · Fiber typing · "
             f"{item.queue_source.value.replace('_', ' ')} · "
             f"{self.controller.session.queue_position + 1}/{count}"
         )

@@ -320,3 +320,32 @@ def test_starting_a_plan_again_resumes_at_the_first_unlabelled_fiber(tmp_path, m
     assert widget.controller.session.queue_position == 2
     assert len(session.object_decisions) == 2
     widget.close()
+
+
+def test_blind_mode_never_shows_section_or_mouse_names(tmp_path, monkeypatch):
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    qtpy = pytest.importorskip("qtpy.QtWidgets")
+    from src.review.fiber_type_review import FiberTypeReviewController
+    from src.review.guided_review_widget import GuidedReviewWidget
+    from src.review.session import ReviewSession
+
+    application = qtpy.QApplication.instance() or qtpy.QApplication([])
+    reference = _project(tmp_path, image_ids=("mdx_old_one", "mdxJag_young_two")).for_reference("r")
+    session = ReviewSession(project_id=reference.project_id, model_version="model.v1")
+    session.current_image_id = "mdx_old_one"
+    shown = []
+    widget = GuidedReviewWidget(
+        reference, FiberTypeReviewController(session), blind=True, show_image=shown.append
+    )
+    widget.start_random_sample()
+    application.processEvents()
+
+    for label in (widget.context, widget.details, widget.status, widget.plan_message):
+        text = label.text()
+        assert "mdx" not in text and "mouse_a" not in text, text
+    assert widget.context.text().startswith("Section ")
+    assert set(widget.section_codes.values()) == {1, 2}
+    widget.go_to_next_section()
+    assert shown and shown[0] in {"mdx_old_one", "mdxJag_young_two"}
+    assert "mdx" not in widget.status.text()
+    widget.close()

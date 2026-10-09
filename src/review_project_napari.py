@@ -521,6 +521,12 @@ def main(argv: list[str] | None = None) -> int:
         centroids = fiber_centroids(np.asarray(tifffile.imread(labels_path)))
         return set(fibers_by_field(fields, centroids))
 
+    def go_to_image(image_id: str) -> None:
+        controller.set_image(image_id)
+        if loaded_image_id != image_id:
+            show_image(image_id)
+            viewer.reset_view()
+
     def focus_current_object() -> None:
         item = guided_widget.controller.current_item
         if item is not None:
@@ -663,6 +669,7 @@ def main(argv: list[str] | None = None) -> int:
         focus_current_object=focus_current_object,
         blind=args.blind,
         reference_field_fibers=reference_field_fibers if args.blind else None,
+        show_image=go_to_image if args.blind else None,
     )
     guided_dock = _keep_dock(
         viewer.window.add_dock_widget(guided_widget, area="left", name="Guided Review")
@@ -675,8 +682,13 @@ def main(argv: list[str] | None = None) -> int:
         workspace_menu.addAction("Show Guided Review", guided_dock.show)
         cohort_action = workspace_menu.addAction("Show Cohort QC", open_dashboard)
         cohort_action.setEnabled(not args.blind)  # the dashboard shows model results
-        workspace_menu.addAction("Show Section Review", open_image_review)
-        workspace_menu.addAction("Show Region Review", open_region_review)
+        # These panels name sections and mice, so they are unavailable in blind mode.
+        workspace_menu.addAction("Show Section Review", open_image_review).setEnabled(
+            not args.blind
+        )
+        workspace_menu.addAction("Show Region Review", open_region_review).setEnabled(
+            not args.blind
+        )
         nuclei_action = workspace_menu.addAction("Show Nuclei Review", open_nuclei_review)
         nuclei_action.setEnabled(has_nuclei)
         workspace_menu.addAction("Show Channel Map", channel_map_dock.show)
