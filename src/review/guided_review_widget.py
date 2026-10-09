@@ -119,10 +119,16 @@ class GuidedReviewWidget(QWidget):
         self.review_guide_button = QToolButton()
         self.review_guide_button.setText("? Review guide")
         navigator.addWidget(self.review_guide_button)
-        self.tutorial_group = QGroupBox("Welcome to guided review")
+        self.tutorial_group = QGroupBox(
+            "Welcome to blind labelling" if blind else "Welcome to guided review"
+        )
         tutorial_layout = QVBoxLayout(self.tutorial_group)
         tutorial = QLabel(
-            "1. Choose a review plan.\n"
+            "1. Choose a labelling plan.\n"
+            "2. Label each fiber from the stain alone; the model's calls are hidden.\n"
+            "3. Labels save immediately; Undo restores the last one."
+            if blind
+            else "1. Choose a review plan.\n"
             "2. Check the current fiber and keep or correct the model call.\n"
             "3. Decisions save immediately; Undo restores the last one."
         )
