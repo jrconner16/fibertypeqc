@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from hashlib import sha256
 
 import pandas as pd
 from qtpy.QtCore import QSettings, Qt
@@ -53,7 +54,8 @@ class GuidedReviewWidget(QWidget):
         show_domain: Callable[[Domain], None] | None = None,
         focus_current_object: Callable[[], None] | None = None,
         blind: bool = False,
-        reference_field_fibers: Callable[[str, bool], set[int]] | None = None,
+        reference_field_fibers: Callable[[str, bool | str], set[int]] | None = None,
+        show_image: Callable[[str], None] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -63,6 +65,7 @@ class GuidedReviewWidget(QWidget):
         self.blind = blind
         # (image_id, capture drawn shapes?) -> IDs of fibers inside the reviewer's drawn fields.
         self.reference_field_fibers = reference_field_fibers
+        self.show_image = show_image
         self.object_changed = object_changed
         self.show_dashboard = show_dashboard
         self.show_section = show_section
@@ -75,6 +78,15 @@ class GuidedReviewWidget(QWidget):
         self.allowed_images = allowed_images(project, TEST if blind else POOL)
         if self.allowed_images is not None:
             self.rows = self.rows[self.rows["image_id"].isin(self.allowed_images)]
+        # Blind mode never shows section or mouse names (they can carry genotype, age, or
+        # treatment). Sections get neutral numbers in an order unrelated to their names.
+        blind_images = sorted(
+            self.allowed_images
+            if self.allowed_images is not None
+            else {image.image_id for image in project.images},
+            key=lambda image_id: sha256(f"{project.project_id}:{image_id}".encode()).hexdigest(),
+        )
+        self.section_codes = {image_id: n for n, image_id in enumerate(blind_images, start=1)}
         # Only offer the classes this project's model produces (class names only; no calls).
         self.classes = set(self.rows["model_fiber_type"].astype(str).str.lower()) & {
             "i",
@@ -112,17 +124,24 @@ class GuidedReviewWidget(QWidget):
             button = QToolButton()
             button.setText(label)
             button.clicked.connect(callback)
-            button.setVisible(not (blind and label == "Cohort"))  # the dashboard shows results
+            # Blind mode hides every panel that names sections or mice or shows model results.
+            button.setVisible(not blind)
             navigator.addWidget(button)
         navigator.addStretch(1)
         self.navigator = navigator
         self.review_guide_button = QToolButton()
         self.review_guide_button.setText("? Review guide")
         navigator.addWidget(self.review_guide_button)
-        self.tutorial_group = QGroupBox("Welcome to guided review")
+        self.tutorial_group = QGroupBox(
+            "Welcome to blind labelling" if blind else "Welcome to guided review"
+        )
         tutorial_layout = QVBoxLayout(self.tutorial_group)
         tutorial = QLabel(
-            "1. Choose a review plan.\n"
+            "1. Choose a labelling plan.\n"
+            "2. Label each fiber from the stain alone; the model's calls are hidden.\n"
+            "3. Labels save immediately; Undo restores the last one."
+            if blind
+            else "1. Choose a review plan.\n"
             "2. Check the current fiber and keep or correct the model call.\n"
             "3. Decisions save immediately; Undo restores the last one."
         )
@@ -175,12 +194,27 @@ class GuidedReviewWidget(QWidget):
         self.start_flagged_button.setVisible(not blind)
         self.random_sample_button = QPushButton("Label a random sample")
         self.random_sample_button.setToolTip(
-            "A reproducible random sample across the project; change its size, seed, and scope "
-            "under Advanced review options."
+            "A reproducible random sample (by default 150 fibers from every section); change "
+            "its size, seed, and scope under Advanced review options."
         )
         self.random_sample_button.setVisible(blind)
         self.random_sample_button.clicked.connect(self.start_random_sample)
         plan_layout.addWidget(self.random_sample_button)
+        self.auto_field_button = QPushButton("Label a computer-placed field (about 100 fibers)")
+        self.auto_field_button.setToolTip(
+            "The computer picks where the field goes on this section, from the seed under "
+            "Advanced review options, so the choice is not yours. Every fiber in it is queued."
+        )
+        self.auto_field_button.setVisible(blind and reference_field_fibers is not None)
+        self.auto_field_button.clicked.connect(self.start_auto_field_review)
+        plan_layout.addWidget(self.auto_field_button)
+        self.next_section_button = QPushButton("Go to next section")
+        self.next_section_button.setToolTip(
+            "Open the next section (shown by number only) for field labelling."
+        )
+        self.next_section_button.setVisible(blind and show_image is not None)
+        self.next_section_button.clicked.connect(self.go_to_next_section)
+        plan_layout.addWidget(self.next_section_button)
         self.field_button = QPushButton("Label every fiber in my drawn fields")
         self.field_button.setToolTip(
             "Draw one or more shapes in the orange 'review_analysis_rois' layer on this section, "
@@ -323,6 +357,10 @@ class GuidedReviewWidget(QWidget):
                 self._add_shortcut(key, lambda value=fiber_type: self._record_type(value))
         self._add_shortcut("X", lambda: self._record_special(ObjectReviewStatus.EXCLUDED))
         self._add_shortcut("U", self.undo)
+        if blind:
+            # Reference sampling: the same number of computer-drawn fibers from every section.
+            self.sample_spin.setValue(150)
+            self.scope_combo.setCurrentText(RandomAuditScope.IMAGE.value)
         self._load_sample_settings()
         self._restore_saved_queue()
         self.tutorial_group.setVisible(not self._tutorial_seen())
@@ -335,6 +373,9 @@ class GuidedReviewWidget(QWidget):
 
     def _add_shortcut(self, sequence: str, callback: Callable[[], None]) -> None:
         shortcut = QShortcut(QKeySequence(sequence), self, activated=callback)
+        # Work wherever keyboard focus is (the image, another panel, or this dock floating as
+        # its own window). Text boxes still receive the keys typed into them.
+        shortcut.setContext(Qt.ApplicationShortcut)
         self.shortcuts.append(shortcut)
 
     def start_random_sample(self) -> None:
@@ -342,7 +383,40 @@ class GuidedReviewWidget(QWidget):
         self._set_queue(QueueSource.RANDOM_AUDIT)
         self.status.setText("Started a random sample.")
 
-    def _field_queue(self, capture: bool) -> tuple:
+    def go_to_next_section(self) -> None:
+        """Open the next section in the neutral blind order."""
+        order = sorted(self.section_codes, key=self.section_codes.get)
+        if not order or self.show_image is None:
+            return
+        current = self.controller.session.current_image_id
+        index = (order.index(current) + 1) % len(order) if current in order else 0
+        self.controller.session.current_image_id = order[index]
+        self.show_image(order[index])
+        self.status.setText(f"Showing section {index + 1} of {len(order)}.")
+
+    def start_auto_field_review(self) -> None:
+        if not self._section_allowed():
+            return
+        image_id = self.controller.session.current_image_id
+        seed = f"{self.project.project_id}:{image_id}:{self.seed_spin.value()}"
+        queue = self._field_queue(capture=seed)
+        if not queue:
+            self.status.setText("This section has no fibers to place a field on.")
+            return
+        self._review_started = True
+        self.controller.set_queue(queue, "reference_fields", position=self._first_undecided(queue))
+        self.status.setText(f"Started labelling {len(queue)} fibers in a computer-placed field.")
+        self.refresh(notify=True)
+
+    def _first_undecided(self, queue: tuple) -> int:
+        """Start a plan at its first fiber without a decision, so starting again resumes."""
+        decided = {(d.image_id, d.fiber_id) for d in self.controller.session.object_decisions}
+        for index, item in enumerate(queue):
+            if (item.image_id, item.fiber_id) not in decided:
+                return index
+        return 0
+
+    def _field_queue(self, capture: bool | str) -> tuple:
         image_id = self.controller.session.current_image_id
         if not image_id or self.reference_field_fibers is None:
             return ()
@@ -361,7 +435,7 @@ class GuidedReviewWidget(QWidget):
             )
             return
         self._review_started = True
-        self.controller.set_queue(queue, "reference_fields")
+        self.controller.set_queue(queue, "reference_fields", position=self._first_undecided(queue))
         self.status.setText(f"Started labelling {len(queue)} fibers in the drawn fields.")
         self.refresh(notify=True)
 
@@ -372,7 +446,11 @@ class GuidedReviewWidget(QWidget):
         wanted, mode = ("test", "Blind labelling") if self.blind else ("pool", "Guided review")
         self.status.setText(
             f"{mode} is limited to {wanted} mice in this project, and this section is not one. "
-            "Choose another section (see evaluation_roles.csv)."
+            + (
+                "Use 'Go to next section'."
+                if self.blind
+                else "Choose another section (see evaluation_roles.csv)."
+            )
         )
         return False
 
@@ -383,7 +461,7 @@ class GuidedReviewWidget(QWidget):
         image_id = self.controller.session.current_image_id
         section_rows = self.rows[self.rows["image_id"].eq(image_id)]
         queue = build_fiber_type_queue(section_rows, QueueSource.FULL_AUDIT)
-        self.controller.set_queue(queue, "selected_section")
+        self.controller.set_queue(queue, "selected_section", position=self._first_undecided(queue))
         self.status.setText("Started full review for the current section.")
         self.refresh(notify=True)
 
@@ -480,7 +558,7 @@ class GuidedReviewWidget(QWidget):
         source: QueueSource,
         *,
         notify: bool = True,
-        position: int = 0,
+        position: int | None = None,
     ) -> None:
         if source is QueueSource.RANDOM_AUDIT:
             self._save_sample_settings()
@@ -491,6 +569,8 @@ class GuidedReviewWidget(QWidget):
             sample_size=self.sample_spin.value(),
             random_scope=self.scope_combo.currentText(),
         )
+        if position is None:
+            position = self._first_undecided(queue)
         self.controller.set_queue(queue, source.value, position=position)
         self.queue_combo.blockSignals(True)
         self.queue_combo.setCurrentText(source.value)
@@ -602,8 +682,13 @@ class GuidedReviewWidget(QWidget):
             self.decision_group.setEnabled(False)
             return
         self.decision_group.setEnabled(True)
+        where = (
+            f"Section {self.section_codes.get(item.image_id, '?')} of {len(self.section_codes)}"
+            if self.blind
+            else f"{item.mouse_id} · {item.image_id}"
+        )
         self.context.setText(
-            f"{item.mouse_id} · {item.image_id} · Fiber typing · "
+            f"{where} · Fiber typing · "
             f"{item.queue_source.value.replace('_', ' ')} · "
             f"{self.controller.session.queue_position + 1}/{count}"
         )
