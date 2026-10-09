@@ -436,20 +436,48 @@ def main(argv: list[str] | None = None) -> int:
                 viewer.camera.center = tuple(float(values.mean()) for values in coordinates)
         review_widget.refresh()
 
-    def reference_field_fibers(image_id: str, capture: bool) -> set[int]:
-        """Fibers inside the reviewer's drawn reference fields on one section.
+    def reference_field_fibers(image_id: str, capture: bool | str) -> set[int]:
+        """Fibers inside this section's reference fields.
 
-        With ``capture``, the shapes currently drawn in the analysis-ROI layer replace this
-        section's saved reference fields first.
+        ``capture=True`` first replaces the saved fields with the shapes drawn in the
+        analysis-ROI layer. A string instead places one field by computer, seeded by that
+        string, so the reviewer does not choose where it goes.
         """
         import tifffile
 
         from src.review.reference import (
+            AUTO_FIELD_PREFIX,
             REFERENCE_FIELD_ROLE,
             fiber_centroids,
             fibers_by_field,
+            random_field_polygon,
             reference_fields,
         )
+
+        if isinstance(capture, str):
+            labels_file = project.image(image_id).outputs.get("fiber_labels")
+            if labels_file is None:
+                return set()
+            placed = random_field_polygon(
+                fiber_centroids(np.asarray(tifffile.imread(labels_file))), capture
+            )
+            for region in reference_fields(session, image_id):
+                region_controller.save(region_controller.remove_region(region.region_id))
+            region_controller.save(
+                region_controller.add_region(
+                    image_id=image_id,
+                    geometry=placed,
+                    domain=Domain.FIBER_TYPING,
+                    action="analysis_roi",
+                    kind=RegionKind.ANALYSIS_ROI,
+                    name=f"{AUTO_FIELD_PREFIX}_1",
+                    role=REFERENCE_FIELD_ROLE,
+                )
+            )
+            if loaded_image_id == image_id:
+                _refresh_region_shapes()
+                region_widget.refresh()
+            capture = False
 
         if capture and loaded_image_id == image_id:
             try:

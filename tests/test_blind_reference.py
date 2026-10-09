@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -174,7 +175,7 @@ def test_reference_export_reports_fields_agreement_and_keeps_model_separate(tmp_
     assert (a1.reference_label, a1.model_fiber_type, a1.sampling) == (
         "iia",
         "iia",
-        "reference_field",
+        "drawn_field",
     )
     a3 = labels[(labels.reviewer == "a") & (labels.fiber_id == 3)].iloc[0]
     assert a3.sampling == "whole_section" and bool(a3.inputs_unchanged)
@@ -265,3 +266,33 @@ def test_roles_limit_blind_labelling_to_test_mice_and_review_to_pool_mice(tmp_pa
     (folder / "evaluation_roles.csv").write_text("mouse_id,role\nmouse_a,sealed\n")
     with pytest.raises(ValueError, match="'pool' or 'test'"):
         load_roles(project)
+
+
+def test_computer_placed_field_is_reproducible_and_holds_the_requested_fibers():
+    from src.review.reference import fibers_by_field, random_field_polygon
+    from src.review.schemas import RegionAnnotation
+
+    rng = np.random.default_rng(1)
+    centroids = {i + 1: tuple(map(float, rng.uniform(0, 1000, 2))) for i in range(600)}
+
+    first = random_field_polygon(centroids, "project:image:0", n_fibers=100)
+    again = random_field_polygon(centroids, "project:image:0", n_fibers=100)
+    other = random_field_polygon(centroids, "project:image:1", n_fibers=100)
+
+    def members(geometry):
+        field = RegionAnnotation(
+            region_id="r",
+            image_id="image",
+            geometry=geometry,
+            domain="fiber_typing",
+            action="analysis_roi",
+            reason_code="",
+            kind="analysis_roi",
+            name="auto_field_1",
+            role="reference_field",
+        )
+        return set(fibers_by_field([field], centroids))
+
+    assert first == again and first != other
+    assert 99 <= len(members(first)) <= 101
+    assert len(members(random_field_polygon(centroids, "s", n_fibers=5000))) == 600

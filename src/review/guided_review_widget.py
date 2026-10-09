@@ -53,7 +53,7 @@ class GuidedReviewWidget(QWidget):
         show_domain: Callable[[Domain], None] | None = None,
         focus_current_object: Callable[[], None] | None = None,
         blind: bool = False,
-        reference_field_fibers: Callable[[str, bool], set[int]] | None = None,
+        reference_field_fibers: Callable[[str, bool | str], set[int]] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -175,12 +175,20 @@ class GuidedReviewWidget(QWidget):
         self.start_flagged_button.setVisible(not blind)
         self.random_sample_button = QPushButton("Label a random sample")
         self.random_sample_button.setToolTip(
-            "A reproducible random sample across the project; change its size, seed, and scope "
-            "under Advanced review options."
+            "A reproducible random sample (by default 150 fibers from every section); change "
+            "its size, seed, and scope under Advanced review options."
         )
         self.random_sample_button.setVisible(blind)
         self.random_sample_button.clicked.connect(self.start_random_sample)
         plan_layout.addWidget(self.random_sample_button)
+        self.auto_field_button = QPushButton("Label a computer-placed field (about 100 fibers)")
+        self.auto_field_button.setToolTip(
+            "The computer picks where the field goes on this section, from the seed under "
+            "Advanced review options, so the choice is not yours. Every fiber in it is queued."
+        )
+        self.auto_field_button.setVisible(blind and reference_field_fibers is not None)
+        self.auto_field_button.clicked.connect(self.start_auto_field_review)
+        plan_layout.addWidget(self.auto_field_button)
         self.field_button = QPushButton("Label every fiber in my drawn fields")
         self.field_button.setToolTip(
             "Draw one or more shapes in the orange 'review_analysis_rois' layer on this section, "
@@ -323,6 +331,10 @@ class GuidedReviewWidget(QWidget):
                 self._add_shortcut(key, lambda value=fiber_type: self._record_type(value))
         self._add_shortcut("X", lambda: self._record_special(ObjectReviewStatus.EXCLUDED))
         self._add_shortcut("U", self.undo)
+        if blind:
+            # Reference sampling: the same number of computer-drawn fibers from every section.
+            self.sample_spin.setValue(150)
+            self.scope_combo.setCurrentText(RandomAuditScope.IMAGE.value)
         self._load_sample_settings()
         self._restore_saved_queue()
         self.tutorial_group.setVisible(not self._tutorial_seen())
@@ -342,7 +354,21 @@ class GuidedReviewWidget(QWidget):
         self._set_queue(QueueSource.RANDOM_AUDIT)
         self.status.setText("Started a random sample.")
 
-    def _field_queue(self, capture: bool) -> tuple:
+    def start_auto_field_review(self) -> None:
+        if not self._section_allowed():
+            return
+        image_id = self.controller.session.current_image_id
+        seed = f"{self.project.project_id}:{image_id}:{self.seed_spin.value()}"
+        queue = self._field_queue(capture=seed)
+        if not queue:
+            self.status.setText("This section has no fibers to place a field on.")
+            return
+        self._review_started = True
+        self.controller.set_queue(queue, "reference_fields")
+        self.status.setText(f"Started labelling {len(queue)} fibers in a computer-placed field.")
+        self.refresh(notify=True)
+
+    def _field_queue(self, capture: bool | str) -> tuple:
         image_id = self.controller.session.current_image_id
         if not image_id or self.reference_field_fibers is None:
             return ()
