@@ -296,3 +296,27 @@ def test_computer_placed_field_is_reproducible_and_holds_the_requested_fibers():
     assert first == again and first != other
     assert 99 <= len(members(first)) <= 101
     assert len(members(random_field_polygon(centroids, "s", n_fibers=5000))) == 600
+
+
+def test_starting_a_plan_again_resumes_at_the_first_unlabelled_fiber(tmp_path, monkeypatch):
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    qtpy = pytest.importorskip("qtpy.QtWidgets")
+    from src.review.fiber_type_review import FiberTypeReviewController
+    from src.review.guided_review_widget import GuidedReviewWidget
+    from src.review.session import ReviewSession
+
+    application = qtpy.QApplication.instance() or qtpy.QApplication([])
+    reference = _project(tmp_path).for_reference("rev")
+    session = ReviewSession(project_id=reference.project_id, model_version="model.v1")
+    session.current_image_id = "one"
+    widget = GuidedReviewWidget(reference, FiberTypeReviewController(session), blind=True)
+    widget.start_section_review()
+    widget._record_type("iib")
+    widget._record_type("iix")
+
+    widget.start_section_review()  # clicked again, e.g. after a restart
+    application.processEvents()
+
+    assert widget.controller.session.queue_position == 2
+    assert len(session.object_decisions) == 2
+    widget.close()

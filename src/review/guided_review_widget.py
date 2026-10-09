@@ -367,9 +367,17 @@ class GuidedReviewWidget(QWidget):
             self.status.setText("This section has no fibers to place a field on.")
             return
         self._review_started = True
-        self.controller.set_queue(queue, "reference_fields")
+        self.controller.set_queue(queue, "reference_fields", position=self._first_undecided(queue))
         self.status.setText(f"Started labelling {len(queue)} fibers in a computer-placed field.")
         self.refresh(notify=True)
+
+    def _first_undecided(self, queue: tuple) -> int:
+        """Start a plan at its first fiber without a decision, so starting again resumes."""
+        decided = {(d.image_id, d.fiber_id) for d in self.controller.session.object_decisions}
+        for index, item in enumerate(queue):
+            if (item.image_id, item.fiber_id) not in decided:
+                return index
+        return 0
 
     def _field_queue(self, capture: bool | str) -> tuple:
         image_id = self.controller.session.current_image_id
@@ -390,7 +398,7 @@ class GuidedReviewWidget(QWidget):
             )
             return
         self._review_started = True
-        self.controller.set_queue(queue, "reference_fields")
+        self.controller.set_queue(queue, "reference_fields", position=self._first_undecided(queue))
         self.status.setText(f"Started labelling {len(queue)} fibers in the drawn fields.")
         self.refresh(notify=True)
 
@@ -412,7 +420,7 @@ class GuidedReviewWidget(QWidget):
         image_id = self.controller.session.current_image_id
         section_rows = self.rows[self.rows["image_id"].eq(image_id)]
         queue = build_fiber_type_queue(section_rows, QueueSource.FULL_AUDIT)
-        self.controller.set_queue(queue, "selected_section")
+        self.controller.set_queue(queue, "selected_section", position=self._first_undecided(queue))
         self.status.setText("Started full review for the current section.")
         self.refresh(notify=True)
 
@@ -509,7 +517,7 @@ class GuidedReviewWidget(QWidget):
         source: QueueSource,
         *,
         notify: bool = True,
-        position: int = 0,
+        position: int | None = None,
     ) -> None:
         if source is QueueSource.RANDOM_AUDIT:
             self._save_sample_settings()
@@ -520,6 +528,8 @@ class GuidedReviewWidget(QWidget):
             sample_size=self.sample_spin.value(),
             random_scope=self.scope_combo.currentText(),
         )
+        if position is None:
+            position = self._first_undecided(queue)
         self.controller.set_queue(queue, source.value, position=position)
         self.queue_combo.blockSignals(True)
         self.queue_combo.setCurrentText(source.value)
