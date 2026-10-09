@@ -347,6 +347,9 @@ class GuidedReviewWidget(QWidget):
 
     def _add_shortcut(self, sequence: str, callback: Callable[[], None]) -> None:
         shortcut = QShortcut(QKeySequence(sequence), self, activated=callback)
+        # Work wherever keyboard focus is (the image, another panel, or this dock floating as
+        # its own window). Text boxes still receive the keys typed into them.
+        shortcut.setContext(Qt.ApplicationShortcut)
         self.shortcuts.append(shortcut)
 
     def start_random_sample(self) -> None:
