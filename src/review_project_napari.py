@@ -436,20 +436,48 @@ def main(argv: list[str] | None = None) -> int:
                 viewer.camera.center = tuple(float(values.mean()) for values in coordinates)
         review_widget.refresh()
 
-    def reference_field_fibers(image_id: str, capture: bool) -> set[int]:
-        """Fibers inside the reviewer's drawn reference fields on one section.
+    def reference_field_fibers(image_id: str, capture: bool | str) -> set[int]:
+        """Fibers inside this section's reference fields.
 
-        With ``capture``, the shapes currently drawn in the analysis-ROI layer replace this
-        section's saved reference fields first.
+        ``capture=True`` first replaces the saved fields with the shapes drawn in the
+        analysis-ROI layer. A string instead places one field by computer, seeded by that
+        string, so the reviewer does not choose where it goes.
         """
         import tifffile
 
         from src.review.reference import (
+            AUTO_FIELD_PREFIX,
             REFERENCE_FIELD_ROLE,
             fiber_centroids,
             fibers_by_field,
+            random_field_polygon,
             reference_fields,
         )
+
+        if isinstance(capture, str):
+            labels_file = project.image(image_id).outputs.get("fiber_labels")
+            if labels_file is None:
+                return set()
+            placed = random_field_polygon(
+                fiber_centroids(np.asarray(tifffile.imread(labels_file))), capture
+            )
+            for region in reference_fields(session, image_id):
+                region_controller.save(region_controller.remove_region(region.region_id))
+            region_controller.save(
+                region_controller.add_region(
+                    image_id=image_id,
+                    geometry=placed,
+                    domain=Domain.FIBER_TYPING,
+                    action="analysis_roi",
+                    kind=RegionKind.ANALYSIS_ROI,
+                    name=f"{AUTO_FIELD_PREFIX}_1",
+                    role=REFERENCE_FIELD_ROLE,
+                )
+            )
+            if loaded_image_id == image_id:
+                _refresh_region_shapes()
+                region_widget.refresh()
+            capture = False
 
         if capture and loaded_image_id == image_id:
             try:
@@ -492,6 +520,12 @@ def main(argv: list[str] | None = None) -> int:
             return set()
         centroids = fiber_centroids(np.asarray(tifffile.imread(labels_path)))
         return set(fibers_by_field(fields, centroids))
+
+    def go_to_image(image_id: str) -> None:
+        controller.set_image(image_id)
+        if loaded_image_id != image_id:
+            show_image(image_id)
+            viewer.reset_view()
 
     def focus_current_object() -> None:
         item = guided_widget.controller.current_item
@@ -635,6 +669,7 @@ def main(argv: list[str] | None = None) -> int:
         focus_current_object=focus_current_object,
         blind=args.blind,
         reference_field_fibers=reference_field_fibers if args.blind else None,
+        show_image=go_to_image if args.blind else None,
     )
     guided_dock = _keep_dock(
         viewer.window.add_dock_widget(guided_widget, area="left", name="Guided Review")
@@ -647,8 +682,13 @@ def main(argv: list[str] | None = None) -> int:
         workspace_menu.addAction("Show Guided Review", guided_dock.show)
         cohort_action = workspace_menu.addAction("Show Cohort QC", open_dashboard)
         cohort_action.setEnabled(not args.blind)  # the dashboard shows model results
-        workspace_menu.addAction("Show Section Review", open_image_review)
-        workspace_menu.addAction("Show Region Review", open_region_review)
+        # These panels name sections and mice, so they are unavailable in blind mode.
+        workspace_menu.addAction("Show Section Review", open_image_review).setEnabled(
+            not args.blind
+        )
+        workspace_menu.addAction("Show Region Review", open_region_review).setEnabled(
+            not args.blind
+        )
         nuclei_action = workspace_menu.addAction("Show Nuclei Review", open_nuclei_review)
         nuclei_action.setEnabled(has_nuclei)
         workspace_menu.addAction("Show Channel Map", channel_map_dock.show)

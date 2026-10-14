@@ -29,6 +29,11 @@
   dashboard withheld. Labels are saved per reviewer under `review/reference/<reviewer>/`, apart
   from review decisions, and are never applied at finalization. Plans: every fiber in the current
   section, or a reproducible random sample.
+- **Computer-placed reference field:** in blind mode, **Label a computer-placed field** puts a
+  field of about 100 fibers at a location drawn from a seed, so the reviewer does not choose
+  where it goes. Blind random samples default to 150 fibers from every section. The reference
+  export's `sampling` column distinguishes `random_sample`, `computer_placed_field`,
+  `drawn_field`, and `whole_section`.
 - **Reference fields:** in blind mode, draw shapes in the `review_analysis_rois` layer and choose
   **Label every fiber in my drawn fields**; the shapes are saved as reference fields and every
   fiber whose center is inside one is queued. Random-sample settings are saved, so reopening

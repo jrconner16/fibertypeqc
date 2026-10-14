@@ -7,6 +7,7 @@ separate ``model_*`` columns, and reports which drawn fields were labelled exhau
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from itertools import combinations
@@ -29,6 +30,7 @@ from src.review.timing import SESSIONS_FILENAME
 
 REFERENCE_SCHEMA_VERSION = "fibertypeqc.reference_export.v1"
 REFERENCE_FIELD_ROLE = "reference_field"
+AUTO_FIELD_PREFIX = "auto_field"
 LABEL_COLUMNS = (
     "image_id",
     "mouse_id",
@@ -54,6 +56,35 @@ def fiber_centroids(labels: np.ndarray) -> dict[int, tuple[float, float]]:
         int(region.label): (float(region.centroid[1]), float(region.centroid[0]))
         for region in regionprops(labels)
     }
+
+
+def random_field_polygon(
+    centroids: dict[int, tuple[float, float]], seed: str, n_fibers: int = 100
+) -> dict[str, Any]:
+    """A circular field at a computer-chosen place, sized to hold about ``n_fibers`` fibers.
+
+    A fiber is drawn at random from ``seed`` (so the same seed always gives the same field) and
+    the circle around it reaches just past its ``n_fibers``-th nearest neighbor. The reviewer
+    has no say in where the field goes.
+    """
+    if not centroids:
+        raise ValueError("There are no fibers to place a field on.")
+    ids = sorted(centroids)
+    points = np.array([centroids[fiber_id] for fiber_id in ids], dtype=float)
+    digest = hashlib.sha256(seed.encode()).digest()
+    center = points[np.random.default_rng(int.from_bytes(digest[:8], "big")).integers(len(ids))]
+    distances = np.sort(np.hypot(*(points - center).T))
+    count = min(n_fibers, len(ids))
+    outer = distances[count] if count < len(ids) else distances[-1] + 1.0
+    radius = (distances[count - 1] + outer) / 2
+    angles = np.linspace(0.0, 2 * np.pi, 65)
+    radius /= np.cos(np.pi / 64)  # so the 64-sided outline contains the whole circle
+    ring = [
+        [float(center[0] + radius * np.cos(a)), float(center[1] + radius * np.sin(a))]
+        for a in angles
+    ]
+    ring[-1] = ring[0]
+    return {"type": "Polygon", "coordinates": [ring]}
 
 
 def reference_fields(session: ReviewSession, image_id: str) -> list[RegionAnnotation]:
@@ -142,7 +173,9 @@ def export_reference(project: Project, output_dir: Path) -> dict[str, Any]:
             recorded = session.input_fingerprints.get(decision.image_id)
             field_name = field_of.get(decision.image_id, {}).get(decision.fiber_id, "")
             sampling = (
-                "reference_field"
+                "computer_placed_field"
+                if field_name.startswith(AUTO_FIELD_PREFIX)
+                else "drawn_field"
                 if field_name
                 else "random_sample"
                 if decision.queue_source == "random_audit"
@@ -245,8 +278,8 @@ def export_reference(project: Project, output_dir: Path) -> dict[str, Any]:
         "n_exhaustive_fields": int(fields["exhaustive"].sum()) if len(fields) else 0,
         "note": (
             "model_* columns are the model's output for comparison; reviewers did not see them. "
-            "Labels with sampling other than reference_field or whole_section are a sample, not "
-            "an exhaustive field."
+            "sampling says how each fiber was chosen: random_sample (computer-drawn fibers), "
+            "computer_placed_field or drawn_field (every fiber in a field), or whole_section."
         ),
         "files_sha256": {name: file_sha256(output_dir / name) for name in written},
     }
