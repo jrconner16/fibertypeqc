@@ -1,4 +1,4 @@
-# Vivienne four-channel ImageJ review/export stack.
+# Four-channel Type I, IIa, laminin, DAPI panel (ImageJ review/export stack order).
 # Verified order: AF594 Type I, AF488 Type IIa, AF647 laminin, DAPI/Hoechst.
 channels:
   laminin: 2

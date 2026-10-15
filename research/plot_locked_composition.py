@@ -1,4 +1,4 @@
-"""Plot mouse-level compositions from the locked Jag1 Quad candidate score."""
+"""Plot mouse-level compositions from a locked candidate score."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def plot_composition(data: pd.DataFrame, output: Path) -> None:
         axis.set_xticks(range(len(GROUPS)), [GROUP_LABELS[group] for group in GROUPS])
         axis.set_xlim(-0.5, 1.5)
         axis.grid(axis="y", alpha=0.25)
-    fig.suptitle("Jag1-regeneration Quad: locked-model exploratory composition", fontsize=14)
+    fig.suptitle("Locked-model exploratory composition", fontsize=14)
     fig.text(
         0.5,
         0.01,
@@ -68,7 +68,7 @@ def plot_composition(data: pd.DataFrame, output: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Plot locked Jag1 Quad mouse compositions")
+    parser = argparse.ArgumentParser(description="Plot locked-candidate mouse compositions")
     parser.add_argument("--mouse-composition", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

@@ -13,5 +13,5 @@ Included now:
 - `demo_napari_review_zoom.png` (review UI zoomed detail)
 - `demo_batch_summary_plot.png` (summary figure)
 
-See [docs/demo_manifest.md](../../docs/demo_manifest.md) for provenance and intended generation
+See [docs/history/demo_manifest.md](../../docs/history/demo_manifest.md) for provenance and intended generation
 commands.

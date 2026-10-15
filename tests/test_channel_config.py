@@ -48,11 +48,11 @@ def test_load_channel_config_reads_canonical_semantic_panel(tmp_path):
     )
 
 
-def test_vivienne_panel_declares_only_observed_direct_markers():
+def test_i_iia_dapi_panel_declares_only_observed_direct_markers():
     panel_path = (
         Path(__file__).resolve().parents[1]
         / "manifests"
-        / "vivienne_i_iia_dapi_panel.yaml"
+        / "i_iia_laminin_dapi_panel.yaml"
     )
 
     cfg = load_channel_config(panel_path)

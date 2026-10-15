@@ -1,130 +1,99 @@
 # FiberTypeQC Roadmap
 
-- Updated: 2026-10-14
-- Status: **frozen.** v0.3.0 is released; work after it is listed below and paused. The next step
-  is an audit of the repository for a software-paper (JOSS) submission, which will replace this
-  plan.
-- Supersedes: [docs/history/ROADMAP_2026H2.md](docs/history/ROADMAP_2026H2.md) and earlier planning notes.
+- Updated: 2026-10-15
+- Status: **active.** Goal: a clean, citable repository and a submission to the Journal of Open
+  Source Software (JOSS).
+- Supersedes: [docs/history/ROADMAP_v0.3.md](docs/history/ROADMAP_v0.3.md) (frozen 2026-10-14) and
+  earlier plans in [docs/history/](docs/history/).
 
-Study-specific planning (cohorts, private evidence, model-selection history) is kept outside Git.
-This file contains only public-safe scope, decisions, and status.
+This file contains only public-safe scope, decisions, and status. Study-specific planning is kept
+outside Git.
 
-## Goal
+## Scope
 
-A reproducible, interpretable FiberTypeQC release in which another researcher can run the full chain
-on a compatible image and reproduce its outputs:
+v0.3.0 is released and is the immutable baseline. This plan polishes the existing software; it adds
+no features. Production code paths (`src/`, `fibertypeqc/`, `scripts/`, `manifests/`, `configs/`,
+`examples/`) do not move, so imports, commands, model loading, and output paths stay compatible.
+Method validation is a separate track (D) and does not block JOSS unless it finds a software bug.
+
+## Current state
+
+Working: MIT licence; four releases (v0.1.0-alpha to v0.3.0); CI with lint, repository and
+private-data checks, CLI smoke tests, fast tests, and a deterministic synthetic reference run;
+locked environment; one-command project workflow; demo; model cards without accuracy claims;
+output and panel schemas; a core/research boundary enforced by `tests/test_core_boundary.py`.
+
+Gaps: the repository is hard to navigate (research tooling, thin wrapper packages, phase-era design
+notes, screenshots at the root); the README is a full manual without a statement of need; no
+`CITATION.cff`, `CONTRIBUTING.md`, code of conduct, issue templates, or archive DOI; demo data
+provenance is not stated; no JOSS paper.
+
+## Track A — Repository cleanup and presentation
+
+| ID | Task | Priority | Effort | Done when |
+|---|---|---|---|---|
+| A1 | Remove study-specific material from tracked files | blocker | 0.5 d | repository checks pass; no study-specific names in tracked files |
+| A2 | Documentation: move `README_review_workflow.md` to `docs/review_guide.md` and `README_uv_setup.md` to `docs/install.md`; consolidate `docs/quickstart.md` and the README's reference sections into `docs/user_guide.md`; move phase-era notes to `docs/history/`; add a `docs/README.md` index; rewrite or retire `docs/validation_summary.md` | important | 1.5 d | link check passes; no duplicated or contradictory pages |
+| A3 | Delete the `analysis/` placeholder; replace `demo_screenshots/` with one current image in `docs/images/`; add `research/README.md` (unsupported study tooling); keep `research/` and `validation/` working | important | 0.5 d | tests and reference run pass |
+| A4 | README rewrite (about 150 lines): problem, workflow figure, status and limitations, install and demo, capabilities, QC and review, docs/architecture/tests, citation and licence; plus a five-minute code walkthrough | blocker | 1.5 d | every command checked against its argparse definition |
+| A5 | Dependencies: `ruff` to the dev extra; move other non-core packages to extras where safe | important | 0.5 d | fresh `uv sync --frozen` and reference run pass |
+
+## Track B — Archive and citation
+
+| ID | Task | Priority | Effort | Done when |
+|---|---|---|---|---|
+| B1 | `CITATION.cff` (authors with ORCID, version, licence, repository) | blocker | 1 h | valid CFF; GitHub shows "Cite this repository" |
+| B2 | Enable the Zenodo GitHub integration (maintainer account step) | blocker | 15 min | repository switched on in Zenodo |
+| B3 | Release v0.4.0 (work since v0.3.0 plus cleanup); Zenodo archives it | blocker | 0.5 d | version DOI and concept DOI resolve; metadata matches `CITATION.cff` |
+| B4 | DOI badge and "How to cite" in the README (concept DOI for the software; version DOI for a specific result) | blocker | 1 h | links resolve |
+
+Zenodo archives only releases made after the integration is enabled; v0.3.0 is left as released.
+
+## Track C — JOSS submission
+
+| ID | Task | Priority | Effort | Done when |
+|---|---|---|---|---|
+| C1 | `CONTRIBUTING.md` (setup, tests, reference run, private-data rule), `CODE_OF_CONDUCT.md`, bug and question issue templates | blocker | 0.5 d | linked from the README |
+| C2 | State the demo data's source, de-identification, and licence in `docs/demo.md` | blocker | 1 h | stated |
+| C3 | Install and demo run by someone other than the author, from the README only; fix what they report | important | 0.5 d | at least one issue filed and closed |
+| C4 | Optional: macOS job in CI (fast tests) | optional | 2 h | green |
+| C5 | `paper/paper.md` and `paper/paper.bib`: Summary, Statement of need, State of the field, Software design, Research impact statement, AI usage disclosure; 750–1750 words | blocker | 3 d | draft PDF builds; every claim maps to code or a test |
+| C6 | Submit after the repository has been public for six months (created 2026-05-31) | — | 1 h | submitted |
+
+Positioning: FiberTypeQC does not claim a new classifier. Its contribution is an integrated,
+auditable workflow: project folders from raw images to a cohort report, QC-driven guided review,
+corrections stored apart from predictions with every final value labelled by source, panel-specific
+models checked by panel and SHA-256, blind reference labelling, a pre-declared model-promotion rule
+with rollback, and reference snapshots. The paper compares it with MyoSight, MuscleJ/MuscleJ2,
+Myosoft, QuantiMus, FiNuTyper, QuPath with Cellpose, and ilastik, citing each tool's own
+publication, and makes no accuracy claims beyond the model cards.
+
+## Track D — Method validation (not scheduled; does not block JOSS)
+
+Possible studies: hold-out accuracy and calibration of the default model from blind reference
+labels; QC-ranked versus random review; performance as labels accumulate; cross-cohort transfer;
+segmentation and morphometry validation; nuclear analysis accuracy; comparison with other tools,
+reported as disagreement rather than error. Deferred: continuous phenotype models, new network
+architectures, feature and classifier ablations, new features.
+
+## Critical path
 
 ```text
-image -> segmentation -> panel-specific prediction -> QC -> guided review
-      -> finalized analysis-ready tables -> image/mouse/cohort report
+decisions -> A1 -> A2 -> A3 -> A4 + C1 + C2 -> A5 -> C3 -> B1 -> B2 -> B3 -> B4 -> C5 -> C6
 ```
 
-The release validates the workflow, not a universal classifier.
+Estimated remaining work: 8–12 working days, mostly documentation. Earliest submission: December
+2026.
 
-## Decisions
+## Open decisions
 
-- **One model per panel.** Fiber-type models do not generalize across channel configurations. Each
-  released model declares the panel (marker roles), ordered features, and classes it supports, and
-  the pipeline refuses a mismatched panel.
-- **Default model: four-class QUAD (Type I, IIa, IIb, IIx).** A TA model is deferred and will be
-  rebuilt from its frozen evaluation contract when needed. The historical three-class model
-  (`rebaseline_tile_v2_p75p90_iib_iia_iix`) remains reproducible but is not a release model.
-- **Models trained on unpublished data are not committed.** The registry records identity and
-  digest; the artifact is resolved at runtime from a private model root and verified by digest.
-- **Release reviewer: the project-based Napari review** (`src/review_project_napari.py`,
-  `src/review/`). The per-image reviewer is kept only as an input bridge.
-- **Not a rewrite.** Separate the supported product core from research code, then close the gaps.
+- Author list.
+- What the research-impact statement may say.
+- Packaging: keep the locked run-from-repository install (current) or make the package
+  installable with pip (larger change; deferred unless needed).
+- Wording of the AI usage disclosure.
 
-## Since v0.3.0 (on `main`, unreleased; frozen 2026-10-14)
-
-Built and merged, each with tests; GUI parts checked by hand in napari:
-
-- **Blind reference labelling** (`review --blind --reviewer NAME`): model calls, confidence, QC
-  reasons, and section/mouse names withheld; labels stored per reviewer and never applied to
-  results; random samples (150 per section by default), computer-placed fields, or drawn fields.
-- **Reference export** (`reference`): all reviewers' labels with model output in separate columns,
-  field coverage, reviewer agreement (percent, Cohen's kappa), review time.
-- **Review time** recorded for every session.
-- **Evaluation roles** (`evaluation_roles.csv`): pool and test mice kept apart in review, blind
-  labelling, and model improvement.
-- **Model improver** (`improve`): candidates (logistic, random forest, gradient boosting) from
-  review decisions, evaluated on held-out mice against the current model under a declared recipe
-  and promotion rule.
-- **Promotion and rollback** (`promote`): explicit, archived, reversible switch to a candidate;
-  review decisions carried forward.
-- Reviewer fixes: Exclude button, fiber-call overlay, edge-fiber handling, reliable panels,
-  shortcuts that work regardless of focus, plans that resume at the first unlabelled fiber.
-
-Paused, not started: learning-curve runner, schema-driven classes and a "no model yet" state, a
-custom-schema model generator, improve/promote buttons in the reviewer, leaving edge fibers out of
-training labels.
-
-## State at v0.3.0 (2026-10-03)
-
-| Area | State |
-|---|---|
-| Ingest and segmentation | Axis-metadata loading; multi-scene CZIs split deterministically; device and digests recorded |
-| Typing | Panel-specific models selected by ID or file; pinned feature extraction; fail-closed panel check |
-| Per-image summary and QC | Class proportions from the model's classes; uncertainty and residual-class checks |
-| Batch | Model verified before processing; outputs named by image ID; portable paths |
-| Model registry | Features, classes, digests, and private-artifact entries; default model declared |
-| Project review | Cohort QC, section status, guided fiber review, regions and analysis ROIs; laminin review prompts |
-| Finalization | Review decisions and exclusions applied into finalized tables; predictions never modified |
-| Results | Image, mouse, ROI, and cohort tables; cohort report built only from exported tables |
-| Reproducibility infrastructure | Locked environment, CI, synthetic references run end to end, private-data guardrails |
-| Default model validation | Software reproducibility checks pass; random hold-out validation not yet done |
-| Default model distribution | Release downloads (v0.3.0), verified by SHA-256 |
-
-## Stages
-
-Each stage is one branch and pull request. Stages marked ⚗ change scientific outputs: each change is
-explained before editing and accompanied by a before/after comparison of reference outputs.
-
-- [x] **Stage 0 — Guardrails and plan.** Private-data checks in `scripts.check_repository`
-  (unapproved model artifacts, per-fiber tables outside fixtures, private paths, optional private
-  identifier denylist), pre-commit hook, this roadmap, tracked `AGENTS.md`, supported-surface map in
-  `ARCHITECTURE.md`.
-- [x] **Stage 1 — Carve the core** (no behavior change). Declare the supported modules; move
-  research modules behind a `research/` namespace with compatibility wrappers; fix README drift.
-- [x] **Stage 2 — Core correctness** ⚗. Summary classes and QC residual rate from the model's class
-  list; warn when `--sensitivity` overrides explicit typing flags; batch path/digest fixes; record
-  device, library versions, and input digests; explicit image scene/axis handling; extend reference
-  validation to summaries and QC.
-- [x] **Stage 3 — Four-class QUAD default** ⚗. Extended model manifest and registry; semantic path
-  becomes the primary typing path and supports any sklearn estimator family; fail-closed panel
-  compatibility; runtime model resolution with digest verification; public synthetic four-class
-  reference; historical models marked retired.
-- [x] **Stage 4 — Finalization** ⚗. One finalizer that applies review decisions and region/section
-  exclusions, labels every value as predicted, reviewed, excluded, or unresolved, and refuses
-  decisions made on different labels or tables.
-- [x] **Stage 5 — Results layer.** Image, mouse, and cohort tables from finalized outputs; cohort HTML
-  report including predicted-versus-finalized comparison. Every figure reproducible from exported
-  CSV/JSON.
-- [x] **Stage 6 — One command path and usability.** Documented entry points from batch run through
-  QC, review, finalization, and report; first hands-on usability pass on a multi-mouse project on
-  an HPC GUI, with its fixes merged.
-- [x] **Stage 7 — Release.** Models distributed as release downloads; private reference run with
-  frozen expected outputs; demo data and walkthrough; v0.3.0 tagged. Still open: a clean-checkout
-  rehearsal by a non-author following the README only.
-
-Order: `0 → 1 → 2 → {3, 4} → 5 → 6 → 7`. Reference outputs are frozen only after Stage 2.
-
-## After this release
-
-- **Validation:** blinded review of a random hold-out sample for the default model; until then its
-  model card makes no accuracy claims.
-- **Adapt-to-your-panel workflow:** create project → map channels → run a baseline → review/label a
-  subset (including a blind random sample) → train a panel model with pinned features and a recorded
-  evaluation → rerun → finalize/report. This is what makes the tool usable on panels without a
-  published model.
-- **Usability:** one project-folder convention, an init wizard for panel and sample-sheet files,
-  a `status`/next-action command, a finalize-and-report button in the reviewer, panel presets;
-  later a GUI channel mapper, sample-sheet editor, and napari plugin.
-- **Install:** split GUI and research dependencies into optional extras.
-- **Sections:** splitting separate tissue pieces imaged within one Zeiss scene.
-- Optional: rebuilt TA model, OCI/Apptainer images, shared TA+QUAD model research.
-
-## Verification for every stage
+## Verification for every change
 
 ```bash
 uv run ruff check .
@@ -132,12 +101,3 @@ uv run pytest -m "not integration" -q
 uv run python -m scripts.run_reference
 uv run python -m scripts.check_repository
 ```
-
-## Completion criteria
-
-- A non-author reproduces the declared workflow from a clean checkout without undocumented files or
-  developer knowledge.
-- Every released model and expected output is tied to immutable identifiers and digests.
-- Users can distinguish predicted, reviewed, excluded, unresolved, and finalized values, and the
-  report shows results before and after review.
-- Review produces finalized outputs without altering predictions.

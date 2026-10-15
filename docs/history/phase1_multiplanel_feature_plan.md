@@ -2,8 +2,8 @@
 
 > **Historical plan:** This document records the pre-implementation Phase 1 design. Statements
 > describing DAPI, semantic features, review overlays, or caching as future work are retained for
-> architectural context and are not a current capability matrix. See [Panel Schema](panel_schema.md),
-> [Output Schema](output_schema.md), and [Review Workflow](../README_review_workflow.md) for current
+> architectural context and are not a current capability matrix. See [Panel Schema](../panel_schema.md),
+> [Output Schema](../output_schema.md), and [Review Guide](../review_guide.md) for current
 > behavior.
 
 ## Status and scope

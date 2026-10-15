@@ -274,7 +274,7 @@ finalization manifest.
 The headless project-review QC command writes versioned `image_qc.csv`,
 `fiber_qc.csv`, `nucleus_qc.csv`, and `section_selection.csv` files. Their
 artifact contract, formulas, rule behavior, and schemas are documented in
-[`review_qc_phase2a.md`](review_qc_phase2a.md).
+the [review reference](review_reference.md#headless-review-qc-phase-2a).
 
 The read-only cohort presentation and readiness definitions are documented in
-[`review_dashboard_phase2b.md`](review_dashboard_phase2b.md).
+the [review reference](review_reference.md#cohort-dashboard-phase-2b).

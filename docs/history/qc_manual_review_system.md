@@ -1403,7 +1403,7 @@ uv run ruff check <changed Python files and tests>
 ### Phase 2B
 
 - [x] Defined the exact read-only dashboard boundary before implementation.
-- [x] Recorded the authoritative frozen eMHC/DAPI baseline and excluded Vivienne
+- [x] Recorded the authoritative frozen eMHC/DAPI baseline and excluded the Type I/IIa/DAPI cohort
   outputs from QC validation.
 - [x] Added validated Phase 2A QC-table loading and cross-table provenance checks.
 - [x] Added GUI-independent dashboard summaries and readiness classifications.
@@ -1507,7 +1507,7 @@ Every meaningful change from the proposed design is recorded here.
     contract, so inventing those values would be scientifically misleading.
 22. **Use `e3_exports/ta_emhc_baseline_v1_2026-07-29` as the authoritative
     frozen eMHC/DAPI nuclei baseline.** Do not use
-    `phase5_vivienne_dapi`; those artifacts may originate from a different
+    `phase5 Type I/IIa/DAPI output`; those artifacts may originate from a different
     pipeline. The dashboard consumes project/QC tables and does not encode either
     user-specific SSD path.
 23. **Keep Phase 2B read-only.** Strategy changes are provisional in memory.

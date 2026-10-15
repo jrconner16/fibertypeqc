@@ -20,7 +20,7 @@ from research.train_panel_baselines import (
 
 def parser() -> argparse.ArgumentParser:
     out = argparse.ArgumentParser(description="Run exploratory panel-transfer baselines.")
-    for role in ("quad-train", "quad-heldout", "vivienne-train", "vivienne-heldout"):
+    for role in ("quad-train", "quad-heldout", "i-iia-train", "i-iia-heldout"):
         out.add_argument(f"--{role}-reviewed", type=Path, required=True)
         out.add_argument(f"--{role}-diagnostics", type=Path, required=True)
     out.add_argument("--output-dir", type=Path, required=True)
@@ -41,16 +41,16 @@ def main() -> None:
         raise SystemExit(f"Output directory already exists: {args.output_dir}")
     quad_train = _load(args.quad_train_reviewed, args.quad_train_diagnostics)
     quad_heldout = _load(args.quad_heldout_reviewed, args.quad_heldout_diagnostics)
-    viv_train = _load(args.vivienne_train_reviewed, args.vivienne_train_diagnostics)
-    viv_heldout = _load(args.vivienne_heldout_reviewed, args.vivienne_heldout_diagnostics)
+    i_iia_train = _load(args.i_iia_train_reviewed, args.i_iia_train_diagnostics)
+    i_iia_heldout = _load(args.i_iia_heldout_reviewed, args.i_iia_heldout_diagnostics)
     datasets = {
         "quad_train": quad_train,
         "quad_heldout": quad_heldout,
-        "vivienne_train": viv_train,
-        "vivienne_heldout": viv_heldout,
+        "i_iia_train": i_iia_train,
+        "i_iia_heldout": i_iia_heldout,
     }
     features = semantic_feature_columns(quad_train, quad_heldout)
-    for frame in (viv_train, viv_heldout):
+    for frame in (i_iia_train, i_iia_heldout):
         features = [column for column in features if column in frame.columns]
     if not features:
         raise ValueError("No semantic features are shared by every panel/domain dataset.")
@@ -58,11 +58,11 @@ def main() -> None:
     y = {name: frame["final_type"] for name, frame in datasets.items()}
     experiments = {
         "quad_to_quad": ("quad_train", "quad_heldout"),
-        "vivienne_to_vivienne": ("vivienne_train", "vivienne_heldout"),
-        "pooled_to_quad": (("quad_train", "vivienne_train"), "quad_heldout"),
-        "pooled_to_vivienne": (("quad_train", "vivienne_train"), "vivienne_heldout"),
-        "quad_to_vivienne": ("quad_train", "vivienne_heldout"),
-        "vivienne_to_quad": ("vivienne_train", "quad_heldout"),
+        "i_iia_to_i_iia": ("i_iia_train", "i_iia_heldout"),
+        "pooled_to_quad": (("quad_train", "i_iia_train"), "quad_heldout"),
+        "pooled_to_i_iia": (("quad_train", "i_iia_train"), "i_iia_heldout"),
+        "quad_to_i_iia": ("quad_train", "i_iia_heldout"),
+        "i_iia_to_quad": ("i_iia_train", "quad_heldout"),
     }
     report: dict[str, object] = {
         "purpose": "exploratory transfer diagnostic; not model selection",
