@@ -67,6 +67,12 @@
   to `--i-iia-train-*` / `--i-iia-heldout-*`.
 - Removed the `analysis/` placeholder, stale screenshots, and an internal panel-audit note.
 
+### Dependencies
+
+- `ruff` is now only in the `dev` extra, and JupyterLab/ipykernel moved to a new optional
+  `notebook` extra. No locked versions changed; the pipeline, review, and reference run do not use
+  them. Use `uv sync --frozen --extra notebook` to keep JupyterLab.
+
 ## v0.3.0
 
 ### Release summary
