@@ -48,6 +48,25 @@
 - The reviewer only offers the classes the project's model produces (a three-class project no
   longer shows a Type I button).
 
+### Documentation and repository
+
+- README rewritten as a short overview (problem, workflow, status, install, capabilities, docs,
+  code tour). Its reference material moved to `docs/user_guide.md`, which also absorbs
+  `docs/quickstart.md`.
+- `README_uv_setup.md` rewritten as `docs/install.md`; `README_review_workflow.md` moved to
+  `docs/review_guide.md`; the six `docs/review_*_phase*.md` pages merged into
+  `docs/review_reference.md`; superseded plans and the v0.1 demo manifest moved to
+  `docs/history/`; new `docs/README.md` index.
+- Added `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue templates, and `research/README.md`.
+- The v0.3 roadmap moved to `docs/history/ROADMAP_v0.3.md`; `ROADMAP.md` now tracks cleanup,
+  archiving, and a JOSS submission.
+- Neutral names for study-specific files: `manifests/i_iia_laminin_dapi_panel.yaml`,
+  `examples/cluster_manifest_template.csv`, `scripts/slurm_panel_array.sh` (environment variables
+  now `PANEL_INPUT_ROOT`, `PANEL_OUTPUT_ROOT`, `PANEL_MANIFEST`),
+  `research.plot_locked_composition`; `research.run_panel_transfer_experiment` options renamed
+  to `--i-iia-train-*` / `--i-iia-heldout-*`.
+- Removed the `analysis/` placeholder, stale screenshots, and an internal panel-audit note.
+
 ## v0.3.0
 
 ### Release summary

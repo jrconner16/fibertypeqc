@@ -1,4 +1,4 @@
-"""Blinded, image-first development review for visually selected Jag1 Quad fibers.
+"""Blinded, image-first development review for visually selected fibers.
 
 The reviewer chooses a fiber directly in the image before classifying it.  This
 mode deliberately has no candidate list, fiber table, prediction, probability,

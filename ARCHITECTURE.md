@@ -54,8 +54,8 @@ Research modules live in `research/` and may import the supported core. The core
 
 ## Supported release surface
 
-The overhaul in [ROADMAP.md](ROADMAP.md) narrows the supported product to the modules below. Anything
-else (`research/`, `validation/`, `analysis/`) is research tooling: it may change or move without
+The v0.3 overhaul ([docs/history/ROADMAP_v0.3.md](docs/history/ROADMAP_v0.3.md)) narrows the supported product to the modules below. Anything
+else (`research/`, `validation/`) is research tooling: it may change or move without
 notice and is not part of the release contract.
 
 | Layer | Supported modules |

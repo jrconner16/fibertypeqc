@@ -1,304 +1,148 @@
 # FiberTypeQC
 
-**Muscle fiber segmentation, fiber typing, QC, guided review, and reporting for immunofluorescence
-histology images.**
+**Muscle fiber segmentation, fiber typing, quality control, and guided human review for
+immunofluorescence histology, with auditable, analysis-ready outputs.**
 
-FiberTypeQC takes multi-channel muscle sections (CZI or TIFF) and produces analysis-ready fiber
-tables and a cohort report:
+Fiber-type composition of skeletal muscle is usually measured by hand or with per-image threshold
+tools. Manual typing is slow and varies between people; automated calls are rarely checked
+systematically, and corrections are often made directly in result tables, so it is hard to tell
+afterwards which values came from software and which from a person. FiberTypeQC is a Python
+workflow for multi-channel muscle sections (Zeiss CZI or TIFF) that keeps every step inspectable:
+it segments fibers, types them with a model matched to the staining panel, flags results that need
+a human look, records the reviewer's decisions separately from the model's predictions, and builds
+image-, mouse-, and cohort-level tables and a report.
 
-1. **Segment** fibers from the laminin channel (Cellpose).
-2. **Classify** fiber types with a model matched to your staining panel.
-3. **QC** every image and fiber.
-4. **Review** flagged results in Napari.
-5. **Finalize** review decisions into analysis tables without altering the model's predictions.
-6. **Report** image, mouse, and cohort results in a self-contained HTML report.
+```text
+images ─► segment (Cellpose) ─► type (panel-specific model) ─► QC flags
+       ─► guided review (Napari) ─► finalize (predictions untouched) ─► tables + HTML report
+```
+
+![Review workspace on a demo field: each fiber outlined in the color of its current call over the raw stain channels](docs/images/demo_review_workspace.png)
 
 ## Status
 
-Version `0.3.0`. Read this before relying on results:
+Version 0.3.0. Read before relying on results:
 
-- **Models are panel-specific.** A model only works on the staining panel it was trained on, and
-  the pipeline refuses a mismatched panel. The default model, `quad_four_class_rf_v1`, is for
-  four-marker panels (laminin, Type I, IIa, IIb; IIx inferred from absent signal).
-- **Model files are release downloads, not part of this repository.** Get
-  `quad_four_class_rf_v1.joblib` or `ta_three_class_logistic_v1.joblib` from the
-  [releases page](https://github.com/jrconner16/fibertypeqc/releases) and pass the file with
-  `--model` (or name it in the project config); the pipeline verifies it by its SHA-256.
-- **The default model is not yet validated on a random hold-out sample.** See its
-  [model card](docs/model_cards/quad_four_class_rf_v1.md). Use it for review-assisted analysis.
-- Without a model for your panel you can still run segmentation, QC, and the synthetic reference.
+- **Models are panel-specific.** A model works only on the staining panel it was trained on; the
+  pipeline refuses a mismatched panel. The default, `quad_four_class_rf_v1`, is for laminin, Type I,
+  IIa, and IIb panels (IIx inferred from absent signal).
+- **No accuracy claims yet.** The released models have not been validated on a blinded random
+  hold-out sample; see their [model cards](docs/model_cards/). Use them for review-assisted
+  analysis.
+- **Model files are release downloads**, verified by SHA-256; they are not in the repository.
+- Nuclear segmentation and extra-marker (eMHC, direct IIx) measurements are experimental.
 
-## Requirements
+## Install and try it
 
-- macOS or Linux; a GPU is optional but speeds up Cellpose.
-- [`uv`](https://docs.astral.sh/uv/) (it installs the pinned Python 3.11 and all dependencies).
-- To know which channel holds which stain in your images (see [Set up a project](#set-up-a-project)).
-- The model file for your panel.
-
-## Install and check
-
-Run every command from the repository root (the folder containing `pyproject.toml`).
+macOS or Linux, with [`uv`](https://docs.astral.sh/uv/) (it installs Python 3.11 and the locked
+dependencies). A GPU is optional.
 
 ```bash
 git clone https://github.com/jrconner16/fibertypeqc.git
 cd fibertypeqc
 uv sync --frozen                             # first run downloads several GB (PyTorch)
-uv run python -m scripts.run_reference       # runs the synthetic reference end to end
+uv run python -m scripts.run_reference       # synthetic end-to-end check; no data needed
 ```
 
-`run_reference` needs no private model or data. It runs the pipeline, review finalization, and
-results on synthetic images and checks the outputs; it should end with `reference workflow passed`.
-It tests the software, not biological accuracy. On shared or HPC filesystems see
-[README_uv_setup.md](README_uv_setup.md).
+Then follow the [demo](docs/demo.md): four small public fields from download to the HTML report.
+Details, HPC notes, and model downloads: [docs/install.md](docs/install.md).
 
-## Try the demo
-
-[docs/demo.md](docs/demo.md) walks through the whole workflow on four small cropped fields, from
-download to the HTML report, with a finished example project to compare against.
-
-## Set up a project
-
-One command creates a project folder for a study. It asks which staining panel you used (or lets
-you enter the channel for each stain), finds your images, and writes three small files:
+## Run your own images
 
 ```bash
-uv run python -m fibertypeqc init myproject/ --images /path/to/images
+uv run python -m fibertypeqc init     myproject/ --images /path/to/images   # panel, samples, model
+uv run python -m fibertypeqc run      myproject/   # segment, type, and QC every image
+uv run python -m fibertypeqc prepare  myproject/   # review project and project QC
+uv run python -m fibertypeqc review   myproject/   # guided review in Napari
+uv run python -m fibertypeqc finalize myproject/   # finalized tables and cohort report
+uv run python -m fibertypeqc status   myproject/   # where am I, and what next
 ```
 
-```
-myproject/
-  fibertypeqc_project.yaml   # images folder, panel, sample sheet, model
-  panel.yaml                 # which channel holds which stain
-  samples.csv                # one row per image: fill in mouse_id (and any group columns)
-```
+The [user guide](docs/user_guide.md) covers project setup, outputs, QC checks, models,
+troubleshooting, and single-image commands.
 
-Then open `samples.csv` and fill in `mouse_id` for each image. Any other column you add or fill
-(for example `group` or `genotype`) becomes a condition for cohort summaries. If mouse IDs are in
-your file names, `--mouse-id-pattern` fills them in, e.g. `--mouse-id-pattern '^(m\d+)_'`.
+## What it does
 
-To run unattended, give everything as options:
+- **Ingest:** CZI and TIFF, multi-scene CZIs split deterministically, channel roles from a panel
+  file or preset.
+- **Segment:** Cellpose on the laminin channel; per-fiber area and Feret diameters.
+- **Type:** panel-specific scikit-learn models with pinned feature extraction; each model declares
+  its panel, features, and classes, and is identified by SHA-256.
+- **QC:** per-image checks (fiber count, uncertainty, inferred-class share, fiber size, channel
+  crosstalk) and per-fiber flags (low confidence or margin, faint or thick laminin outline).
+- **Review:** a Napari workspace with a cohort dashboard, section pass/fail/exclude, a guided queue
+  of flagged fibers that says why each is shown, and drawn exclusion regions and analysis ROIs.
+- **Finalize:** applies review decisions and exclusions into new tables; every final value is
+  labelled `predicted`, `reviewed`, `excluded`, or `unresolved`; refuses decisions made on inputs
+  that have since changed.
+- **Report:** image, mouse, ROI, and cohort tables, and a self-contained HTML report comparing
+  predicted and finalized results.
+- **Measure and adapt:** blind reference labelling (model output hidden) with reviewer agreement;
+  candidate models trained from review decisions and compared under a rule fixed in advance;
+  explicit, reversible promotion; reproducibility snapshots.
 
-```bash
-uv run python -m fibertypeqc init myproject/ --images /path/to/images \
-  --panel four_marker_i_iia_laminin_iib --model /path/to/quad_four_class_rf_v1.joblib --yes
-```
+## How QC and review fit together
 
-**Panel presets** (`manifests/panels/`): `four_marker_i_iia_laminin_iib` (Type I, IIa, laminin,
-IIb in channels 0–3; IIx inferred) and `three_marker_iib_iia_laminin` (IIb, IIa, laminin; IIx
-inferred). Channels count from 0. If your channel order differs, choose "custom" in the wizard or
-edit `panel.yaml`; details in [docs/panel_schema.md](docs/panel_schema.md).
+The model's per-fiber table is written once and never edited. Automatic QC decides which fibers
+and sections a person should look at; the reviewer's decisions are saved as a separate review
+state; finalization combines the two into new tables, recording where each value came from. See the
+[review guide](docs/review_guide.md).
 
-**Model**: a registered model ID, or the path to your model file. With an ID for a model that is
-not in the repository, set `export FIBERTYPEQC_MODEL_ROOT=/folder/containing/the/model`.
+## Documentation
 
-## End-to-end workflow
-
-Then run the steps. Each reads the previous step's files and writes new ones; predictions are
-never modified.
-
-```bash
-uv run python -m fibertypeqc status   myproject/   # where am I, and what is the next command
-uv run python -m fibertypeqc run      myproject/   # 1. segment, type, and QC every image (slow)
-uv run python -m fibertypeqc prepare  myproject/   # 2-3. build the review project, run project QC
-uv run python -m fibertypeqc review   myproject/   # 4. review in Napari (GUI); saves automatically;
-                                                   #    "Finalize and build report" does step 5-6 there
-uv run python -m fibertypeqc finalize myproject/   # 5-6. finalized tables, summaries, HTML report
-```
-
-Then open `myproject/results/cohort_report.html`. The folder ends up with `batch/` (masks, fiber
-tables), `review/` (QC and saved decisions), `final/`, and `results/`.
-
-Notes:
-
-- `run` is the slow step (Cellpose); use a GPU node or a batch job for many images. It checks the
-  model, panel, and inputs before processing and stops with one message if something is missing.
-  Extra options are passed through, e.g. `run myproject/ --reuse-artifacts auto` to reuse masks
-  from an earlier run. The other steps take seconds to minutes and can be re-run at any time.
-- `finalize` works before any review; every fiber then keeps its model prediction.
-- For cropped fields, add `exclude_image_border_fibers: true` to `fibertypeqc_project.yaml` to
-  leave fibers cut off by the image edge out of the results (counted in the report). Off by
-  default.
-- `prepare` keeps an existing review project (and its decisions) rather than rebuilding it.
-- With split CZIs, tissue pieces imaged within one Zeiss scene stay together in one section.
-- Keep the project folder on storage with room: masks and exported scenes are about the size of
-  the raw images.
-
-<details>
-<summary>The individual commands behind each step</summary>
-
-```bash
-uv run python -m scripts.run_batch --input-dir images/ --panel-config panel.yaml \
-  --split-czi-scenes --model MODEL --output-dir myproject/batch
-uv run python -m scripts.make_review_project --batch-dir myproject/batch \
-  --sample-sheet samples.csv --panel-config panel.yaml --project-dir myproject/review
-uv run python -m scripts.generate_review_qc --project myproject/review/project.yaml
-uv run python -m scripts.review_project_napari --project myproject/review/project.yaml \
-  --reviewer YOUR_NAME --display-downsample 2
-uv run python -m scripts.finalize_review_project --project myproject/review/project.yaml \
-  --output-dir myproject/final
-uv run python -m scripts.summarize_results --final-dir myproject/final \
-  --project myproject/review/project.yaml --output-dir myproject/results
-```
-
-`make_review_project` never overwrites an existing project.
-
-</details>
-
-## Adapt the model from your review
-
-If the model does poorly on your images, your review decisions can train a replacement:
-
-```bash
-uv run python -m fibertypeqc improve myproject/
-```
-
-This compares three candidate model types with the current model on held-out mice, using only the
-fibers you reviewed, and saves each candidate with a manifest in `myproject/models/`. It prints a
-recommendation from a rule fixed in advance (`manifests/improver/recipe.v1.yaml`) and never
-changes the model your project uses. It needs reviewed fibers from at least three mice and ten per
-class. The comparison is between models on reviewed fibers, which are mostly hard cases; it is
-not an accuracy estimate.
-
-To switch the project to a candidate, and to undo that:
-
-```bash
-uv run python -m fibertypeqc promote myproject/ logistic      # add --override if not recommended
-uv run python -m fibertypeqc promote myproject/ --rollback
-```
-
-Switching re-types every section on its existing mask (no segmentation), keeps your review
-decisions, archives the previous outputs under `myproject/models/history/`, and records the change
-in `myproject/models/model_history.csv`.
-
-## Check a run against a reference
-
-To confirm that a later run (new code version, another computer) reproduces an earlier one, freeze
-a snapshot of a project's batch outputs and check against it later:
-
-```bash
-uv run python -m fibertypeqc snapshot myproject/ --freeze    # writes myproject/reference_snapshot.json
-uv run python -m fibertypeqc snapshot myproject/ --check     # exit code 0 when every section matches
-```
-
-A section with an identical mask must have identical fiber calls. A re-segmented section (masks
-can differ slightly between devices) must agree on fiber count within 2% and on every class share
-within 2 percentage points; adjust with `--count-tolerance` and `--composition-tolerance`. Snapshots
-contain image IDs and counts from your data, so keep snapshots of private data private.
-
-## Review
-
-The review workspace has four parts: cohort QC, per-section pass/fail/exclude, guided
-fiber-by-fiber review of flagged fibers (`K` keeps the model call, `1`–`4` set I/IIa/IIb/IIx), and
-regions (draw an area to exclude, or name analysis ROIs). Fibers are flagged for low model
-confidence or margin and for a faint or unusually thick laminin outline; "Why shown" names the
-reason. Full guide: [README_review_workflow.md](README_review_workflow.md).
-
-## What you get
-
-| Step | Output | Notes |
-|---|---|---|
-| `run` | per image: `*_cellpose_labels.tif`, `*_fibers.csv`, `*_summary.csv`, `*_run.json`, QC JSON, `*_result_report.html` | `*_fibers.csv` holds the model's call, probabilities, confidence, and margin; it is never modified later |
-| `prepare` | `qc/image_qc.csv`, `fiber_qc.csv`, `section_selection.csv` | technical QC and which sections are used |
-| `finalize` | `<image_id>_fibers_finalized.csv`, `final_fiber_table.csv`, `finalization_manifest.json` | every model column plus `final_type` and `value_source` (`predicted`, `reviewed`, `excluded`, `unresolved`) |
-| `finalize` | `image_summary.csv`, `mouse_summary.csv`, `cohort_summary.csv`, `roi_summary.csv`, `cohort_report.html` | CSVs are the source of truth; the report is built only from them |
-
-How final values are decided:
-
-- exclusions win: an excluded section, then a drawn exclusion region (by fiber center), then a
-  fiber the reviewer excluded; otherwise the reviewer's decision; otherwise the model's call;
-- fibers flagged for review but not reviewed keep the model's call and are counted in the report;
-- unresolved fibers have no final type and are left out of percentages, with their count reported;
-- mouse-level results pool fibers across that mouse's sections; cohort results treat each mouse as
-  one unit (mean ± SD);
-- finalization refuses a section whose mask or fiber table changed after review began.
-
-Column definitions: [docs/output_schema.md](docs/output_schema.md).
-
-## Models
-
-| Model ID | Panel | Classes | Where the file is |
-|---|---|---|---|
-| `quad_four_class_rf_v1` (default) | laminin, Type I, IIa, IIb | I, IIa, IIb, IIx (inferred) | release download; verified by SHA-256 |
-| `ta_three_class_logistic_v1` | laminin, IIa, IIb | IIa, IIb, IIx (inferred) | release download; verified by SHA-256 |
-| `synthetic_four_class_reference_v1` | laminin, Type I, IIa, IIb | I, IIa, IIb, IIx | in the repository; synthetic test fixture only |
-| `rebaseline_tile_v2_p75p90_iib_iia_iix` | laminin, IIa, IIb | IIa, IIb, IIx (inferred) | in the repository; retired historical model |
-
-`--model` takes a model ID or a path to a registered model file. The registry is
-`manifests/model_registry.v1.yaml` ([docs/model_registry.md](docs/model_registry.md)). A model's
-manifest can pin the feature-extraction settings it was trained with; the pipeline then uses exactly
-those and refuses typing options that would change them.
-
-## Automatic QC
-
-Per image, written to `*_postrun_qc.json` and the summary. A warning never removes fibers.
-
-| Check | Warns when |
+| For | Read |
 |---|---|
-| `postrun.fiber_count` | fewer than 300 fibers |
-| `postrun.uncertainty_rate` | more than 35% of fibers are low-confidence or unresolved |
-| `postrun.residual_rate` | share of the inferred class (IIx); informational until `--qc-max-residual-rate` is set |
-| `postrun.median_area` | median fiber area outside 200–15,000 px² |
-| `postrun.marker_correlation` | marker channels correlate above 0.92 (possible crosstalk or wrong channels) |
+| Users | [Install](docs/install.md) · [Demo](docs/demo.md) · [User guide](docs/user_guide.md) · [Review guide](docs/review_guide.md) · [Panels](docs/panel_schema.md) · [Outputs](docs/output_schema.md) · [Model cards](docs/model_cards/) |
+| Developers | [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Model registry](docs/model_registry.md) · [All docs](docs/README.md) |
+| Project | [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md) |
 
-## Troubleshooting
+### A five-minute tour of the code
 
-- **`No module named …`, or the wrong Python version**: you are not in the repository root.
-- **Not sure what to run next**: `uv run python -m fibertypeqc status myproject/`.
-- **"distributed privately" / "not a registered model"**: pass `--model /path/to/model.joblib` or
-  set `FIBERTYPEQC_MODEL_ROOT`; the file must be the registered model (checked by SHA-256).
-- **"contains N scenes"**: set `split_czi_scenes: true` in the project config (or add
-  `--split-czi-scenes` to `run_batch`).
-- **"non-channel dimensions (Z=…)"**: project or split Z/T stacks into single-plane multichannel
-  images first. TIFFs without channel metadata need ImageJ axes such as `CYX`.
-- **Batch reports fewer sections than expected**: sections are Zeiss scenes; the batch log prints
-  the scene count for each CZI.
-- **Project has fewer images than the batch**: `make_review_project` prints `warning: skipped …`
-  with the reason for each (failed in the batch, not in the sample sheet, or missing masks).
-- **Poor segmentation**: check the laminin channel in the panel file. `run_pipeline` (single image)
-  accepts `--diameter` (default 30) and `--cellpose-normalize`.
-- **Out of memory in review**: use `--display-downsample 4`.
+1. [ARCHITECTURE.md](ARCHITECTURE.md): the supported surface, data contracts, and the boundary
+   between product code and research tooling.
+2. [src/cli.py](src/cli.py): the project-folder workflow behind `python -m fibertypeqc`.
+3. [src/review/finalization.py](src/review/finalization.py): how review decisions and exclusions
+   become final values without touching predictions.
+4. [fibertypeqc/model_manifest.py](fibertypeqc/model_manifest.py) and
+   [fibertypeqc/model_resolution.py](fibertypeqc/model_resolution.py): panel-compatibility checks
+   and digest-verified model loading.
+5. [src/model_improver.py](src/model_improver.py) with
+   [manifests/improver/recipe.v1.yaml](manifests/improver/recipe.v1.yaml): candidate models
+   evaluated on held-out mice under a pre-declared promotion rule.
+6. [.github/workflows/ci.yml](.github/workflows/ci.yml) and
+   [scripts/run_reference.py](scripts/run_reference.py): what every change must pass.
 
-## Other entry points
+## Tests
 
-- **One image**: `uv run python -m scripts.run_pipeline --input image.tif --output-dir out
-  --panel-config my_panel.yaml --model MODEL`. Add `--labels-path` to use an existing mask.
-- **Historical three-class model** (laminin, IIa, IIb panels): `scripts.run_batch --model
-  rebaseline_tile_v2_p75p90_iib_iia_iix`; see [docs/quickstart.md](docs/quickstart.md) and its
-  [model card](data/models/model_card.md).
-- **Legacy per-image reviewer**: `scripts.review_labels_napari`; its corrections import into
-  finalization with `--legacy-review IMAGE_ID=CSV`. `scripts.merge_reviewed_labels` is deprecated.
+```bash
+uv sync --frozen --extra dev
+uv run pytest -m "not integration" -q          # fast synthetic tests
+uv run python -m scripts.run_reference         # end-to-end synthetic workflow
+uv run python -m scripts.check_repository      # links, tracked artifacts, private-data guardrails
+```
+
+CI runs these, plus linting and a smoke test of every public command, on each push.
 
 ## Repository layout
 
 ```
-scripts/      Public commands (python -m scripts.<name>)
-src/          Supported pipeline, review, finalization, and results code
 fibertypeqc/  Contracts: panels, model manifests and registry, QC, provenance, reports
-manifests/    Model registry and model manifests
-examples/     Synthetic reference images, models, and example configs
-docs/         Schemas, model cards, review guides
-research/     Research and study tooling; not part of the supported surface
-validation/   Thin wrappers over research validation tools
+src/          Pipeline, review, finalization, and results implementation
+scripts/      Public commands (python -m scripts.<name>)
+manifests/    Model registry, model manifests, panel presets, improver recipe
+examples/     Synthetic reference images and models, example outputs
+docs/         User and developer documentation; docs/history/ holds superseded plans
 tests/        Synthetic tests
+research/     Study and model-development tooling; not part of the supported surface
+validation/   Command wrappers over research validation tools
 ```
 
-More detail: [ARCHITECTURE.md](ARCHITECTURE.md). Plan and status: [ROADMAP.md](ROADMAP.md).
-Screenshots of the earlier per-image reviewer: [docs/demo_manifest.md](docs/demo_manifest.md).
+## Citation, license, and contact
 
-## Development
+If you use FiberTypeQC, please cite this repository and the version you used. MIT License; see
+[LICENSE](LICENSE). Questions and bug reports: open an
+[issue](https://github.com/jrconner16/fibertypeqc/issues). Contributions: see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-```bash
-uv sync --frozen --extra dev                  # adds pytest and pre-commit
-uv run ruff check .
-uv run pytest -q
-uv run python -m scripts.run_reference
-uv run python -m scripts.check_repository     # links, tracked artifacts, private-data guardrails
-uv run pre-commit install                     # once per clone
-```
-
-This repository is public. Do not commit microscopy data, real specimen identifiers, results from
+This repository is public: do not commit microscopy data, real specimen identifiers, results from
 unpublished data, or models trained on them; see [AGENTS.md](AGENTS.md).
-
-## License and contact
-
-MIT License; see [LICENSE](LICENSE). For questions or bug reports, open an issue.

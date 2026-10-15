@@ -22,10 +22,10 @@ def _table(prefix: str, authority: str, groups: list[str]) -> pd.DataFrame:
 
 def test_run_comparison_emits_grouped_cross_cohort_and_reporting_scopes():
     existing = _table("existing", "manual_audit", ["e1", "e2"])
-    notch = _table("notch", "reviewed_myosight", ["n1", "n2"])
+    cohort_b = _table("cohort_b", "reviewed_myosight", ["n1", "n2"])
     protected = _table("protected", "reviewed_myosight", ["p1"])
 
-    predictions, metrics = run_comparison(existing, notch, protected)
+    predictions, metrics = run_comparison(existing, cohort_b, protected)
 
     assert set(predictions["condition"]) == {
         "existing_only",

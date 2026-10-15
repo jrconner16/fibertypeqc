@@ -1,5 +1,12 @@
 # Validation Summary
 
+> **Status:** this page describes research comparison tools from v0.1-alpha. Comparison with
+> MyoSight or another method measures agreement between methods, not accuracy: both can be wrong.
+> No released model has accuracy figures yet; see the
+> [model cards](model_cards/quad_four_class_rf_v1.md). For blind reference labelling, which is how
+> the supported workflow measures a model on your images, see the
+> [user guide](user_guide.md#blind-reference-labels).
+
 FiberTypeQC v0.1-alpha includes validation utilities for image-level comparison against MyoSight
 exports.
 

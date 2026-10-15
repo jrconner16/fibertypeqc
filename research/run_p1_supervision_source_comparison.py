@@ -157,37 +157,37 @@ def _leave_one_group_out(
 
 
 def run_comparison(
-    existing: pd.DataFrame, notch: pd.DataFrame, protected: pd.DataFrame
+    existing: pd.DataFrame, cohort_b: pd.DataFrame, protected: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     prediction_frames: list[pd.DataFrame] = []
     existing_oof = _leave_one_group_out(
         existing, condition="existing_only", scope="grouped_resampling_existing"
     )
-    notch_oof = _leave_one_group_out(
-        notch, condition="cohort_b_only", scope="grouped_resampling_cohort_b"
+    cohort_b_oof = _leave_one_group_out(
+        cohort_b, condition="cohort_b_only", scope="grouped_resampling_cohort_b"
     )
     pooled_existing = _leave_one_group_out(
         existing,
         condition="pooled",
         scope="grouped_resampling_existing",
-        pooled=notch,
+        pooled=cohort_b,
     )
-    pooled_notch = _leave_one_group_out(
-        notch,
+    pooled_cohort_b = _leave_one_group_out(
+        cohort_b,
         condition="pooled",
         scope="grouped_resampling_cohort_b",
         pooled=existing,
     )
-    for frame in [existing_oof, notch_oof, pooled_existing, pooled_notch]:
+    for frame in [existing_oof, cohort_b_oof, pooled_existing, pooled_cohort_b]:
         prediction_frames.append(frame)
     for condition, train, test, scope in [
-        ("existing_to_cohort_b", existing, notch, "cross_cohort_cohort_b_development"),
-        ("cohort_b_to_existing", notch, existing, "cross_cohort_existing_development"),
+        ("existing_to_cohort_b", existing, cohort_b, "cross_cohort_cohort_b_development"),
+        ("cohort_b_to_existing", cohort_b, existing, "cross_cohort_existing_development"),
         ("existing_only", existing, protected, "protected_reporting_only"),
-        ("cohort_b_only", notch, protected, "protected_reporting_only"),
+        ("cohort_b_only", cohort_b, protected, "protected_reporting_only"),
         (
             "pooled",
-            pd.concat([existing, notch], ignore_index=True),
+            pd.concat([existing, cohort_b], ignore_index=True),
             protected,
             "protected_reporting_only",
         ),
@@ -224,7 +224,7 @@ def main() -> None:
         authority="manual_audit",
         fitting=True,
     )
-    notch = _validate(
+    cohort_b = _validate(
         pd.read_csv(args.cohort_b_development_features, low_memory=False),
         name="Cohort B development",
         authority="reviewed_myosight",
@@ -236,7 +236,7 @@ def main() -> None:
         authority="reviewed_myosight",
         fitting=False,
     )
-    predictions, metrics = run_comparison(existing, notch, protected)
+    predictions, metrics = run_comparison(existing, cohort_b, protected)
     args.output_dir.mkdir(parents=True)
     predictions.to_csv(args.output_dir / "predictions.csv", index=False)
     metrics.to_csv(args.output_dir / "metrics.csv", index=False)

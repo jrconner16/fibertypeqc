@@ -4,7 +4,7 @@
 
 The release path reviews a whole project in one Napari workspace and finalizes the decisions into
 analysis-ready tables. Prepare the project with steps 1–3 of the
-[end-to-end workflow](README.md#end-to-end-workflow), then launch:
+[end-to-end workflow](user_guide.md#end-to-end-workflow), then launch:
 
 ```bash
 uv run python -m scripts.review_project_napari \
