@@ -67,6 +67,7 @@
   to `--i-iia-train-*` / `--i-iia-heldout-*`.
 - Removed the `analysis/` placeholder, stale screenshots, and an internal panel-audit note.
 - `docs/demo.md` states the source and licence (CC BY 4.0) of the demo images.
+- Added `CITATION.cff` (authors: James R. Conner, Felipe de Souza Leite, Louis M. Kunkel).
 
 ### Dependencies
 

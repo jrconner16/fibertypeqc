@@ -139,7 +139,8 @@ validation/   Command wrappers over research validation tools
 
 ## Citation, license, and contact
 
-If you use FiberTypeQC, please cite this repository and the version you used. MIT License; see
+If you use FiberTypeQC, please cite it with the version you used; GitHub's "Cite this repository"
+button gives the citation from [CITATION.cff](CITATION.cff). MIT License; see
 [LICENSE](LICENSE). Questions and bug reports: open an
 [issue](https://github.com/jrconner16/fibertypeqc/issues). Contributions: see
 [CONTRIBUTING.md](CONTRIBUTING.md).
