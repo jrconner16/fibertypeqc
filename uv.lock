@@ -569,8 +569,6 @@ dependencies = [
     { name = "cellpose" },
     { name = "czifile" },
     { name = "imagecodecs" },
-    { name = "ipykernel" },
-    { name = "jupyterlab" },
     { name = "magicgui" },
     { name = "matplotlib" },
     { name = "napari", extra = ["pyqt5"] },
@@ -578,7 +576,6 @@ dependencies = [
     { name = "pandas" },
     { name = "pyyaml" },
     { name = "roifile" },
-    { name = "ruff" },
     { name = "scikit-image" },
     { name = "scikit-learn" },
     { name = "scipy" },
@@ -593,6 +590,10 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+notebook = [
+    { name = "ipykernel" },
+    { name = "jupyterlab" },
+]
 segmentation = [
     { name = "torch" },
     { name = "torchvision" },
@@ -603,8 +604,8 @@ requires-dist = [
     { name = "cellpose", specifier = ">=3.0" },
     { name = "czifile", specifier = ">=2019.7.2" },
     { name = "imagecodecs", specifier = ">=2024.1.1" },
-    { name = "ipykernel", specifier = ">=6.29" },
-    { name = "jupyterlab", specifier = ">=4.2" },
+    { name = "ipykernel", marker = "extra == 'notebook'", specifier = ">=6.29" },
+    { name = "jupyterlab", marker = "extra == 'notebook'", specifier = ">=4.2" },
     { name = "magicgui", specifier = ">=0.8" },
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "napari", extras = ["pyqt5"], specifier = ">=0.5" },
@@ -614,8 +615,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "roifile", specifier = ">=2024.5.24" },
-    { name = "ruff", specifier = ">=0.15.10" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.10" },
     { name = "scikit-image", specifier = ">=0.22" },
     { name = "scikit-learn", specifier = ">=1.5" },
     { name = "scipy", specifier = ">=1.12" },
@@ -625,7 +625,7 @@ requires-dist = [
     { name = "torchvision", marker = "extra == 'segmentation'" },
     { name = "xgboost", specifier = ">=2.1" },
 ]
-provides-extras = ["segmentation", "dev"]
+provides-extras = ["segmentation", "notebook", "dev"]
 
 [[package]]
 name = "filelock"

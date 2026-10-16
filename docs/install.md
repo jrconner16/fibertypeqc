@@ -29,11 +29,14 @@ uses the project environment.
 ## Development tools
 
 ```bash
-uv sync --frozen --extra dev                 # adds pytest and pre-commit
+uv sync --frozen --extra dev                 # adds ruff, pytest and pre-commit
 uv run pytest -m "not integration" -q
 ```
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full check list.
+
+JupyterLab is optional: add `--extra notebook` to `uv sync` if you analyze outputs in notebooks.
+Extras combine, for example `uv sync --frozen --extra dev --extra notebook`.
 
 ## Shared or HPC filesystems
 
