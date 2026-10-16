@@ -9,6 +9,13 @@ from the absence of IIa and IIb signal. The demo illustrates the software; its n
 study results, and the model has not been validated on a random hold-out sample
 ([model card](model_cards/ta_three_class_logistic_v1.md)).
 
+**Source and licence.** The images were acquired in the FiberTypeQC authors' laboratory and are
+shared with permission for demonstrating and testing FiberTypeQC. They are cropped and renamed
+(`demo_section_a`..`d`). The demo images and the files in
+`fibertypeqc_demo.zip` are released under the
+[Creative Commons Attribution 4.0 licence (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/);
+the FiberTypeQC code is MIT-licensed.
+
 ## 1. Get the demo files
 
 From the [releases page](https://github.com/jrconner16/fibertypeqc/releases) download
