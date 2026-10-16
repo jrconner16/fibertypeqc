@@ -66,6 +66,7 @@
   `research.plot_locked_composition`; `research.run_panel_transfer_experiment` options renamed
   to `--i-iia-train-*` / `--i-iia-heldout-*`.
 - Removed the `analysis/` placeholder, stale screenshots, and an internal panel-audit note.
+- `docs/demo.md` states the source and licence (CC BY 4.0) of the demo images.
 
 ### Dependencies
 
