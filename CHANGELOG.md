@@ -48,6 +48,15 @@
 - The reviewer only offers the classes the project's model produces (a three-class project no
   longer shows a Type I button).
 
+### Changed
+
+- `run_batch` (and so `fibertypeqc run`) starts each image's pipeline with the batch's own Python
+  interpreter instead of `uv run python`, removing a per-image environment check that is slow on
+  network filesystems. Outputs are unchanged.
+- The batch log now reports each image's wall-clock time beside the pipeline's own runtime; the
+  difference is time spent on interpreter startup, imports, and shutdown. `batch_summary.csv` is
+  unchanged.
+
 ### Documentation and repository
 
 - README rewritten as a short overview (problem, workflow, status, install, capabilities, docs,
