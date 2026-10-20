@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import subprocess
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -11,6 +13,7 @@ from src.run_batch import (
     BatchChannelOverrides,
     _error_tail,
     _load_input_manifest,
+    _pipeline_runtime_s,
     _pipeline_timing_lines,
     build_batch_command,
     run_single_image,
@@ -334,3 +337,78 @@ def test_error_tail_prefers_the_argparse_error_line():
     stderr = "usage: run_pipeline.py [-h]\n   [--flag FLAG]\nrun_pipeline.py: error: Unknown model"
 
     assert _error_tail(stderr) == "Unknown model"
+
+
+def test_build_batch_command_reuses_the_current_interpreter(tmp_path):
+    cmd = build_batch_command(
+        tmp_path / "image.czi",
+        tmp_path / "out",
+        channel_overrides=BatchChannelOverrides(),
+    )
+
+    assert cmd[:3] == [sys.executable, "-m", "src.run_pipeline"]
+    assert "uv" not in cmd
+
+
+def test_pipeline_runtime_is_read_from_the_child_summary_line():
+    assert _pipeline_runtime_s("[7/7] done: write outputs (0.4s)\ntotal runtime: 213.0s") == 213.0
+    assert _pipeline_runtime_s("no timing here") is None
+    assert _pipeline_runtime_s(None) is None
+    assert _pipeline_runtime_s("total runtime: not-a-number") is None
+
+
+def _fake_success(output_dir, stdout):
+    def fake_run(cmd, capture_output, text, timeout, check, cwd):
+        image_id = cmd[cmd.index("--image-id") + 1]
+        pd.DataFrame({"label": [1]}).to_csv(output_dir / image_id / f"{image_id}_fibers.csv")
+        return subprocess.CompletedProcess(cmd, 0, stdout, "")
+
+    return fake_run
+
+
+def test_run_single_image_logs_wall_time_against_pipeline_runtime(tmp_path, monkeypatch, caplog):
+    input_file = tmp_path / "image.czi"
+    input_file.write_text("", encoding="utf-8")
+    output_dir = tmp_path / "batch"
+    monkeypatch.setattr(
+        "src.run_batch.subprocess.run", _fake_success(output_dir, "total runtime: 2.0s\n")
+    )
+    clock = iter([100.0, 107.5])
+    monkeypatch.setattr("src.run_batch.time.perf_counter", lambda: next(clock))
+
+    with caplog.at_level(logging.INFO, logger="src.run_batch"):
+        result = run_single_image(input_file, output_dir, channel_overrides=BatchChannelOverrides())
+
+    assert (
+        "timing: wall 7.5s, pipeline 2.0s, outside pipeline (startup/shutdown) 5.5s"
+        in caplog.text
+    )
+    # Timing is logged only; the batch_summary.csv row keeps its existing columns.
+    assert set(result) == {
+        "image_name",
+        "status",
+        "error",
+        "fiber_count",
+        "summary_path",
+        "feature_diagnostics_path",
+    }
+
+
+def test_failed_image_still_logs_wall_time(tmp_path, monkeypatch, caplog):
+    input_file = tmp_path / "image.czi"
+    input_file.write_text("", encoding="utf-8")
+
+    def fake_run(cmd, capture_output, text, timeout, check, cwd):
+        raise subprocess.CalledProcessError(2, cmd, output="", stderr="Traceback\nValueError: bad")
+
+    monkeypatch.setattr("src.run_batch.subprocess.run", fake_run)
+    clock = iter([10.0, 13.0])
+    monkeypatch.setattr("src.run_batch.time.perf_counter", lambda: next(clock))
+
+    with caplog.at_level(logging.INFO, logger="src.run_batch"):
+        result = run_single_image(
+            input_file, tmp_path / "batch", channel_overrides=BatchChannelOverrides()
+        )
+
+    assert result["status"] == "failed"
+    assert "timing: wall 3.0s (pipeline runtime not reported)" in caplog.text

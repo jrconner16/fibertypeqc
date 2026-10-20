@@ -11,6 +11,7 @@ import argparse
 import logging
 import subprocess
 import sys
+import time
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -122,10 +123,10 @@ def build_batch_command(
     Returns:
         List of command arguments to pass to subprocess
     """
+    # The batch already runs inside the project environment; reuse its interpreter rather than
+    # paying a per-image `uv run` environment check (slow on network filesystems).
     cmd = [
-        "uv",
-        "run",
-        "python",
+        sys.executable,
         "-m",
         "src.run_pipeline",
         "--input",
@@ -242,6 +243,31 @@ def _pipeline_timing_lines(stdout: str) -> list[str]:
     return [line for line in stdout.splitlines() if line.startswith(prefixes)]
 
 
+def _pipeline_runtime_s(stdout: str | None) -> float | None:
+    """Return the child's own reported total runtime, if it printed one."""
+    for line in reversed((stdout or "").splitlines()):
+        if line.startswith("total runtime:"):
+            try:
+                return float(line.removeprefix("total runtime:").strip().removesuffix("s"))
+            except ValueError:
+                return None
+    return None
+
+
+def _image_timing_line(wall_s: float, pipeline_s: float | None) -> str:
+    """Summarize wall-clock time against the pipeline's own runtime.
+
+    The difference is time the pipeline does not measure itself: interpreter startup and
+    imports, work before its timer starts, and process shutdown.
+    """
+    if pipeline_s is None:
+        return f"wall {wall_s:.1f}s (pipeline runtime not reported)"
+    return (
+        f"wall {wall_s:.1f}s, pipeline {pipeline_s:.1f}s, "
+        f"outside pipeline (startup/shutdown) {wall_s - pipeline_s:.1f}s"
+    )
+
+
 def _load_input_manifest(
     path: Path,
     *,
@@ -336,6 +362,7 @@ def run_single_image(
         model_argument=model_argument,
     )
 
+    t_start = time.perf_counter()
     try:
         completed = subprocess.run(
             cmd,
@@ -345,9 +372,12 @@ def run_single_image(
             check=True,
             cwd=PROJECT_ROOT,
         )
+        wall_s = time.perf_counter() - t_start
         logger.info(f"✓ Completed: {input_file.name}")
         for line in _pipeline_timing_lines(completed.stdout):
             logger.info(f"  pipeline: {line}")
+        pipeline_s = _pipeline_runtime_s(completed.stdout)
+        logger.info(f"  timing: {_image_timing_line(wall_s, pipeline_s)}")
 
         # Outputs are named from --image-id, so no post-run renaming is needed.
         stem = output_stem(str(result["image_name"]))
@@ -364,11 +394,13 @@ def run_single_image(
         result["status"] = "timeout"
         result["error"] = "Pipeline exceeded 1-hour timeout"
         logger.error(f"✗ Timeout: {input_file.name}")
+        logger.info(f"  timing: {_image_timing_line(time.perf_counter() - t_start, None)}")
 
     except subprocess.CalledProcessError as e:
         result["status"] = "failed"
         result["error"] = f"Exit code {e.returncode}: {_error_tail(e.stderr)}"
         logger.error(f"✗ Failed: {input_file.name} — {result['error']}")
+        logger.info(f"  timing: {_image_timing_line(time.perf_counter() - t_start, None)}")
 
     except Exception as e:
         result["status"] = "error"
