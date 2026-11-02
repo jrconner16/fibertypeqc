@@ -11,8 +11,9 @@ outside Git.
 
 ## Scope
 
-v0.3.0 is released and is the immutable baseline. This plan polishes the existing software; it adds
-no features. Production code paths (`src/`, `fibertypeqc/`, `scripts/`, `manifests/`, `configs/`,
+v0.3.0 and v0.4.0 are released and immutable. Tracks A–C polish the existing software and add no
+features. The model builder (Track E) is planned development for a later release; it adds a new
+path for panels without a model and does not change existing behavior. Production code paths (`src/`, `fibertypeqc/`, `scripts/`, `manifests/`, `configs/`,
 `examples/`) do not move, so imports, commands, model loading, and output paths stay compatible.
 Method validation is a separate track (D) and does not block JOSS unless it finds a software bug.
 
@@ -73,6 +74,42 @@ labels; QC-ranked versus random review; performance as labels accumulate; cross-
 segmentation and morphometry validation; nuclear analysis accuracy; comparison with other tools,
 reported as disagreement rather than error. Deferred: continuous phenotype models, new network
 architectures, feature and classifier ablations, new features.
+
+## Track E — Model builder (planned; does not block the archive or JOSS submission)
+
+Goal: a lab whose panel has no model can build one inside FiberTypeQC, with the safeguards the
+model improver already has. Flow: `init` with no model -> `run` (segment and measure; calls
+`unclassified`) -> `review --blind` (label a sample) -> `build` (train and evaluate) -> explicit
+`promote` -> normal review and `improve`.
+
+Decisions:
+
+- Classes come from the project configuration. `negative` means negative for every measured
+  myosin marker and has a panel-specific display label (for example I⁻/IIa⁻); it is never read as
+  IIx or IIb. `unclassified` (no model call yet) and `uncertain` (a reviewer decision) stay
+  separate concepts. `hybrid` is optional.
+- Training features are marker intensity measurements only. Fiber area and morphology are kept
+  for QC and analysis but are not used to type fibers. Existing models, including those that use
+  area, are unchanged, and their model cards state any dependence on morphology.
+- The builder recipe sets minimums (3 independent training mice, 30 labels per class, every class
+  represented across the training mice) and selects candidates by leave-one-mouse-out evaluation.
+  A candidate is recommended only if its median per-mouse macro-F1 is at least 0.10 above a
+  majority-class baseline and every class has recall of at least 0.70. These are configurable,
+  documented safeguards, not guarantees of biological validity. Test mice never take part in
+  model selection, and a recommended model is never promoted automatically.
+
+| ID | Task | Priority | Done when |
+|---|---|---|---|
+| E1 | Run a project without a model: segmentation and measurements only, calls `unclassified`; QC, prepare, review, finalization, and summaries accept it | blocker | existing projects, the reference run, and the demo snapshot are unchanged |
+| E2 | Classes from the project configuration, including `negative` and optional `hybrid` | blocker | blind labelling offers the configured classes |
+| E3 | Builder recipe and `build` command (reusing the improver's evaluation) | blocker | candidates, manifests, and report written; recommendation follows the recipe |
+| E4 | `promote` from a project without a model, with rollback to unclassified | blocker | promote and rollback are exact |
+| E5 | Synthetic end-to-end test in CI (run -> labels -> build -> promote -> rollback -> snapshot) | blocker | green in CI |
+| E6 | User guide section and model-card template for built models | important | documented |
+| E7 | Public demo of building a model from manual labels on published images | optional | does not delay a release or the submission |
+
+Not in scope: importing labels from other tools, classes other than fiber types, deep-learning
+models, segmentation changes.
 
 ## Critical path
 
