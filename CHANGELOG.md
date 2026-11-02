@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## v0.4.0
+
+### Release summary
+
+- First release archived on Zenodo, with a DOI and `CITATION.cff` (authors, ORCIDs,
+  affiliations).
+- Model improvement with an explicit promotion rule and exact rollback (`improve`, `promote`),
+  blind reference labelling, evaluation roles, and reference export.
+- Faster batches on shared filesystems, and HPC (Slurm and Open OnDemand) guidance.
+- A simpler README, consolidated documentation, demo-data licence, and contributor files.
+- No change to segmentation, feature extraction, or the released models; v0.3.0 projects and
+  model files work unchanged. A few example files were renamed (listed below).
 
 ### Added
 

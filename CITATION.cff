@@ -19,6 +19,8 @@ authors:
     family-names: Kunkel
     orcid: "https://orcid.org/0000-0001-6126-0242"
     affiliation: "Division of Genetics and Genomics, Boston Children's Hospital, Boston, MA, USA; The Manton Center for Orphan Disease Research, Boston Children's Hospital, Boston, MA, USA"
+version: "0.4.0"
+date-released: "2026-11-02"
 repository-code: "https://github.com/jrconner16/fibertypeqc"
 license: MIT
 keywords:

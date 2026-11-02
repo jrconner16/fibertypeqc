@@ -1,6 +1,6 @@
 # FiberTypeQC Roadmap
 
-- Updated: 2026-10-15
+- Updated: 2026-11-02
 - Status: **active.** Goal: a clean, citable repository and a submission to the Journal of Open
   Source Software (JOSS).
 - Supersedes: [docs/history/ROADMAP_v0.3.md](docs/history/ROADMAP_v0.3.md) (frozen 2026-10-14) and
@@ -18,15 +18,13 @@ Method validation is a separate track (D) and does not block JOSS unless it find
 
 ## Current state
 
-Working: MIT licence; four releases (v0.1.0-alpha to v0.3.0); CI with lint, repository and
-private-data checks, CLI smoke tests, fast tests, and a deterministic synthetic reference run;
-locked environment; one-command project workflow; demo; model cards without accuracy claims;
-output and panel schemas; a core/research boundary enforced by `tests/test_core_boundary.py`.
+Done: Track A; B1 (`CITATION.cff` with ORCIDs and affiliations); B2 (Zenodo integration enabled);
+C1; C2. HPC use (Slurm batch, Open OnDemand review) is documented in `docs/install.md` and was
+checked on a cluster: the demo batch agreed with the macOS reference snapshot within tolerance.
 
-Gaps: the repository is hard to navigate (research tooling, thin wrapper packages, phase-era design
-notes, screenshots at the root); the README is a full manual without a statement of need; no
-`CITATION.cff`, `CONTRIBUTING.md`, code of conduct, issue templates, or archive DOI; demo data
-provenance is not stated; no JOSS paper.
+In progress: B3 (release v0.4.0), then B4 (DOI badge and citation in the README); C3 (outside
+install and demo run); C5 (paper). C3 fixes ship
+in a later release; the concept DOI covers every version.
 
 ## Track A — Repository cleanup and presentation
 
@@ -87,7 +85,6 @@ Estimated remaining work: 8–12 working days, mostly documentation. Earliest su
 
 ## Open decisions
 
-- Author list.
 - What the research-impact statement may say.
 - Packaging: keep the locked run-from-repository install (current) or make the package
   installable with pip (larger change; deferred unless needed).

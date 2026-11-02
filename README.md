@@ -21,7 +21,7 @@ images ─► segment (Cellpose) ─► type (panel-specific model) ─► QC fl
 
 ## Status
 
-Version 0.3.0. Read before relying on results:
+Version 0.4.0. Read before relying on results:
 
 - **Models are panel-specific.** A model works only on the staining panel it was trained on; the
   pipeline refuses a mismatched panel. The default, `quad_four_class_rf_v1`, is for laminin, Type I,
