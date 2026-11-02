@@ -59,6 +59,8 @@
 
 ### Documentation and repository
 
+- `docs/install.md` gains an HPC section: a Slurm job for `run` on a GPU node, CPU steps, and
+  review in an Open OnDemand desktop.
 - README rewritten as a short overview (problem, workflow, status, install, capabilities, docs,
   code tour). Its reference material moved to `docs/user_guide.md`, which also absorbs
   `docs/quickstart.md`.
