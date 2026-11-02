@@ -102,8 +102,10 @@ Both QC JSON files use schema version `fibertypeqc.qc.v2` and contain:
 - `stage`: `preflight` or `postrun`;
 - `overall_status`: `pass`, `warn`, or `fail`;
 - `recommended_next_action`: a stable machine-readable action name;
-- `checks`: ordered checks with stable `code`, `status`, explanatory `message`, `next_action`, and
-  optional measurements;
+- `checks`: ordered checks with stable `code`, `status` (`pass`, `warn`, `fail`, or
+  `not_applicable`), explanatory `message`, `next_action`, and optional measurements.
+  `not_applicable` marks a check that does not apply to the run, such as classification checks
+  for a project without a model; it never changes `overall_status`;
 - `context`: input, panel, model, or generated-artifact context relevant to the stage.
 
 Stable preflight codes are:
@@ -123,6 +125,9 @@ Stable post-run codes are:
 - `postrun.fiber_count`;
 - `postrun.uncertainty_rate`: fraction of fibers flagged `needs_review` (below the model
   confidence/margin thresholds) or called `uncertain`/`unresolved`, regardless of class;
+- `postrun.classification`: replaces `postrun.uncertainty_rate` for a run without a model
+  (`--no-model`); always `not_applicable`. In such runs `preflight.model_artifact_valid` and
+  `preflight.model_panel_compatible` are also `not_applicable`;
 - `postrun.residual_rate`: present only when the panel enables residual inference. Fraction of fibers
   assigned the residual (inferred-by-absence) class, e.g. IIx when I/IIa/IIb are all negative. A high
   value can indicate weak or failed marker staining. It is informational (`pass`) unless

@@ -112,6 +112,7 @@ def build_batch_command(
     model_manifest: Path | None = None,
     model_id: str | None = None,
     model_argument: str | None = None,
+    no_model: bool = False,
 ) -> list[str]:
     """
     Build the frozen v0 pipeline command for a single image.
@@ -142,7 +143,7 @@ def build_batch_command(
         "--reuse-artifacts",
         reuse_artifacts,
     ]
-    legacy_v0 = model_id is None or model_id == LEGACY_V0_MODEL_ID
+    legacy_v0 = not no_model and (model_id is None or model_id == LEGACY_V0_MODEL_ID)
     if legacy_v0:
         # The historical three-class model's typing settings and review thresholds. Models that
         # pin their own feature extraction must not receive these flags.
@@ -160,7 +161,10 @@ def build_batch_command(
                 str(V0_PARAMS["model_margin_threshold"]),
             ]
         )
-    if model_id is not None:
+    if no_model:
+        # Measure only; calls are 'unclassified' until a model is built and promoted.
+        cmd.append("--no-model")
+    elif model_id is not None:
         # run_pipeline resolves the registered manifest and artifact and verifies the digest.
         cmd.extend(["--model", model_argument or model_id])
     else:
@@ -316,6 +320,7 @@ def run_single_image(
     model_manifest: Path | None = None,
     model_id: str | None = None,
     model_argument: str | None = None,
+    no_model: bool = False,
 ) -> dict:
     """
     Process a single image through the v0 pipeline.
@@ -360,6 +365,7 @@ def run_single_image(
         model_manifest=model_manifest,
         model_id=model_id,
         model_argument=model_argument,
+        no_model=no_model,
     )
 
     t_start = time.perf_counter()
@@ -484,6 +490,14 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--no-model",
+        action="store_true",
+        help=(
+            "Segment and measure every image without typing fibers (calls are 'unclassified'), "
+            "for a panel that has no model yet. Needs --panel-config."
+        ),
+    )
+    parser.add_argument(
         "--model-manifest",
         type=Path,
         default=None,
@@ -600,7 +614,21 @@ def main() -> None:
             print(f"  {k}: {v}")
         return
 
-    if args.model is None and args.classifier_path is None:
+    if args.no_model:
+        if (
+            args.model is not None
+            or args.classifier_path is not None
+            or args.model_manifest is not None
+        ):
+            parser.error(
+                "--no-model cannot be combined with --model, --classifier-path, or "
+                "--model-manifest"
+            )
+        if args.panel_config is None and args.channel_config is None:
+            parser.error(
+                "--no-model needs --panel-config describing which channel holds each marker"
+            )
+    elif args.model is None and args.classifier_path is None:
         # Release default: the registry's default fiber-type model (four-class QUAD). The
         # historical three-class run remains available with --model LEGACY_V0_MODEL_ID.
         args.model = default_model_id("fiber_identity")
@@ -735,7 +763,9 @@ def main() -> None:
         sys.exit(1)
 
     logger.info(f"Found {len(image_rows)} image(s) to process")
-    if resolved_model is not None and resolved_model.model_id != LEGACY_V0_MODEL_ID:
+    if args.no_model:
+        logger.info("Model: none (fibers are measured, not typed; calls are 'unclassified')")
+    elif resolved_model is not None and resolved_model.model_id != LEGACY_V0_MODEL_ID:
         logger.info(f"Model: {resolved_model.model_id}")
         logger.info(f"  artifact sha256: {file_sha256(resolved_model.artifact_path)}")
         logger.info(f"  manifest: {resolved_model.manifest_path.name}")
@@ -799,6 +829,7 @@ def main() -> None:
             # The verified absolute artifact path: children identify it by digest and do not
             # depend on the working directory or FIBERTYPEQC_MODEL_ROOT.
             model_argument=str(resolved_model.artifact_path) if resolved_model else None,
+            no_model=args.no_model,
         )
         results.append(result)
     results.extend(scene_failures)

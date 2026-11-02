@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import Any
 
 QC_SCHEMA_VERSION = "fibertypeqc.qc.v2"
-QC_STATUSES = frozenset(("pass", "warn", "fail"))
+# ``not_applicable`` marks a check that does not apply to this run (for example classification
+# checks when no model types the fibers); it never affects the overall status.
+QC_STATUSES = frozenset(("pass", "warn", "fail", "not_applicable"))
 
 
 def qc_check(
@@ -102,6 +104,7 @@ def postrun_checks(
     median_area_max: float,
     max_type_corr: float,
     max_residual_rate: float | None = None,
+    typing_applicable: bool = True,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     checks.append(
@@ -120,6 +123,13 @@ def postrun_checks(
     high_uncertainty = bool(qc_stats["flag_high_uncertainty_rate"])
     checks.append(
         qc_check(
+            "postrun.classification",
+            "not_applicable",
+            "No model: fibers are measured but not typed, so classification QC does not apply.",
+            "label_fibers_blind",
+        )
+        if not typing_applicable
+        else qc_check(
             "postrun.uncertainty_rate",
             "warn" if high_uncertainty else "pass",
             "Uncertain-fiber rate exceeds the configured maximum."

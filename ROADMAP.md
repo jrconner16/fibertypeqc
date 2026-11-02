@@ -92,8 +92,10 @@ Decisions:
 - Training features are marker intensity measurements only. Fiber area and morphology are kept
   for QC and analysis but are not used to type fibers. Existing models, including those that use
   area, are unchanged, and their model cards state any dependence on morphology.
-- The builder recipe sets minimums (3 independent training mice, 30 labels per class, every class
-  represented across the training mice) and selects candidates by leave-one-mouse-out evaluation.
+- The builder recipe sets minimums (3 independent training mice; 30 labels per class, from at
+  least 2 training mice with at least 5 each) and selects candidates by leave-one-mouse-out
+  evaluation. A class absent from a held-out mouse has no recall for that mouse (N/A, not zero);
+  per-class support and contributing mice are reported.
   A candidate is recommended only if its median per-mouse macro-F1 is at least 0.10 above a
   majority-class baseline and every class has recall of at least 0.70. These are configurable,
   documented safeguards, not guarantees of biological validity. Test mice never take part in

@@ -864,7 +864,10 @@ def generate_project_qc(
                     project=project,
                     image=image,
                     domain=domain,
-                    applicable=domain in image.applicable_domains,
+                    # Without a model there are no calls, so typing QC does not apply; the
+                    # typing metrics are still recorded.
+                    applicable=domain in image.applicable_domains
+                    and not (domain is Domain.FIBER_TYPING and project.model_version == "none"),
                     rules=rules,
                     computed_at=computed_at,
                     metrics=domain_metrics[domain],

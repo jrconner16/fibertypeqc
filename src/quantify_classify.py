@@ -55,6 +55,9 @@ class QuantifyConfig:
 
     # Optional classifier hook (off by default).
     classifier_path: str | None = None
+    # A project without a model: measure every fiber but type none of them (calls are
+    # ``unclassified``). Labels for building a model come from blind labelling instead.
+    typing_disabled: bool = False
 
 
 @dataclass
@@ -72,6 +75,9 @@ class QCConfig:
 
 
 LEGACY_SUMMARY_CLASSES = ("type1", "type2", "mixed", "unknown")
+# Call for every fiber when typing is disabled. Deliberately not the legacy ``unknown``, which the
+# rule path uses for fibers negative for IIb and IIa and which is read as IIx downstream.
+UNCLASSIFIED = "unclassified"
 UNCERTAIN_FIBER_LABELS = frozenset(("uncertain", "unresolved"))
 
 
@@ -1182,12 +1188,20 @@ def quantify_labels(labels: np.ndarray, image_chw: np.ndarray, cfg: QuantifyConf
             df[f"area_erode_{erode_px}px"] = csa_areas.astype(np.int32)
             df[f"area_erode_{erode_px}px_um2"] = csa_areas.astype(np.float32) * pixel_area_um2
 
-    if marker_specs is None:
-        df["fiber_type"] = "unknown"
-        df["fiber_type_source"] = "unclassified_panel"
-        df["classification_method"] = "diagnostics_only"
-        df["needs_review"] = True
-        df["typing_signal_qc_flags"] = "classification_not_available"
+    if cfg.typing_disabled or marker_specs is None:
+        if cfg.typing_disabled:
+            df["fiber_type"] = UNCLASSIFIED
+            df["fiber_type_source"] = "no_model"
+            df["classification_method"] = "none"
+            # Nothing to review yet: there is no call to check.
+            df["needs_review"] = False
+            df["typing_signal_qc_flags"] = ""
+        else:
+            df["fiber_type"] = "unknown"
+            df["fiber_type_source"] = "unclassified_panel"
+            df["classification_method"] = "diagnostics_only"
+            df["needs_review"] = True
+            df["typing_signal_qc_flags"] = "classification_not_available"
         df["classifier_path"] = ""
         for col in (
             "type1_threshold",

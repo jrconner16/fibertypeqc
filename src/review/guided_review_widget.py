@@ -87,13 +87,26 @@ class GuidedReviewWidget(QWidget):
             key=lambda image_id: sha256(f"{project.project_id}:{image_id}".encode()).hexdigest(),
         )
         self.section_codes = {image_id: n for n, image_id in enumerate(blind_images, start=1)}
-        # Only offer the classes this project's model produces (class names only; no calls).
-        self.classes = set(self.rows["model_fiber_type"].astype(str).str.lower()) & {
-            "i",
-            "iia",
-            "iib",
-            "iix",
-        } or {"i", "iia", "iib", "iix"}
+        # Only offer the classes this project's model produces (class names only; no calls). A
+        # project without a model offers the classes named in its configuration instead.
+        self.classes = set(project.review_classes) or (
+            set(self.rows["model_fiber_type"].astype(str).str.lower())
+            & {"i", "iia", "iib", "iix"}
+            or {"i", "iia", "iib", "iix"}
+        )
+        # (shortcut key, button text, class); hybrid and negative only appear when configured.
+        self.class_buttons = tuple(
+            (key, name, value)
+            for key, name, value in (
+                ("1", "I", "i"),
+                ("2", "IIa", "iia"),
+                ("3", "IIb", "iib"),
+                ("4", "IIx", "iix"),
+                ("5", "Hybrid", "hybrid"),
+                ("6", project.class_labels.get("negative", "Negative"), "negative"),
+            )
+            if value in self.classes
+        )
         self.timer = ReviewTimer(
             project.review_directory,
             reviewer=controller.session.reviewer,
@@ -164,16 +177,7 @@ class GuidedReviewWidget(QWidget):
         self.status.setWordWrap(True)
         self.undo_button = QPushButton("Undo last decision")
         self.undo_button.setEnabled(False)
-        class_keys = " · ".join(
-            f"{key} {name}"
-            for key, name, value in (
-                ("1", "I", "i"),
-                ("2", "IIa", "iia"),
-                ("3", "IIb", "iib"),
-                ("4", "IIx", "iix"),
-            )
-            if value in self.classes
-        )
+        class_keys = " · ".join(f"{key} {name}" for key, name, _ in self.class_buttons)
         self.shortcut_label = QLabel(
             "Shortcuts: ←/→ navigate · F center fiber · "
             + ("" if blind else "K keep model · ")
@@ -244,17 +248,11 @@ class GuidedReviewWidget(QWidget):
         keep = QPushButton("Keep model call (K)")
         keep.setVisible(not blind)
         primary.addWidget(keep)
-        for label, fiber_type in (
-            ("I (1)", "i"),
-            ("IIa (2)", "iia"),
-            ("IIb (3)", "iib"),
-            ("IIx (4)", "iix"),
-        ):
-            button = QPushButton(label)
+        for key, name, fiber_type in self.class_buttons:
+            button = QPushButton(f"{name} ({key})")
             button.clicked.connect(
                 lambda _checked=False, value=fiber_type: self._record_type(value)
             )
-            button.setVisible(fiber_type in self.classes)
             primary.addWidget(button)
         exclude = QPushButton("Exclude (X)")
         exclude.setToolTip("Leave this fiber out of the results (damaged, cut off, not a fiber).")
@@ -352,9 +350,8 @@ class GuidedReviewWidget(QWidget):
         self._add_shortcut("F", self._focus_current_object)
         if not blind:
             self._add_shortcut("K", self._keep_model_call)
-        for key, fiber_type in (("1", "i"), ("2", "iia"), ("3", "iib"), ("4", "iix")):
-            if fiber_type in self.classes:
-                self._add_shortcut(key, lambda value=fiber_type: self._record_type(value))
+        for key, _, fiber_type in self.class_buttons:
+            self._add_shortcut(key, lambda value=fiber_type: self._record_type(value))
         self._add_shortcut("X", lambda: self._record_special(ObjectReviewStatus.EXCLUDED))
         self._add_shortcut("U", self.undo)
         if blind:

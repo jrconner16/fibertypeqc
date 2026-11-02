@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- **Projects without a model** (model builder, roadmap E1/E2): `model: none` in
+  `fibertypeqc_project.yaml` segments and measures every fiber without typing it (calls are
+  `unclassified`; `run_batch --no-model`, `run_pipeline --no-model`). Optional `classes` (default:
+  one per measured myosin marker plus `negative`; `hybrid` on request) are the choices offered in
+  blind labelling; `negative` is shown with the panel's markers (for example I⁻/IIa⁻) and is never
+  read as IIx or IIb. `unclassified` is distinct from the legacy rule call `unknown` and from a
+  reviewer's `uncertain`. `review` requires `--blind` for these projects, and `finalize`,
+  `improve`, and `promote` refuse them until a model exists. Classification QC is reported as
+  `not_applicable` (a new check status that never changes the overall status); segmentation and
+  measurement QC pass, warn, and fail as usual. Outputs of projects with a model are unchanged.
+
 ### Documentation and repository
 
 - README and `CITATION.cff` give the Zenodo DOIs (concept DOI 10.5281/zenodo.23893717; v0.4.0

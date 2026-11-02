@@ -37,6 +37,8 @@ def _relative(path: Path, start: Path) -> str:
 
 def _model_version(run_record: Path) -> str:
     record = json.loads(run_record.read_text(encoding="utf-8"))
+    if record.get("typing") == "none":
+        return "none"
     manifest = record.get("model_manifest_path")
     if manifest:
         raw = yaml.safe_load((Path(__file__).resolve().parents[1] / manifest).read_text())
@@ -57,6 +59,8 @@ def build_project(
     *,
     project_id: str,
     project_name: str,
+    classes: list[str] | None = None,
+    negative_label: str = "",
 ) -> tuple[dict[str, Any], list[str]]:
     sheet = pd.read_csv(sample_sheet, dtype=str, keep_default_na=False)
     missing = [column for column in REQUIRED_COLUMNS if column not in sheet.columns]
@@ -134,6 +138,15 @@ def build_project(
         "model_version": model_versions.pop(),
         "images": images,
     }
+    if project["model_version"] == "none":
+        # Without a model, the classes a fiber can be labelled with come from the project config.
+        if not classes:
+            raise ValueError("The batch ran without a model; pass the label classes (--classes)")
+        project["review_classes"] = list(classes)
+        if negative_label:
+            project["class_labels"] = {"negative": negative_label}
+    elif classes:
+        raise ValueError("--classes is only used for a batch run without a model")
     return project, warnings
 
 
@@ -150,6 +163,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--project-id", default=None, help="Default: project directory name")
     parser.add_argument("--project-name", default=None)
+    parser.add_argument(
+        "--classes",
+        default=None,
+        help="Comma-separated label classes, for a batch run without a model",
+    )
+    parser.add_argument(
+        "--negative-label", default="", help="How 'negative' is shown, e.g. 'I⁻/IIa⁻'"
+    )
     return parser
 
 
@@ -170,6 +191,8 @@ def main(argv: list[str] | None = None) -> int:
             project_dir,
             project_id=project_id,
             project_name=args.project_name or project_id,
+            classes=[value for value in (args.classes or "").split(",") if value] or None,
+            negative_label=args.negative_label,
         )
     except ValueError as exc:
         print(f"Cannot build project: {exc}", file=sys.stderr)
