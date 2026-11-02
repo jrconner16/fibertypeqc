@@ -36,6 +36,7 @@ from typing import Any
 import pandas as pd
 import yaml
 
+from fibertypeqc.config import load_channel_config
 from fibertypeqc.model_resolution import default_model_id
 from fibertypeqc.panel_presets import (
     MARKER_LABELS,
@@ -45,6 +46,7 @@ from fibertypeqc.panel_presets import (
     preset_path,
     write_panel,
 )
+from src.fiber_type_labels import default_classes, negative_display_label, validate_classes
 from src.reference_snapshot import (
     DEFAULT_COMPOSITION_TOLERANCE,
     DEFAULT_COUNT_TOLERANCE,
@@ -72,6 +74,10 @@ class ProjectFolder:
     reviewer: str
     display_downsample: int
     exclude_image_border_fibers: bool = False
+    # ``model: none``: fibers are measured but not typed, and are labelled into ``classes``.
+    no_model: bool = False
+    classes: tuple[str, ...] = ()
+    negative_label: str = ""
 
     @property
     def batch_dir(self) -> Path:
@@ -123,19 +129,44 @@ def load_project_folder(folder: Path) -> ProjectFolder:
     model = raw.get("model")
     if model is not None and not isinstance(model, str):
         raise ProjectError(f"{CONFIG_NAME}: 'model' must be a model ID or a file path")
-    if isinstance(model, str) and _is_path_like(model):
+    no_model = isinstance(model, str) and model.strip().lower() == "none"
+    if no_model:
+        model = None
+    elif isinstance(model, str) and _is_path_like(model):
         model = str(_resolve(root, model, "model"))
+    panel = preset_path(str(raw.get("panel"))) or _resolve(root, raw.get("panel"), "panel")
+    classes: tuple[str, ...] = ()
+    negative_label = ""
+    if "classes" in raw and not no_model:
+        raise ProjectError(
+            f"{CONFIG_NAME}: 'classes' is only used with 'model: none'; "
+            "a model sets its own classes"
+        )
+    if no_model and panel.is_file():
+        try:
+            markers = load_channel_config(panel).available_markers
+            classes = tuple(
+                validate_classes(raw["classes"], markers)
+                if "classes" in raw
+                else default_classes(markers)
+            )
+        except ValueError as exc:
+            raise ProjectError(f"{CONFIG_NAME}: {exc}") from exc
+        negative_label = negative_display_label(markers)
     return ProjectFolder(
         root=root,
         images=_resolve(root, raw.get("images"), "images"),
         # A preset name may be used directly instead of a panel file in the project folder.
-        panel=preset_path(str(raw.get("panel"))) or _resolve(root, raw.get("panel"), "panel"),
+        panel=panel,
         sample_sheet=_resolve(root, raw.get("sample_sheet"), "sample_sheet"),
         model=model,
         split_czi_scenes=bool(raw.get("split_czi_scenes", True)),
         reviewer=str(raw.get("reviewer", "") or ""),
         display_downsample=int(raw.get("display_downsample", 2)),
         exclude_image_border_fibers=bool(raw.get("exclude_image_border_fibers", False)),
+        no_model=no_model,
+        classes=classes,
+        negative_label=negative_label,
     )
 
 
@@ -186,6 +217,13 @@ def project_status(project: ProjectFolder) -> dict[str, Any]:
             regions=len(state.get("regions", [])),
             sections_opened=len(state.get("input_fingerprints", {})),
         )
+    if project.no_model:
+        labels = {}
+        for state_path in sorted((project.review_dir / "reference").glob("*/review_state.json")):
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            labels[state_path.parent.name] = len(state.get("object_decisions", []))
+        status["blind_labels"] = labels
+        return status
     manifest_path = project.final_dir / "finalization_manifest.json"
     if not manifest_path.is_file():
         return status
@@ -211,6 +249,14 @@ NEXT_STEP = {
     "finalized": ("finalize", "Build the result tables and report."),
     "reported": ("review", "Done. Review more and finalize again, or open the report."),
 }
+# A project without a model is measured, not typed, and its fibers are labelled blind.
+NO_MODEL_NEXT_STEP = {
+    "new": ("run", "Segment and measure every image (no model: fibers are not typed)."),
+    "ready_for_review": (
+        "review",
+        "Label a sample of fibers: review PROJECT --blind --reviewer NAME (no model yet).",
+    ),
+}
 
 
 def command_status(project: ProjectFolder) -> int:
@@ -227,11 +273,18 @@ def command_status(project: ProjectFolder) -> int:
             f"Review:  {status['fiber_decisions']} fiber decision(s), {status['regions']} "
             f"region(s), {status['sections_opened']} section(s) opened"
         )
+    if status.get("blind_labels"):
+        counts = ", ".join(f"{name} {count}" for name, count in status["blind_labels"].items())
+        print(f"Labels:  blind labels by reviewer: {counts}")
     if "report" in status:
         print(f"Report:  {status['report']}")
     for note in status["notes"]:
         print(f"Note:    {note}")
-    step, explanation = NEXT_STEP[status["stage"]]
+    if project.no_model:
+        print(f"Model:   none; classes {', '.join(project.classes) or '(panel file missing)'}")
+    step, explanation = (
+        NO_MODEL_NEXT_STEP.get(status["stage"]) if project.no_model else None
+    ) or NEXT_STEP[status["stage"]]
     print(f"Next:    python -m fibertypeqc {step} {project.root}")
     print(f"         {explanation}")
     return 0
@@ -246,7 +299,9 @@ def command_run(project: ProjectFolder, extra: list[str]) -> int:
         "--panel-config", str(project.panel),
         "--output-dir", str(project.batch_dir),
     ]  # fmt: skip
-    if project.model:
+    if project.no_model:
+        arguments.append("--no-model")
+    elif project.model:
         arguments += ["--model", project.model]
     if project.split_czi_scenes:
         arguments.append("--split-czi-scenes")
@@ -273,6 +328,12 @@ def command_prepare(project: ProjectFolder) -> int:
                 str(project.review_dir),
                 "--project-id",
                 project.root.name,
+                *(
+                    ["--classes", ",".join(project.classes),
+                     "--negative-label", project.negative_label]
+                    if project.no_model
+                    else []
+                ),
             ],  # fmt: skip
         )
         if code != 0:
@@ -289,10 +350,24 @@ def command_review(project: ProjectFolder, extra: list[str]) -> int:
     ]  # fmt: skip
     if project.reviewer:
         arguments += ["--reviewer", project.reviewer]
+    if project.no_model and "--blind" not in extra:
+        raise ProjectError(
+            "This project has no model, so there are no calls to review. Label a sample of fibers "
+            "instead: python -m fibertypeqc review PROJECT --blind --reviewer NAME"
+        )
     return _run("review_project_napari", [*arguments, *extra])
 
 
+def _require_model(project: ProjectFolder, step: str) -> None:
+    if project.no_model:
+        raise ProjectError(
+            f"This project has no model yet ('model: none'), so '{step}' has no fiber calls to "
+            "work with. Label fibers with: review --blind --reviewer NAME."
+        )
+
+
 def command_finalize(project: ProjectFolder) -> int:
+    _require_model(project, "finalize")
     if not project.review_project.is_file():
         raise ProjectError("The review project is not built. Run: python -m fibertypeqc prepare")
     code = _run(
@@ -411,7 +486,11 @@ def command_init(args: argparse.Namespace) -> int:
     panel, panel_source = _choose_panel(images, interactive, args.panel)
     default_model = default_model_id("fiber_identity") or ""
     model = args.model or (
-        _ask("Model: a registered ID or the path to your model file", default_model)
+        _ask(
+            "Model: a registered ID, the path to your model file, or 'none' if your panel has "
+            "no model yet",
+            default_model,
+        )
         if interactive
         else default_model
     )
@@ -563,7 +642,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--panel",
         help=f"Panel preset ({', '.join(list_presets())}) or a panel YAML file to copy",
     )
-    init.add_argument("--model", help="Registered model ID or path to a model file")
+    init.add_argument(
+        "--model",
+        help="Registered model ID, path to a model file, or 'none' for a panel without a model",
+    )
     init.add_argument(
         "--mouse-id-pattern",
         help="Regular expression applied to each file name; its first group fills mouse_id",
@@ -591,6 +673,8 @@ def main(argv: list[str] | None = None) -> int:
             return command_prepare(project)
         if args.step == "review":
             return command_review(project, extra)
+        if args.step in {"promote", "improve"}:
+            _require_model(project, args.step)
         if args.step == "promote":
             arguments = ["--project-root", str(project.root), "--panel-config", str(project.panel)]
             if args.rollback:

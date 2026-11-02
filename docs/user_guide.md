@@ -37,7 +37,8 @@ inferred). Channels count from 0. If your channel order differs, choose "custom"
 edit `panel.yaml`; details in [panel_schema.md](panel_schema.md).
 
 **Model**: a registered model ID, or the path to your model file. With an ID for a model that is
-not in the repository, set `export FIBERTYPEQC_MODEL_ROOT=/folder/containing/the/model`.
+not in the repository, set `export FIBERTYPEQC_MODEL_ROOT=/folder/containing/the/model`. If no
+model fits your panel, use `model: none` ([Panels without a model](#panels-without-a-model)).
 
 ## End-to-end workflow
 
@@ -167,6 +168,30 @@ pin the feature-extraction settings it was trained with; the pipeline then uses 
 refuses typing options that would change them. Model cards:
 [quad_four_class_rf_v1](model_cards/quad_four_class_rf_v1.md),
 [ta_three_class_logistic_v1](model_cards/ta_three_class_logistic_v1.md).
+
+## Panels without a model
+
+If no model fits your staining panel, set `model: none` in `fibertypeqc_project.yaml`. `run` then
+segments and measures every fiber but types none of them: every call is `unclassified`, and the
+marker measurements are written to `*_feature_diagnostics.csv`. You label a sample of fibers
+blind, and (in a coming release) a model is built from those labels.
+
+```yaml
+model: none
+classes: [i, iia, negative]      # optional; this is the default for a Type I + IIa panel
+```
+
+- `classes` defaults to one class per myosin marker the panel measures, plus `negative`. Add
+  `hybrid` to the list to offer it. A class for a marker the panel does not measure is refused.
+- `negative` means negative for every measured myosin marker and is shown with the panel's
+  markers (for example I⁻/IIa⁻). It is never counted as IIx or IIb.
+- `unclassified` is not a class: it only means no model has typed the fiber yet. It is separate
+  from a reviewer's `uncertain` and from the historical rule call `unknown`.
+
+After `run` and `prepare`, label fibers with
+`uv run python -m fibertypeqc review myproject/ --blind --reviewer NAME`
+([Blind reference labels](#blind-reference-labels)); the buttons offer the configured classes.
+`finalize`, `improve`, and `promote` need model calls and refuse a project without a model.
 
 ## Adapt the model from your review
 

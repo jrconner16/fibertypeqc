@@ -61,6 +61,10 @@ class Project:
     # Where review state is kept, relative to the project root. Blind reference labelling uses
     # its own directory per reviewer so it can never mix with (or be applied as) review decisions.
     review_subdirectory: str = "review"
+    # Projects without a model (model_version "none") are labelled into these classes; empty when a
+    # model sets the classes. ``class_labels`` holds display names, e.g. negative -> "I⁻/IIa⁻".
+    review_classes: tuple[str, ...] = ()
+    class_labels: dict[str, str] = field(default_factory=dict)
 
     @property
     def root(self) -> Path:
@@ -252,6 +256,15 @@ def load_project(path: Path | str, *, validate_paths: bool = True) -> Project:
                     f"{output_path}"
                 )
 
+    review_classes = data.get("review_classes", [])
+    if not isinstance(review_classes, list) or not all(isinstance(v, str) for v in review_classes):
+        raise ValueError("project.review_classes must be a list of class names when provided")
+    class_labels = data.get("class_labels", {})
+    if not isinstance(class_labels, dict):
+        raise ValueError("project.class_labels must be a mapping when provided")
+    if model_version == "none" and not review_classes:
+        raise ValueError("project.review_classes is required when model_version is 'none'")
+
     qc_version = data.get("qc_version", "")
     if not isinstance(qc_version, str):
         raise ValueError("project.qc_version must be a string when provided")
@@ -264,4 +277,6 @@ def load_project(path: Path | str, *, validate_paths: bool = True) -> Project:
         manifest_path=manifest_path,
         images=images,
         qc_version=qc_version,
+        review_classes=tuple(value.strip().lower() for value in review_classes),
+        class_labels={str(key): str(value) for key, value in class_labels.items()},
     )

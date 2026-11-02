@@ -83,8 +83,11 @@ class FiberTypeReviewController:
             if reviewed_type is None
             else normalize_review_label(reviewed_type)
         )
-        if normalized not in REVIEW_TYPES and normalized != item.model_fiber_type:
-            raise ValueError(f"reviewed_type must be one of: {', '.join(REVIEW_TYPES)}")
+        if normalized == "unclassified":
+            raise ValueError("This fiber has no model call to keep; choose a class")
+        allowed = (*REVIEW_TYPES, "negative")
+        if normalized not in allowed and normalized != item.model_fiber_type:
+            raise ValueError(f"reviewed_type must be one of: {', '.join(allowed)}")
         if status is None:
             status = (
                 ObjectReviewStatus.EXCLUDED

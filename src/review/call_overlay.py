@@ -14,6 +14,7 @@ CALL_COLORS: dict[str, tuple[float, float, float, float]] = {
     "iia": (0.1, 0.9, 0.2, 1.0),
     "iib": (1.0, 0.0, 0.8, 1.0),
     "iix": (1.0, 0.55, 0.0, 1.0),
+    "negative": (0.65, 0.45, 0.25, 1.0),
     "excluded": (1.0, 0.1, 0.1, 1.0),
     "unresolved": (0.6, 0.6, 0.6, 1.0),
 }
@@ -23,6 +24,7 @@ CALL_NAMES = {
     "iia": "IIa",
     "iib": "IIb",
     "iix": "IIx",
+    "negative": "negative (no measured marker)",
     "excluded": "excluded",
     "unresolved": "uncertain / unresolved",
 }

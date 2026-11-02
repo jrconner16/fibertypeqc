@@ -334,6 +334,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
+        "--no-model",
+        action="store_true",
+        help=(
+            "Measure every fiber but type none of them (calls are 'unclassified'); for panels "
+            "that have no model yet. Implies --export-diagnostics. Cannot be combined with a model."
+        ),
+    )
+    p.add_argument(
         "--model-manifest",
         type=Path,
         default=None,
@@ -482,6 +490,12 @@ def auto_profile_overridden_flags(argv: list[str]) -> list[str]:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+    if args.no_model:
+        if args.model is not None or args.classifier_path or args.model_manifest is not None:
+            parser.error("--no-model cannot be combined with --model, --classifier-path, or "
+                         "--model-manifest")
+        # The measurements are what a model is later built from.
+        args.export_diagnostics = True
     if args.model is not None:
         if args.classifier_path is not None or args.model_manifest is not None:
             parser.error("--model cannot be combined with --classifier-path or --model-manifest")
@@ -627,6 +641,8 @@ def main() -> None:
                 "Selected legacy model has no sidecar; panel compatibility will use the "
                 "legacy adapter."
                 if args.classifier_path
+                else "No model: fibers are measured but not typed."
+                if args.no_model
                 else "No classifier was selected; the compatible rule path will be used."
             ),
             "proceed_to_input_validation",
@@ -808,6 +824,9 @@ def main() -> None:
                 file_sha256(Path(manifest_classifier)) if manifest_classifier else None
             ),
         )
+        if args.no_model:
+            # Read by the review project builder; typed runs keep their record unchanged.
+            run_manifest["typing"] = "none"
         reused_labels = False
         labels = None
         if args.labels_path is not None:
@@ -919,6 +938,7 @@ def main() -> None:
             classifier_path=None if semantic_candidate else args.classifier_path,
             collect_spatial_marker_features=bool(args.export_diagnostics)
             or model_needs_spatial_features,
+            typing_disabled=bool(args.no_model),
         )
         if model_manifest is not None and model_manifest.feature_extraction is not None:
             # Reproduce the model's training features exactly: pinned values, no profile.
@@ -963,7 +983,9 @@ def main() -> None:
             max_type_corr=args.qc_max_type_corr,
             max_residual_rate=args.qc_max_residual_rate,
         )
-        classes, canonicalize_labels = summary_classes(fibers)
+        classes, canonicalize_labels = (
+            (("unclassified",), False) if args.no_model else summary_classes(fibers)
+        )
         class_stats = class_stats_with_ci(
             fibers,
             classes=classes,
@@ -972,7 +994,9 @@ def main() -> None:
             canonicalize_labels=canonicalize_labels,
         )
         residual_target_class = (
-            channel_cfg.residual_target_class if channel_cfg.residual_inference_enabled else None
+            channel_cfg.residual_target_class
+            if channel_cfg.residual_inference_enabled and not args.no_model
+            else None
         )
         qc_stats = qc_flags_from_fibers(fibers, qc_cfg, residual_target_class=residual_target_class)
         postrun_qc_path = output_dir / f"{stem}_postrun_qc.json"
