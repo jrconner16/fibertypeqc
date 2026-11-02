@@ -634,7 +634,7 @@ def main() -> None:
     preflight_checks.append(
         qc_check(
             "preflight.model_artifact_valid",
-            "pass",
+            "not_applicable" if args.no_model else "pass",
             "Selected model artifact and manifest are readable and compatible."
             if model_manifest is not None
             else (
@@ -725,6 +725,13 @@ def main() -> None:
             raise
         preflight_checks.append(
             qc_check(
+                "preflight.model_panel_compatible",
+                "not_applicable",
+                "No model: fibers are measured but not typed.",
+                "proceed_to_pixel_size_check",
+            )
+            if args.no_model
+            else qc_check(
                 "preflight.model_panel_compatible",
                 "pass",
                 "Selected model is compatible with the observed panel.",
@@ -1011,6 +1018,7 @@ def main() -> None:
                 median_area_max=qc_cfg.median_area_max,
                 max_type_corr=qc_cfg.max_type_corr,
                 max_residual_rate=qc_cfg.max_residual_rate,
+                typing_applicable=not args.no_model,
             ),
             context={
                 "input": portable_path(args.input),

@@ -399,6 +399,14 @@ def test_pipeline_without_a_model_writes_measurements_and_no_calls(tmp_path, mon
     assert set(fibers["fiber_type"]) == {"unclassified"}
     diagnostics = pd.read_csv(out / "syn_feature_diagnostics.csv")
     assert {"type_i.mean", "type_iia.mean"}.issubset(diagnostics.columns)
+    postrun = json.loads((out / "syn_postrun_qc.json").read_text())
+    statuses = {check["code"]: check["status"] for check in postrun["checks"]}
+    assert statuses["postrun.classification"] == "not_applicable"
+    assert "postrun.uncertainty_rate" not in statuses
+    preflight = json.loads((out / "syn_preflight_qc.json").read_text())
+    statuses = {check["code"]: check["status"] for check in preflight["checks"]}
+    assert statuses["preflight.model_panel_compatible"] == "not_applicable"
+    assert statuses["preflight.panel_compatible"] == "pass"
     record = json.loads((out / "syn_run.json").read_text())
     assert record["typing"] == "none" and record["classifier_sha256"] is None
     summary = pd.read_csv(out / "syn_summary.csv")
@@ -420,3 +428,59 @@ def test_pipeline_refuses_no_model_with_a_model(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as error:
         run_pipeline.main()
     assert error.value.code == 2
+
+
+# --- QC without a model -------------------------------------------------------------------
+
+
+def test_classification_qc_is_not_applicable_and_never_changes_the_overall_status():
+    from fibertypeqc.qc_contract import build_qc_report, postrun_checks
+
+    stats = {
+        "flag_low_labels": False,
+        "flag_high_uncertainty_rate": False,
+        "flag_median_area_outlier": False,
+        "flag_high_type_corr": False,
+        "n_labels": 500,
+    }
+    limits = {
+        "min_labels": 300,
+        "max_uncertainty_rate": 0.35,
+        "median_area_min": 200.0,
+        "median_area_max": 15000.0,
+        "max_type_corr": 0.92,
+    }
+    typed = postrun_checks(stats, **limits)
+    untyped = postrun_checks(stats, **limits, typing_applicable=False)
+
+    assert [check["code"] for check in typed] == [
+        "postrun.fiber_count",
+        "postrun.uncertainty_rate",
+        "postrun.median_area",
+        "postrun.marker_correlation",
+    ]
+    assert [(check["code"], check["status"]) for check in untyped] == [
+        ("postrun.fiber_count", "pass"),
+        ("postrun.classification", "not_applicable"),
+        ("postrun.median_area", "pass"),
+        ("postrun.marker_correlation", "pass"),
+    ]
+    assert build_qc_report(stage="postrun", checks=untyped)["overall_status"] == "pass"
+    # Segmentation checks still warn as usual.
+    low = postrun_checks({**stats, "flag_low_labels": True}, **limits, typing_applicable=False)
+    assert build_qc_report(stage="postrun", checks=low)["overall_status"] == "warn"
+
+
+def test_review_qc_marks_typing_not_applicable_without_a_model(tmp_path):
+    from src.review.qc import generate_project_qc
+    from src.review.qc_rules import load_rule_config
+
+    project = _no_model_review_project(tmp_path)
+    image_qc = generate_project_qc(project, load_rule_config()).image_qc
+    by_domain = image_qc.set_index("domain")
+
+    assert by_domain.loc["fiber_typing", "status"] == "not_applicable"
+    assert not by_domain.loc["fiber_typing", "applicable"]
+    assert by_domain.loc["fiber_segmentation", "status"] in {"pass", "review", "fail"}
+    # The typing measurements are still recorded.
+    assert by_domain.loc["fiber_typing", "typing_row_count"] == 4
