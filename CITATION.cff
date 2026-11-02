@@ -9,10 +9,16 @@ abstract: >-
 authors:
   - given-names: James R.
     family-names: Conner
+    orcid: "https://orcid.org/0000-0002-8886-1475"
+    affiliation: "Division of Genetics and Genomics, Boston Children's Hospital, Boston, MA, USA"
   - given-names: Felipe
     family-names: de Souza Leite
+    orcid: "https://orcid.org/0000-0003-2493-8872"
+    affiliation: "Division of Genetics and Genomics, Boston Children's Hospital, Boston, MA, USA"
   - given-names: Louis M.
     family-names: Kunkel
+    orcid: "https://orcid.org/0000-0001-6126-0242"
+    affiliation: "Division of Genetics and Genomics, Boston Children's Hospital, Boston, MA, USA; The Manton Center for Orphan Disease Research, Boston Children's Hospital, Boston, MA, USA"
 repository-code: "https://github.com/jrconner16/fibertypeqc"
 license: MIT
 keywords:
