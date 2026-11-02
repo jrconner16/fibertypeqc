@@ -75,6 +75,16 @@ After each verified bounded work package:
 
 Do not allow several completed work packages to accumulate locally without a Git checkpoint.
 
+Issues, labels, and releases (keep it lightweight):
+- open an issue for substantive new features, bugs, performance problems, and planned
+  improvements; not for trivial fixes, and never retroactively for completed work;
+- label issues and PRs (`bug`, `enhancement`, `documentation`, `performance`, and the existing
+  area labels such as `modeling`, `review`, `cli`);
+- link each PR to its issue: `Closes #N` when the PR fully resolves it, otherwise `Part of #N`;
+- keep issues current as work progresses, and close them when resolved;
+- use version tags and GitHub Releases for meaningful releases, following semantic versioning;
+- never merge a PR or create a release without the maintainer's approval.
+
 ## Documentation discipline
 
 Use the current active roadmap as the execution source of truth.
