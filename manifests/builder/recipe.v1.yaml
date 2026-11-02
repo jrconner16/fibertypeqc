@@ -1,0 +1,30 @@
+# Declared recipe for the model builder (a panel that has no model yet). Candidates, minimums,
+# evaluation, and the recommendation rule are fixed here before any labels are seen; change them
+# only by adding a new recipe version. These are minimum safeguards, not guarantees that a built
+# model generalizes or is biologically valid.
+recipe_id: builder_recipe.v1
+validation: leave_one_mouse_out
+baseline: majority_class  # computed within each fold from that fold's training mice only
+minimums:
+  training_mice: 3
+  labels_per_class: 30  # unique fibers after combining reviewers
+  mice_per_class: 2  # training mice contributing at least labels_per_contributing_mouse
+  labels_per_contributing_mouse: 5
+candidates:
+  logistic:
+    family: multinomial_logistic_regression
+    parameters: {C: 1.0, max_iter: 5000, class_weight: balanced, random_state: 20261008}
+  random_forest:
+    family: random_forest
+    parameters:
+      {n_estimators: 400, min_samples_leaf: 2, class_weight: balanced, random_state: 20261008}
+  gradient_boosting:
+    family: histogram_gradient_boosting
+    parameters:
+      {max_iter: 300, learning_rate: 0.05, max_depth: 6, min_samples_leaf: 5,
+       l2_regularization: 1.0, class_weight: balanced, random_state: 20261008}
+# A candidate is recommended only if both hold on held-out training mice; among passing
+# candidates the highest median per-mouse macro-F1 wins (ties: the order listed above).
+recommendation_rule:
+  minimum_median_mouse_macro_f1_gain_over_baseline: 0.10  # median of per-mouse differences
+  minimum_pooled_class_recall: 0.70  # out-of-fold, every class

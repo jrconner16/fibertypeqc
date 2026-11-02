@@ -14,6 +14,15 @@
   `improve`, and `promote` refuse them until a model exists. Classification QC is reported as
   `not_applicable` (a new check status that never changes the overall status); segmentation and
   measurement QC pass, warn, and fail as usual. Outputs of projects with a model are unchanged.
+- **Model builder** (roadmap E3): `python -m fibertypeqc build PROJECT` builds candidate models for
+  a project without a model from blind labels on its training mice, following a declared recipe
+  (`manifests/builder/recipe.v1.yaml`): marker intensity features only, minimum label counts,
+  leave-one-mouse-out comparison with a per-fold majority-class baseline, and a fixed
+  recommendation rule. Reviewer labels are combined per fiber (conflicts dropped and counted);
+  test mice are never read. Every candidate is refitted on all training mice and saved with a
+  manifest that pins its features and measurement settings; nothing is promoted. Runs without a
+  model now record their measurement settings (`feature_extraction` in the run record), and
+  blind labelling in such projects offers every mouse.
 
 ### Documentation and repository
 

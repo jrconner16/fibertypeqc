@@ -174,7 +174,7 @@ refuses typing options that would change them. Model cards:
 If no model fits your staining panel, set `model: none` in `fibertypeqc_project.yaml`. `run` then
 segments and measures every fiber but types none of them: every call is `unclassified`, and the
 marker measurements are written to `*_feature_diagnostics.csv`. You label a sample of fibers
-blind, and (in a coming release) a model is built from those labels.
+blind, and `build` turns those labels into candidate models.
 
 ```yaml
 model: none
@@ -192,6 +192,33 @@ After `run` and `prepare`, label fibers with
 `uv run python -m fibertypeqc review myproject/ --blind --reviewer NAME`
 ([Blind reference labels](#blind-reference-labels)); the buttons offer the configured classes.
 `finalize`, `improve`, and `promote` need model calls and refuse a project without a model.
+
+Then build candidate models from the blind labels:
+
+```bash
+uv run python -m fibertypeqc build myproject/            # --reviewer NAME to use one reviewer
+```
+
+`build` follows a recipe fixed in advance (`manifests/builder/recipe.v1.yaml`):
+
+- It uses blind labels from training mice only. With `evaluation_roles.csv`, `test` mice are
+  never read; every mouse can still be labelled blind, so test mice can be checked later.
+- Labels from several reviewers are combined per fiber: agreement counts once, disagreements are
+  dropped and counted, and `exclude`/`uncertain` are left out.
+- It needs at least 3 training mice and, for each class, at least 30 labelled fibers from at least
+  2 mice with at least 5 each.
+- Models are trained on marker intensity measurements only, never fiber area or shape, and the
+  manifest pins the measurement settings of the run.
+- Three candidate model types are compared with a majority-class baseline by leave-one-mouse-out.
+  A candidate is recommended only if its median per-mouse macro-F1 is at least 0.10 above the
+  baseline and every class has out-of-fold recall of at least 0.70. Per-mouse support, recall
+  (N/A when a mouse has none of a class), and macro-F1 are written to
+  `models/build_<time>/selection/`.
+- Every candidate is then refitted on all training mice and saved with its manifest in
+  `models/build_<time>/candidates/`, with or without a recommendation.
+
+These checks are minimum safeguards, not an accuracy estimate. `build` never switches the project
+to a model; evaluating on test mice and switching are separate steps.
 
 ## Adapt the model from your review
 

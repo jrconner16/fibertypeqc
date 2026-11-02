@@ -75,7 +75,14 @@ class GuidedReviewWidget(QWidget):
         self.rows = load_fiber_type_rows(project, fiber_qc)
         # With evaluation roles, blind labelling sees only test mice and guided review only pool
         # mice, so reference labels and training labels can never come from the same animals.
-        self.allowed_images = allowed_images(project, TEST if blind else POOL)
+        # Evaluation roles: blind labels on test mice, guided review on pool mice. A project
+        # without a model is labelled blind throughout (pool mice train the built model, test
+        # mice evaluate it later), so every mouse is offered; `build` keeps test mice out.
+        self.allowed_images = (
+            None
+            if project.model_version == "none"
+            else allowed_images(project, TEST if blind else POOL)
+        )
         if self.allowed_images is not None:
             self.rows = self.rows[self.rows["image_id"].isin(self.allowed_images)]
         # Blind mode never shows section or mouse names (they can carry genotype, age, or
