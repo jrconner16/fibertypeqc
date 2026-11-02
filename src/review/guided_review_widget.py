@@ -22,7 +22,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from src.review.call_overlay import legend_html
+from src.review.call_overlay import legend_html, saved_call_text
 from src.review.fiber_type_review import FiberTypeReviewController
 from src.review.project import Project
 from src.review.queues import (
@@ -708,6 +708,11 @@ class GuidedReviewWidget(QWidget):
             f"Model call: {item.model_fiber_type.upper()}",
             f"Why shown: {describe_reason(item.reason_code)}",
         ]
+        saved = saved_call_text(
+            self.controller.session.object_decisions, item.image_id, item.fiber_id
+        )
+        if saved is not None:
+            values.insert(1, f"Your call: {saved}")
         if item.confidence is not None:
             values.append(f"confidence {item.confidence:.2f}")
         if item.probability_margin is not None:

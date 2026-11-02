@@ -50,6 +50,8 @@
 
 ### Changed
 
+- The review panel shows your saved call for the current fiber (for example `Your call: IIx`)
+  next to the model call, so earlier corrections are visible after reopening a project.
 - `run_batch` (and so `fibertypeqc run`) starts each image's pipeline with the batch's own Python
   interpreter instead of `uv run python`, removing a per-image environment check that is slow on
   network filesystems. Outputs are unchanged.

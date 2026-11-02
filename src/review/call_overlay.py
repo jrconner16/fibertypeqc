@@ -57,6 +57,20 @@ def current_calls(
     return calls
 
 
+def saved_call_text(
+    decisions: list[FiberTypeDecision], image_id: str, fiber_id: int
+) -> str | None:
+    """The reviewer's saved call for one fiber, for display; None when it is undecided."""
+    for decision in reversed(decisions):
+        if decision.image_id != image_id or decision.fiber_id != fiber_id:
+            continue
+        if decision.review_status is ObjectReviewStatus.ACCEPTED:
+            return "kept the model call"
+        call = current_calls({fiber_id: decision.model_fiber_type}, [decision], image_id)[fiber_id]
+        return CALL_NAMES.get(call, call)
+    return None
+
+
 def call_color_dict(calls: dict[int, str]) -> dict[int | None, tuple[float, float, float, float]]:
     """Label -> RGBA mapping for a direct label colormap; background is transparent."""
     colors: dict[int | None, tuple[float, float, float, float]] = {
