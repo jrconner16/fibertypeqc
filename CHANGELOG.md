@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Documentation and repository
+
+- README and `CITATION.cff` give the Zenodo DOIs (concept DOI 10.5281/zenodo.23893717; v0.4.0
+  10.5281/zenodo.23893718).
+
 ## v0.4.0
 
 ### Release summary
