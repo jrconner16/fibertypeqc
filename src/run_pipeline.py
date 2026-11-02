@@ -22,6 +22,7 @@ from fibertypeqc.artifacts import (
 from fibertypeqc.config import resolve_channel_config
 from fibertypeqc.html_report import generate_result_report
 from fibertypeqc.model_manifest import (
+    FEATURE_EXTRACTION_FIELDS,
     load_model_manifest,
     validate_model_artifact,
     validate_model_compatibility,
@@ -957,6 +958,12 @@ def main() -> None:
                 mixed_strictness=float(args.mixed_strictness),
             )
         fibers = quantify_labels(labels, image, quant_cfg)
+        if args.no_model:
+            # The exact measurement settings, so a model built from these features can pin them.
+            run_manifest["feature_extraction"] = {
+                name: getattr(quant_cfg, name) for name in sorted(FEATURE_EXTRACTION_FIELDS)
+            }
+            write_run_manifest(run_manifest_path, run_manifest)
         fibers_path = output_dir / f"{stem}_fibers.csv"
         diagnostics_path = None
         semantic_predictions_path = None

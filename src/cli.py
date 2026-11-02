@@ -254,7 +254,8 @@ NO_MODEL_NEXT_STEP = {
     "new": ("run", "Segment and measure every image (no model: fibers are not typed)."),
     "ready_for_review": (
         "review",
-        "Label a sample of fibers: review PROJECT --blind --reviewer NAME (no model yet).",
+        "Label a sample of fibers: review PROJECT --blind --reviewer NAME (no model yet); "
+        "then build a model from the labels: build PROJECT.",
     ),
 }
 
@@ -587,6 +588,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("finalize", "Finalize review decisions and build result tables and the report"),
         ("reference", "Export blind reference labels (from review --blind) for benchmarking"),
         ("improve", "Build and evaluate candidate models from your review decisions"),
+        ("build", "Build and evaluate a first model from blind labels (projects with model: none)"),
     ):
         step = steps.add_parser(name, help=text)
         step.add_argument("project", type=Path, help="Project folder")
@@ -656,7 +658,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args, extra = build_parser().parse_known_args(argv)
-    if extra and args.step not in {"run", "review"}:
+    if extra and args.step not in {"run", "review", "build"}:
         print(f"Unrecognized options for {args.step}: {' '.join(extra)}", file=sys.stderr)
         return 2
     try:
@@ -688,6 +690,20 @@ def main(argv: list[str] | None = None) -> int:
                 return code
             # Project QC is computed from the model's outputs, so it is rebuilt for the new model.
             return _run("generate_review_qc", ["--project", str(project.review_project)])
+        if args.step == "build":
+            if not project.no_model:
+                raise ProjectError(
+                    "This project has a model; adapt it with 'improve'. 'build' is for "
+                    "projects with 'model: none'."
+                )
+            if not project.review_project.is_file():
+                raise ProjectError("Run 'prepare' first, then label fibers with review --blind.")
+            arguments = [
+                "--project", str(project.review_project),
+                "--panel-config", str(project.panel),
+                "--output-dir", str(project.root / "models"),
+            ]  # fmt: skip
+            return _run("build_model", [*arguments, *extra])
         if args.step == "improve":
             arguments = [
                 "--project", str(project.review_project),
