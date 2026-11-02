@@ -23,9 +23,10 @@ Done: Track A; B1 (`CITATION.cff` with ORCIDs and affiliations); B2 (Zenodo inte
 C1; C2. HPC use (Slurm batch, Open OnDemand review) is documented in `docs/install.md` and was
 checked on a cluster: the demo batch agreed with the macOS reference snapshot within tolerance.
 
-In progress: B3 (release v0.4.0), then B4 (DOI badge and citation in the README); C3 (outside
-install and demo run); C5 (paper). C3 fixes ship
-in a later release; the concept DOI covers every version.
+v0.4.0 is released and archived on Zenodo (concept DOI 10.5281/zenodo.23893717; B3, B4 done).
+
+In progress: C3 (outside install and demo run); C5 (paper). C3 fixes ship in a later release; the
+concept DOI covers every version.
 
 ## Track A — Repository cleanup and presentation
 

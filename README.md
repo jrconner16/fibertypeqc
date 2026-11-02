@@ -1,5 +1,7 @@
 # FiberTypeQC
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23893717.svg)](https://doi.org/10.5281/zenodo.23893717)
+
 **Muscle fiber segmentation, fiber typing, quality control, and guided human review for
 immunofluorescence histology, with auditable, analysis-ready outputs.**
 
@@ -139,8 +141,12 @@ validation/   Command wrappers over research validation tools
 
 ## Citation, license, and contact
 
-If you use FiberTypeQC, please cite it with the version you used; GitHub's "Cite this repository"
-button gives the citation from [CITATION.cff](CITATION.cff). MIT License; see
+If you use FiberTypeQC, please cite the version you used. Every release is archived on Zenodo:
+[10.5281/zenodo.23893717](https://doi.org/10.5281/zenodo.23893717) always resolves to the latest
+version, and each version's Zenodo page gives its own DOI (v0.4.0:
+[10.5281/zenodo.23893718](https://doi.org/10.5281/zenodo.23893718)). Cite the version DOI for a
+specific analysis. GitHub's "Cite this repository" button gives the citation from
+[CITATION.cff](CITATION.cff). MIT License; see
 [LICENSE](LICENSE). Questions and bug reports: open an
 [issue](https://github.com/jrconner16/fibertypeqc/issues). Contributions: see
 [CONTRIBUTING.md](CONTRIBUTING.md).

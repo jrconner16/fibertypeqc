@@ -21,6 +21,14 @@ authors:
     affiliation: "Division of Genetics and Genomics, Boston Children's Hospital, Boston, MA, USA; The Manton Center for Orphan Disease Research, Boston Children's Hospital, Boston, MA, USA"
 version: "0.4.0"
 date-released: "2026-11-02"
+doi: "10.5281/zenodo.23893717"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.23893717"
+    description: "Concept DOI: all versions, resolves to the latest"
+  - type: doi
+    value: "10.5281/zenodo.23893718"
+    description: "FiberTypeQC v0.4.0"
 repository-code: "https://github.com/jrconner16/fibertypeqc"
 license: MIT
 keywords:
