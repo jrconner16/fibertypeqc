@@ -2,7 +2,13 @@
 
 import pandas as pd
 
-from src.review.call_overlay import CALL_COLORS, call_color_dict, current_calls, legend_html
+from src.review.call_overlay import (
+    CALL_COLORS,
+    call_color_dict,
+    current_calls,
+    legend_html,
+    saved_call_text,
+)
 from src.review.queues import QueueSource, build_fiber_type_queue, describe_reason
 from src.review.schemas import FiberTypeDecision, ObjectReviewStatus
 
@@ -65,6 +71,22 @@ def test_current_calls_apply_review_decisions_for_one_image():
         4: "unresolved",
     }
     assert current_calls(model, decisions, "other") == model
+
+
+def test_saved_call_text_shows_the_reviewers_decision_for_one_fiber():
+    decisions = [
+        _decision(1, "iix", ObjectReviewStatus.CORRECTED),
+        _decision(2, "exclude", ObjectReviewStatus.EXCLUDED),
+        _decision(3, "iib", ObjectReviewStatus.ACCEPTED),
+        _decision(4, "", ObjectReviewStatus.UNRESOLVED),
+    ]
+
+    assert saved_call_text(decisions, "a", 1) == "IIx"
+    assert saved_call_text(decisions, "a", 2) == "excluded"
+    assert saved_call_text(decisions, "a", 3) == "kept the model call"
+    assert saved_call_text(decisions, "a", 4) == "uncertain / unresolved"
+    assert saved_call_text(decisions, "a", 5) is None
+    assert saved_call_text(decisions, "other", 1) is None
 
 
 def test_call_colors_and_legend():
