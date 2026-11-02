@@ -18,11 +18,18 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import yaml
 
 from fibertypeqc.model_resolution import default_model_id, resolve_model_argument
 from src.fiber_type_labels import normalize_review_label
+from src.model_evaluation import (
+    EvaluationError,
+    build_recommended,
+    evaluation_status,
+    find_build_candidate,
+)
 from src.review.finalization import image_input_fingerprints
 from src.review.project import Project, load_project
 from src.review.schemas import ObjectReviewStatus
@@ -46,6 +53,8 @@ HISTORY_COLUMNS = (
     "flagged_after",
 )
 MASK_SUFFIX = "_cellpose_labels.tif"
+TEST_CHECKS_NAME = "independent_test_checks.csv"
+TEST_CHECK_COLUMNS = ("changed_at_utc", "to_model", "status", "override", "evaluation")
 
 
 class PromotionError(ValueError):
@@ -176,8 +185,25 @@ def _restore(root: Path, project: Project, archive: Path) -> None:
             shutil.copy2(path, image.prediction_directory / path.name)
 
 
-def _retype(project: Project, model: Path, panel: Path) -> None:
-    """Re-type every section with ``model`` on its existing mask; masks are left untouched."""
+def _same_measurements(old: Path, new: Path, features: list[str]) -> bool:
+    before = pd.read_csv(old, low_memory=False)
+    after = pd.read_csv(new, low_memory=False)
+    columns = ["label", *features]
+    if any(name not in frame.columns for frame in (before, after) for name in columns):
+        return False
+    return len(before) == len(after) and np.array_equal(
+        before[columns].to_numpy(dtype=float), after[columns].to_numpy(dtype=float)
+    )
+
+
+def _retype(
+    project: Project, model: Path, panel: Path, *, check_features: list[str] | None = None
+) -> None:
+    """Re-type every section with ``model`` on its existing mask; masks are left untouched.
+
+    With ``check_features`` (promotion from a project without a model) the new run also writes
+    its measurements, which must equal the measurements the model was built from, exactly.
+    """
     with tempfile.TemporaryDirectory(dir=project.root) as scratch:
         staged = []
         for index, image in enumerate(project.images, start=1):
@@ -192,6 +218,7 @@ def _retype(project: Project, model: Path, panel: Path) -> None:
                 "--panel-config", str(panel),
                 "--model", str(model),
                 "--no-crop-auto",
+                *(["--export-diagnostics"] if check_features else []),
             ]  # fmt: skip
             done = subprocess.run(
                 command, cwd=REPO_ROOT, capture_output=True, text=True, check=False
@@ -204,6 +231,15 @@ def _retype(project: Project, model: Path, panel: Path) -> None:
             new = pd.read_csv(new_table, usecols=[0])
             if not old.iloc[:, 0].equals(new.iloc[:, 0]):
                 raise PromotionError(f"{image.image_id}: fiber IDs changed during re-typing.")
+            if check_features is not None:
+                name = f"{image.image_id}_feature_diagnostics.csv"
+                if not _same_measurements(
+                    image.prediction_directory / name, out / name, check_features
+                ):
+                    raise PromotionError(
+                        f"{image.image_id}: re-typing did not reproduce the measurements the "
+                        "model was built from; nothing was changed."
+                    )
             staged.append((image, out))
         # Nothing is replaced until every section has re-typed cleanly.
         for image, out in staged:
@@ -231,24 +267,62 @@ def _set_review_model(project: Project, model_id: str) -> None:
     project.manifest_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
 
 
+def _test_check(root: Path, project: Project, artifact: Path, override: bool) -> dict:
+    """The independent-test condition for promoting a built model (projects without a model).
+
+    With test mice declared, a current evaluation of this exact candidate is required unless
+    ``override`` is given (recorded). Without test mice, promotion proceeds with a warning.
+    """
+    try:
+        check = evaluation_status(root, project, artifact)
+    except EvaluationError as exc:
+        raise PromotionError(str(exc)) from exc
+    if check["status"] in ("missing", "stale") and not override:
+        reason = (
+            "has not been evaluated on the test mice"
+            if check["status"] == "missing"
+            else "was evaluated, but the candidate, the test labels, or the test sections' masks "
+            "or measurements have changed since"
+        )
+        raise PromotionError(
+            f"{artifact.stem} {reason}. Run: evaluate PROJECT {artifact.stem}. To switch "
+            "without a current independent evaluation, repeat with --override; this is recorded."
+        )
+    return {**check, "override": check["status"] in ("missing", "stale")}
+
+
 def promote(root: Path, candidate: str, panel: Path, *, override: bool = False) -> dict:
     config = yaml.safe_load((root / CONFIG_NAME).read_text(encoding="utf-8"))
     project = load_project(root / "review" / "project.yaml")
-    artifact = find_candidate(root, candidate)
+    from_none = project.model_version == "none"
+    if from_none:
+        try:
+            artifact = find_build_candidate(root, candidate)
+        except EvaluationError as exc:
+            raise PromotionError(str(exc)) from exc
+        recommended = build_recommended(artifact)
+        source = "build"
+    else:
+        artifact = find_candidate(root, candidate)
+        recommended = improver_recommended(artifact)
+        source = "improver"
     resolved = resolve_model_argument(str(artifact))
-    recommended = improver_recommended(artifact)
     if recommended is not True and not override:
         raise PromotionError(
-            f"The improver did not recommend {artifact.stem}"
-            + (" (no improver summary found)" if recommended is None else "")
+            f"The {source} did not recommend {artifact.stem}"
+            + (f" (no {source} summary found)" if recommended is None else "")
             + ". To switch anyway, repeat the command with --override; this is recorded."
         )
+    test_check = _test_check(root, project, artifact, override) if from_none else None
+    features = (
+        list(yaml.safe_load(resolved.manifest_path.read_text())["features"]) if from_none else None
+    )
     old_model = project.model_version or str(config.get("model") or default_model_id())
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     flagged_before = _flagged(project)
     archive = _archive(root, project, f"{stamp}__{old_model}")
     try:
-        _retype(project, artifact, panel)
+        _retype(project, artifact, panel, check_features=features)
         session_path = project.review_state_path
         counts = {"reviewed_fibers": 0, "agree_before": 0, "agree_after": 0}
         if session_path.is_file():
@@ -263,6 +337,8 @@ def promote(root: Path, candidate: str, panel: Path, *, override: bool = False) 
             config["model"] = str(artifact.relative_to(root))
         except ValueError:
             config["model"] = str(artifact)
+        # The model now sets the classes; the archived config keeps 'model: none' and 'classes'.
+        config.pop("classes", None)
         (root / CONFIG_NAME).write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
         for stale in (root / "final", root / "results"):
             if stale.is_dir():
@@ -283,6 +359,23 @@ def promote(root: Path, candidate: str, panel: Path, *, override: bool = False) 
         "flagged_after": _flagged(project),
     }
     _append_history(root, row)
+    if test_check is not None:
+        path = root / "models" / TEST_CHECKS_NAME
+        checks = (
+            pd.read_csv(path, dtype=str, keep_default_na=False)
+            if path.is_file()
+            else pd.DataFrame(columns=list(TEST_CHECK_COLUMNS))
+        )
+        entry = {
+            "changed_at_utc": row["changed_at_utc"],
+            "to_model": row["to_model"],
+            "status": test_check["status"],
+            "override": test_check["override"],
+            "evaluation": test_check["evaluation"],
+        }
+        checks = pd.concat([checks, pd.DataFrame([{k: str(v) for k, v in entry.items()}])])
+        checks.to_csv(path, index=False, columns=list(TEST_CHECK_COLUMNS))
+        row["independent_test"] = entry
     return row
 
 
@@ -357,6 +450,24 @@ def main(argv: list[str] | None = None) -> int:
             "accuracy; judge it on sections reviewed after the switch."
         )
     print(f"Flagged for review: {row['flagged_after']} (was {row['flagged_before']}).")
+    test = row.get("independent_test")
+    if test is not None:
+        message = {
+            "current": f"Independent test evaluation: {test['evaluation']}.",
+            "no_test_mice": (
+                "WARNING: no test mice are declared, so this model has had no independent test "
+                "evaluation. This is recorded in models/independent_test_checks.csv."
+            ),
+            "missing": (
+                "WARNING: switched with --override WITHOUT an independent test evaluation; "
+                "recorded in models/independent_test_checks.csv."
+            ),
+            "stale": (
+                "WARNING: switched with --override although the independent test evaluation is "
+                "out of date; recorded in models/independent_test_checks.csv."
+            ),
+        }[test["status"]]
+        print(message)
     print(f"Previous outputs archived in {row['archive']}; undo with: promote --rollback")
     return 0
 

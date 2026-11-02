@@ -100,14 +100,22 @@ def blind_label_sessions(
 
 
 def combine_labels(
-    project: Project, sessions: dict[str, ReviewSession], classes: list[str]
+    project: Project,
+    sessions: dict[str, ReviewSession],
+    classes: list[str],
+    *,
+    role: str = POOL,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """One row per labelled training fiber; reviewer disagreements are dropped and counted."""
-    training_images = allowed_images(project, POOL)
+    """One row per labelled fiber of mice with ``role`` (training mice by default); reviewer
+    disagreements are dropped and counted. Labels of mice with the other role are not read."""
+    training_images = allowed_images(project, role)
+    other_role = "test_mice" if role == POOL else "training_mice"
+    if role != POOL and training_images is None:
+        training_images = set()  # no roles declared: there are no test mice
     known = {image.image_id: image for image in project.images}
     current: dict[str, dict[str, str]] = {}
     left_out = {
-        "test_mice": 0,
+        other_role: 0,
         "excluded": 0,
         "uncertain": 0,
         "outside_classes": 0,
@@ -121,9 +129,9 @@ def combine_labels(
             if image_id not in known:
                 left_out["unknown_section"] += 1
                 continue
-            # Test mice are isolated completely: their labels are not read any further.
+            # Mice of the other role are isolated completely: their labels are not read further.
             if training_images is not None and image_id not in training_images:
-                left_out["test_mice"] += 1
+                left_out[other_role] += 1
                 continue
             status = decision.review_status
             label = normalize_review_label(decision.reviewed_fiber_type)
