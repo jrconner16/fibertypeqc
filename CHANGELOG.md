@@ -39,6 +39,16 @@
   `evaluate` print it too. Results of projects with other models are unchanged. Two evaluations
   of the same candidate within one second no longer collide.
 
+### Fixed
+
+- `promote --rollback` no longer discards review decisions made after a switch (#77). It first
+  archives the outgoing state (config, review project and decisions, QC, final and results,
+  typing outputs) under `models/history/<time>__<model>__rolled_back/`. It records that folder in
+  a new `outgoing_archive` column of `models/model_history.csv`, which older history files read
+  as empty, and prints it. The archived decisions are never applied to the restored model. If
+  the archive cannot be written, rollback stops without changing the project. The restored state
+  is unchanged.
+
 ### Documentation and repository
 
 - Model-card template for built models (`docs/model_cards/built_model_template.md`); the user

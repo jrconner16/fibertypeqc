@@ -18,6 +18,9 @@ from src.promote_model import PromotionError, _test_check, promote, rollback
 from src.reference_snapshot import check as check_snapshot
 from src.reference_snapshot import freeze as freeze_snapshot
 from src.review.project import load_project
+from src.review.schemas import FiberTypeDecision, ObjectReviewStatus
+from src.review.session import ReviewSession
+from src.review.storage import load_session, save_session
 from src.summarize_results import write_results
 from tests.test_model_builder import (  # noqa: F401  (pytest fixtures)
     CLASSES,
@@ -112,9 +115,30 @@ def test_evaluate_promote_and_rollback_restore_the_project_exactly(
     assert manifest["class_labels"] == {"negative": "I⁻/IIa⁻"}
     assert "I⁻/IIa⁻ final" in build_cohort_report(elsewhere / "results")
 
-    rollback(root)
+    # A guided-review decision made with the promoted model.
+    session = ReviewSession(project_id=promoted.project_id, model_version=row["to_model"])
+    session.record_fiber_type_decision(
+        FiberTypeDecision(
+            image_id="syn_m1", fiber_id=1, model_fiber_type=str(fibers.loc[0, "fiber_type"]),
+            reviewed_fiber_type="iia", review_status=ObjectReviewStatus.CORRECTED,
+        )
+    )  # fmt: skip
+    save_session(promoted.review_state_path, session)
+
+    undone = rollback(root)
     assert _tree(root) == before  # byte-for-byte, including config and run records
     assert load_project(root / "review" / "project.yaml").model_version == "none"
+    # The outgoing state, with that decision, is archived and not applied to the restored project.
+    outgoing = root / undone["outgoing_archive"]
+    kept = load_session(outgoing / promoted.review_state_path.relative_to(root))
+    assert kept.model_version == row["to_model"]
+    assert [(d.image_id, d.fiber_id, d.reviewed_fiber_type) for d in kept.object_decisions] == [
+        ("syn_m1", 1, "iia")
+    ]
+    archived_config = yaml.safe_load((outgoing / "fibertypeqc_project.yaml").read_text())
+    assert archived_config["model"].endswith(f"{chosen}.joblib")
+    history = pd.read_csv(root / "models" / "model_history.csv", keep_default_na=False)
+    assert history["outgoing_archive"].tolist() == ["", undone["outgoing_archive"]]
 
 
 def test_promotion_needs_a_current_evaluation_or_a_recorded_override(built):
@@ -273,3 +297,38 @@ def test_evaluate_command_reports_panel_names_and_repeated_use(built, capsys):
     assert main(["--project-root", str(root), "--candidate", chosen]) == 0
     assert "used for 2 evaluations" in capsys.readouterr().out
     assert main(["--project-root", str(root), "--candidate", "nonexistent"]) == 1
+
+
+def test_rollback_changes_nothing_if_the_outgoing_state_cannot_be_archived(built, monkeypatch):
+    from src import promote_model
+
+    root, _, chosen = built
+    (root / "evaluation_roles.csv").unlink()
+    _skip_retyping(monkeypatch)
+    promote(root, chosen, root / "panel.yaml")
+    history_path = root / "models" / "model_history.csv"
+    # A history written before 'outgoing_archive' existed.
+    pd.read_csv(history_path, dtype=str, keep_default_na=False).drop(
+        columns="outgoing_archive"
+    ).to_csv(history_path, index=False)
+    archives = sorted((root / "models" / "history").iterdir())
+    before, history_before = _tree(root), history_path.read_bytes()
+
+    real_archive = promote_model._archive
+
+    def failing_archive(root_, project_, name):
+        (root_ / "models" / "history" / name / "partial").mkdir(parents=True)
+        raise OSError("disk full")
+
+    monkeypatch.setattr(promote_model, "_archive", failing_archive)
+    with pytest.raises(PromotionError, match="nothing was changed"):
+        rollback(root)
+    assert _tree(root) == before
+    assert history_path.read_bytes() == history_before
+    assert sorted((root / "models" / "history").iterdir()) == archives  # no partial archive
+
+    monkeypatch.setattr(promote_model, "_archive", real_archive)
+    row = rollback(root)
+    history = pd.read_csv(history_path, keep_default_na=False)
+    assert history["action"].tolist() == ["promote", "rollback"]
+    assert history["outgoing_archive"].tolist() == ["", row["outgoing_archive"]]
