@@ -183,6 +183,10 @@ classes: [i, iia, negative]      # optional; this is the default for a Type I + 
 
 - `classes` defaults to one class per myosin marker the panel measures, plus `negative`. Add
   `hybrid` to the list to offer it. A class for a marker the panel does not measure is refused.
+- `hybrid` is a single class: any fiber expressing more than one measured myosin marker. On a
+  panel with two myosin markers that is one combination (for example IIa+IIb), but with three or
+  four markers it pools different combinations (I+IIa, IIa+IIb, ...) that may differ
+  biologically. Separate classes per combination are not supported yet.
 - `negative` means negative for every measured myosin marker and is shown with the panel's
   markers (for example I⁻/IIa⁻). It is never counted as IIx or IIb.
 - `unclassified` is not a class: it only means no model has typed the fiber yet. It is separate

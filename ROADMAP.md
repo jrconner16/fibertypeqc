@@ -114,7 +114,9 @@ Status: E1–E4 merged; E5 and E6 in progress; E7 optional. Tracked in issue #71
 | E7 | Public demo of building a model from manual labels on published images | optional | does not delay a release or the submission |
 
 Not in scope: importing labels from other tools, classes other than fiber types, deep-learning
-models, segmentation changes.
+models, segmentation changes. Known limitation: `hybrid` is one class, so on panels with three or
+four myosin markers it pools different co-expression combinations; separate combination classes
+are a possible later extension.
 
 ## Critical path
 

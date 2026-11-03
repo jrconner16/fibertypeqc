@@ -47,6 +47,11 @@
   evaluate, promote, reference snapshot, finalize, results, and exact rollback. It also covers
   the recorded override, promotion without test mice, and the measurement check that stops a
   promotion.
+- Builder tests on other panels: an end-to-end IIa/IIb panel with `hybrid` and `negative` (build,
+  evaluate, promote, rollback), a three-marker panel's classes, `negative` name, and features,
+  and a check that features and calls follow marker identity, not channel order. The user guide
+  notes that `hybrid` pools different co-expression combinations on panels with three or more
+  myosin markers (#76).
 
 - README and `CITATION.cff` give the Zenodo DOIs (concept DOI 10.5281/zenodo.23893717; v0.4.0
   10.5281/zenodo.23893718).
