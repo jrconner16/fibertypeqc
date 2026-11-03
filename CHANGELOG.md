@@ -23,6 +23,16 @@
   manifest that pins its features and measurement settings; nothing is promoted. Runs without a
   model now record their measurement settings (`feature_extraction` in the run record), and
   blind labelling in such projects offers every mouse.
+- **Independent test evaluation and promotion of a built model** (roadmap E4):
+  `python -m fibertypeqc evaluate PROJECT CANDIDATE` scores one chosen built candidate on the test
+  mice's blind labels (nothing is re-typed) and logs every evaluation with a count of test-set uses.
+  Each evaluation fingerprints the candidate, the test labels, and the test sections' masks and
+  measurements. `promote` now accepts built candidates in a project without a model: with test
+  mice declared it requires a current evaluation of that exact candidate (`--override` is recorded
+  in `models/independent_test_checks.csv`); without test mice it warns and records that. Promotion
+  checks that re-typing reproduces the model's training measurements exactly, removes `classes`
+  from the config, and leaves blind labels untouched; `--rollback` restores the project exactly.
+  Promotion of improver candidates is unchanged.
 
 ### Documentation and repository
 

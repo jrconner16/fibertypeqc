@@ -254,8 +254,8 @@ NO_MODEL_NEXT_STEP = {
     "new": ("run", "Segment and measure every image (no model: fibers are not typed)."),
     "ready_for_review": (
         "review",
-        "Label a sample of fibers: review PROJECT --blind --reviewer NAME (no model yet); "
-        "then build a model from the labels: build PROJECT.",
+        "Label a sample of fibers: review PROJECT --blind --reviewer NAME (no model yet); then "
+        "build PROJECT, evaluate PROJECT CANDIDATE on test mice, and promote PROJECT CANDIDATE.",
     ),
 }
 
@@ -594,7 +594,10 @@ def build_parser() -> argparse.ArgumentParser:
         step.add_argument("project", type=Path, help="Project folder")
     promote = steps.add_parser(
         "promote",
-        help="Switch the project to a candidate model from 'improve' (or undo with --rollback)",
+        help=(
+            "Switch the project to a candidate model from 'improve' or 'build' (or undo with "
+            "--rollback)"
+        ),
         description=(
             "Archive the current outputs and review state, re-type every section with the "
             "candidate on the existing masks, carry review decisions forward, and record the "
@@ -606,9 +609,23 @@ def build_parser() -> argparse.ArgumentParser:
     promote.add_argument(
         "--override",
         action="store_true",
-        help="Switch even though 'improve' did not recommend this candidate (recorded)",
+        help=(
+            "Switch even though the candidate was not recommended, or (for a built model) has "
+            "no current independent test evaluation (recorded)"
+        ),
     )
     promote.add_argument("--rollback", action="store_true", help="Undo the most recent switch")
+    evaluate = steps.add_parser(
+        "evaluate",
+        help="Score one chosen built model on the test mice (before promoting it)",
+        description=(
+            "Independent evaluation for a project with 'model: none': score the candidate you "
+            "chose from 'build' on the blind labels of the test mice. Only that candidate is "
+            "scored; every evaluation is logged in models/evaluation_history.csv."
+        ),
+    )
+    evaluate.add_argument("project", type=Path, help="Project folder")
+    evaluate.add_argument("candidate", help="Candidate name (e.g. logistic) or model file")
     snapshot = steps.add_parser(
         "snapshot",
         help="Freeze the batch outputs as a reference, or check this run against one",
@@ -675,8 +692,15 @@ def main(argv: list[str] | None = None) -> int:
             return command_prepare(project)
         if args.step == "review":
             return command_review(project, extra)
-        if args.step in {"promote", "improve"}:
+        if args.step == "improve":
             _require_model(project, args.step)
+        if args.step == "evaluate":
+            if not project.no_model:
+                raise ProjectError("'evaluate' is for built models in projects with 'model: none'.")
+            return _run(
+                "evaluate_model",
+                ["--project-root", str(project.root), "--candidate", args.candidate],
+            )
         if args.step == "promote":
             arguments = ["--project-root", str(project.root), "--panel-config", str(project.panel)]
             if args.rollback:

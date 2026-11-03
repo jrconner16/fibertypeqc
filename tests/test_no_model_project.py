@@ -215,9 +215,15 @@ def test_no_model_steps(tmp_path, monkeypatch, capsys):
     assert cli.main(["review", str(root)]) == 2
     assert "--blind" in capsys.readouterr().err
     assert cli.main(["review", str(root), "--blind", "--reviewer", "a"]) == 0
-    for step in ("finalize", "improve", "promote"):
+    for step in ("finalize", "improve"):
         assert cli.main([step, str(root)]) == 2
         assert "no model" in capsys.readouterr().err
+    # Promoting a built model is allowed (E4); evaluate scores a chosen candidate on test mice.
+    assert cli.main(["promote", str(root), "logistic"]) == 0
+    assert calls[-2][0] == "promote_model" and calls[-1][0] == "generate_review_qc"
+    assert cli.main(["evaluate", str(root), "logistic"]) == 0
+    module, arguments = calls[-1]
+    assert module == "evaluate_model" and arguments[-2:] == ["--candidate", "logistic"]
 
 
 def test_status_counts_blind_labels_and_points_to_blind_labelling(tmp_path, capsys):

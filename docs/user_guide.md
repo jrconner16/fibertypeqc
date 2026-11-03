@@ -220,6 +220,29 @@ uv run python -m fibertypeqc build myproject/            # --reviewer NAME to us
 These checks are minimum safeguards, not an accuracy estimate. `build` never switches the project
 to a model; evaluating on test mice and switching are separate steps.
 
+Choose one candidate (normally the recommended one), score it on the test mice, then switch:
+
+```bash
+uv run python -m fibertypeqc evaluate myproject/ logistic   # independent test evaluation
+uv run python -m fibertypeqc promote  myproject/ logistic   # switch the project to it
+uv run python -m fibertypeqc promote  myproject/ --rollback # back to no model, exactly
+```
+
+- `evaluate` scores only the candidate you name, on blind labels from test mice only, using the
+  measurements already on disk; it changes nothing in the project. Results go to
+  `models/evaluations/`, and every evaluation is logged in `models/evaluation_history.csv` with how
+  many times the same test mice have been used. Choosing between models by their test scores makes
+  the test no longer independent.
+- An evaluation is tied to the exact candidate file and to the test labels, masks, and
+  measurements it used. If any of these change, it is out of date.
+- With test mice declared, `promote` requires a current evaluation of that candidate; `--override`
+  switches anyway and is recorded in `models/independent_test_checks.csv`. Without test mice,
+  `promote` warns that there was no independent test and records that. Test scores never decide
+  for you: switching is your decision.
+- Switching re-types every section on its existing mask and first checks that the measurements
+  reproduce exactly those the model was built from. Blind labels are never changed, and
+  `--rollback` restores the project as it was before the switch.
+
 ## Adapt the model from your review
 
 If the model does poorly on your images, your review decisions can train a replacement:
