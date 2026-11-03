@@ -4,7 +4,8 @@
 
 - [install.md](install.md): requirements, install, HPC notes, model downloads.
 - [demo.md](demo.md): the whole workflow on four small public fields.
-- [user_guide.md](user_guide.md): projects, workflow, outputs, QC, models, troubleshooting.
+- [user_guide.md](user_guide.md): projects, workflow, outputs, QC, models, building a model for a
+  panel without one, troubleshooting.
 - [review_guide.md](review_guide.md): reviewing a project in Napari.
 - [review_reference.md](review_reference.md): project QC, dashboard, and reviewer components in
   detail.
@@ -12,7 +13,8 @@
 - [output_schema.md](output_schema.md): columns of every output table.
 - [result_bundle_schema.md](result_bundle_schema.md): per-image result bundles and reports.
 - Model cards: [quad_four_class_rf_v1](model_cards/quad_four_class_rf_v1.md),
-  [ta_three_class_logistic_v1](model_cards/ta_three_class_logistic_v1.md).
+  [ta_three_class_logistic_v1](model_cards/ta_three_class_logistic_v1.md); a
+  [template](model_cards/built_model_template.md) for models you build.
 
 ## Developing FiberTypeQC
 

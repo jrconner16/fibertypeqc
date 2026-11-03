@@ -79,6 +79,11 @@ troubleshooting, and single-image commands.
   that have since changed.
 - **Report:** image, mouse, ROI, and cohort tables, and a self-contained HTML report comparing
   predicted and finalized results.
+- **Build a first model:** for a panel with no model, measure fibers without typing them, label
+  a sample blind, and build candidate models under a declared recipe (leave-one-mouse-out against
+  a baseline, minimum labels per class and mouse). Check the chosen one on independent test mice
+  before an explicit, reversible switch. See
+  [Panels without a model](docs/user_guide.md#panels-without-a-model).
 - **Measure and adapt:** blind reference labelling (model output hidden) with reviewer agreement;
   candidate models trained from review decisions and compared under a rule fixed in advance;
   explicit, reversible promotion; reproducibility snapshots.

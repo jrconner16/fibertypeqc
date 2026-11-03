@@ -171,7 +171,8 @@ refuses typing options that would change them. Model cards:
 
 ## Panels without a model
 
-If no model fits your staining panel, set `model: none` in `fibertypeqc_project.yaml`. `run` then
+If no model fits your staining panel, set `model: none` in `fibertypeqc_project.yaml` (or create
+the project with `init myproject/ --images ... --model none`). `run` then
 segments and measures every fiber but types none of them: every call is `unclassified`, and the
 marker measurements are written to `*_feature_diagnostics.csv`. You label a sample of fibers
 blind, and `build` turns those labels into candidate models.
@@ -220,6 +221,10 @@ uv run python -m fibertypeqc build myproject/            # --reviewer NAME to us
   `models/build_<time>/selection/`.
 - Every candidate is then refitted on all training mice and saved with its manifest in
   `models/build_<time>/candidates/`, with or without a recommendation.
+
+`status` shows the latest build, its recommended candidate, and whether that candidate's
+evaluation on the test mice is current, out of date, or missing. Its "Next:" line follows these
+steps: label, `build`, `evaluate`, `promote`.
 
 These checks are minimum safeguards, not an accuracy estimate. `build` never switches the project
 to a model; evaluating on test mice and switching are separate steps.

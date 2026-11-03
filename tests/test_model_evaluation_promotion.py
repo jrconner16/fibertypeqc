@@ -332,3 +332,17 @@ def test_rollback_changes_nothing_if_the_outgoing_state_cannot_be_archived(built
     history = pd.read_csv(history_path, keep_default_na=False)
     assert history["action"].tolist() == ["promote", "rollback"]
     assert history["outgoing_archive"].tolist() == ["", row["outgoing_archive"]]
+
+
+def test_status_follows_build_and_independent_evaluation(built):
+    root, project, chosen = built
+    folder = cli.load_project_folder(root)
+    status = cli.builder_status(folder)
+    assert status["recommended"] == chosen and status["evaluation"] == "missing"
+    evaluate(root, project, chosen)
+    assert cli.builder_status(folder)["evaluation"] == "current"
+    assert cli.builder_status(folder)["test_set_uses"] == 1
+    _label(project, "late", {(f"syn_{TEST_MOUSE}", 1): CLASSES[0]})
+    assert cli.builder_status(folder)["evaluation"] == "stale"
+    (root / "evaluation_roles.csv").unlink()
+    assert cli.builder_status(folder)["evaluation"] == "no_test_mice"

@@ -215,6 +215,10 @@ def test_no_model_steps(tmp_path, monkeypatch, capsys):
     assert cli.main(["review", str(root)]) == 2
     assert "--blind" in capsys.readouterr().err
     assert cli.main(["review", str(root), "--blind", "--reviewer", "a"]) == 0
+    # Options may also come before the project folder.
+    assert cli.main(["review", "--blind", "--reviewer", "a", str(root)]) == 0
+    module, arguments = calls[-1]
+    assert module == "review_project_napari" and arguments[-3:] == ["--blind", "--reviewer", "a"]
     for step in ("finalize", "improve"):
         assert cli.main([step, str(root)]) == 2
         assert "no model" in capsys.readouterr().err
@@ -226,7 +230,7 @@ def test_no_model_steps(tmp_path, monkeypatch, capsys):
     assert module == "evaluate_model" and arguments[-2:] == ["--candidate", "logistic"]
 
 
-def test_status_counts_blind_labels_and_points_to_blind_labelling(tmp_path, capsys):
+def test_status_counts_blind_labels_and_points_to_the_next_builder_step(tmp_path, capsys):
     root = _project_folder(tmp_path)
     (root / "batch").mkdir()
     (root / "batch/batch_summary.csv").write_text("image_name,status\na,success\n")
@@ -234,16 +238,40 @@ def test_status_counts_blind_labels_and_points_to_blind_labelling(tmp_path, caps
     (root / "review/qc").mkdir(parents=True)
     (root / "review/project.yaml").write_text("images: [{}]\n")
     (root / "review/qc/fiber_qc.csv").write_text("fiber_id\n")
-    (root / "review/reference/rev1").mkdir(parents=True)
-    (root / "review/reference/rev1/review_state.json").write_text(
-        json.dumps({"object_decisions": [{}, {}, {}]})
-    )
 
     assert cli.main(["status", str(root)]) == 0
     printed = capsys.readouterr().out
     assert "Model:   none; classes i, iia, negative" in printed
+    assert f"Next:    python -m fibertypeqc review {root} --blind --reviewer NAME" in printed
+
+    (root / "review/reference/rev1").mkdir(parents=True)
+    (root / "review/reference/rev1/review_state.json").write_text(
+        json.dumps({"object_decisions": [{}, {}, {}]})
+    )
+    assert cli.main(["status", str(root)]) == 0
+    printed = capsys.readouterr().out
     assert "rev1 3" in printed
-    assert "--blind" in printed
+    assert f"Next:    python -m fibertypeqc build {root}" in printed
+
+
+@pytest.mark.parametrize(
+    ("builder", "expected"),
+    [
+        ({"build": "b", "recommended": None}, "review PROJECT --blind --reviewer NAME"),
+        ({"build": "b", "recommended": "logistic", "evaluation": "missing"},
+         "evaluate PROJECT logistic"),
+        ({"build": "b", "recommended": "logistic", "evaluation": "stale"},
+         "evaluate PROJECT logistic"),
+        ({"build": "b", "recommended": "logistic", "evaluation": "current"},
+         "promote PROJECT logistic"),
+        ({"build": "b", "recommended": "logistic", "evaluation": "no_test_mice"},
+         "promote PROJECT logistic"),
+    ],
+)  # fmt: skip
+def test_next_builder_step_follows_build_and_evaluation(builder, expected):
+    status = {"stage": "ready_for_review", "blind_labels": {"a": 40}, **builder}
+    assert cli.no_model_next_step(status)[0] == expected
+    assert cli.no_model_next_step({**status, "stage": "batch_done"}) is None
 
 
 # --- review project -----------------------------------------------------------------------

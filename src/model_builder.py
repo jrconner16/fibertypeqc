@@ -42,7 +42,7 @@ BUILDER_SCHEMA_VERSION = "fibertypeqc.model_builder.v1"
 BASELINE = "majority_baseline"
 DEFAULT_RECIPE = Path(__file__).resolve().parents[1] / "manifests/builder/recipe.v1.yaml"
 CAVEAT = (
-    "Scores are leave-one-mouse-out on the training mice' blind labels and only compare the "
+    "Scores are leave-one-mouse-out on the blind labels of the training mice and only compare the "
     "candidates with each other and with a majority-class baseline. They are minimum safeguards, "
     "not an accuracy estimate: check a built model on independent test mice before relying on it."
 )

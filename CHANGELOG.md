@@ -39,6 +39,14 @@
   `evaluate` print it too. Results of projects with other models are unchanged. Two evaluations
   of the same candidate within one second no longer collide.
 
+### Changed
+
+- `status` follows the builder for a project without a model (#79). It shows the latest build,
+  its recommended candidate, and whether that candidate's test evaluation is current, out of
+  date, or missing. "Next:" moves from blind labelling to `build`, `evaluate`, and `promote`,
+  and now includes `--blind`. `review --blind --reviewer NAME` and `build --reviewer NAME` accept
+  their options before or after the project folder.
+
 ### Fixed
 
 - `promote --rollback` no longer discards review decisions made after a switch (#77). It first
