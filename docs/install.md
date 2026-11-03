@@ -5,9 +5,15 @@ installed with `pip`.
 
 ## Requirements
 
-- macOS or Linux. A GPU is optional; it speeds up Cellpose segmentation.
+- macOS or Linux. A GPU is optional; it speeds up Cellpose segmentation. Windows is untested
+  ([below](#windows-untested)).
 - [`uv`](https://docs.astral.sh/uv/). It installs the pinned Python (3.11) and every dependency
-  from `uv.lock`.
+  from `uv.lock`. Install it with
+  `curl -LsSf https://astral.sh/uv/install.sh | sh` (or `brew install uv`), then open a new
+  terminal so the `uv` command is found. Other methods are in the
+  [uv documentation](https://docs.astral.sh/uv/getting-started/installation/).
+- `git`. On a Mac without it, the first `git` command offers to install Apple's Command Line
+  Tools; accept, then run the command again.
 - Several GB of disk for the environment (PyTorch, Cellpose, Napari).
 
 ## Install
@@ -25,6 +31,31 @@ finalization, and results on synthetic images and checks the outputs; it ends wi
 
 Run every command from the repository root (the folder containing `pyproject.toml`) so `uv run`
 uses the project environment.
+
+## Windows (untested)
+
+FiberTypeQC is developed and tested on macOS and Linux. It has no Unix-only code, so it may run
+natively on Windows, but this has not been checked. Please
+[report](https://github.com/jrconner16/fibertypeqc/issues) what works and what does not.
+
+In PowerShell, install `uv`, then open a new terminal:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Install [Git for Windows](https://git-scm.com/download/win), then run the same commands as above,
+each on one line (the `\` line continuations in these docs are for macOS and Linux shells). Write
+paths the Windows way, in quotes if they contain spaces, for example
+`--images "D:\Microscopy\My images"`.
+
+- Keep the images and the project folder on the same drive (both on `C:` or both on `D:`); the
+  review project stores image paths relative to the project.
+- Close output files (for example CSVs open in Excel) before a step rewrites them; Windows does
+  not allow replacing a file another program has open.
+- If the native install does not work, use [WSL2](https://learn.microsoft.com/windows/wsl/install)
+  with Ubuntu and follow the Linux steps unchanged. The Napari review window needs WSLg
+  (Windows 11, or a recent Windows 10).
 
 ## Development tools
 

@@ -37,9 +37,11 @@ Version 0.4.0. Read before relying on results:
 ## Install and try it
 
 macOS or Linux, with [`uv`](https://docs.astral.sh/uv/) (it installs Python 3.11 and the locked
-dependencies). A GPU is optional.
+dependencies). A GPU is optional. Windows is untested; see
+[install.md](docs/install.md#windows-untested).
 
 ```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh   # installs uv (or: brew install uv); then open a new terminal
 git clone https://github.com/jrconner16/fibertypeqc.git
 cd fibertypeqc
 uv sync --frozen                             # first run downloads several GB (PyTorch)
