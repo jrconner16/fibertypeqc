@@ -59,6 +59,11 @@
 
 ### Documentation and repository
 
+- Install steps include installing `uv` (macOS/Linux and Windows PowerShell) and opening a new
+  terminal afterwards. A Windows section (untested) covers one-line commands, Windows paths,
+  keeping images and the project on one drive, closing files open in other programs, and WSL2
+  as a fallback.
+
 - Model-card template for built models (`docs/model_cards/built_model_template.md`); the user
   guide describes a project after a built model is promoted.
 - CI now runs the end-to-end builder test through to results: run, blind labels, build,
