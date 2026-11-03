@@ -223,6 +223,7 @@ def project_status(project: ProjectFolder) -> dict[str, Any]:
             state = json.loads(state_path.read_text(encoding="utf-8"))
             labels[state_path.parent.name] = len(state.get("object_decisions", []))
         status["blind_labels"] = labels
+        status.update(builder_status(project))
         return status
     manifest_path = project.final_dir / "finalization_manifest.json"
     if not manifest_path.is_file():
@@ -239,6 +240,65 @@ def project_status(project: ProjectFolder) -> dict[str, Any]:
     return status
 
 
+def builder_status(project: ProjectFolder) -> dict[str, Any]:
+    """The latest build and the independent evaluation of its recommended candidate (read only)."""
+    builds = sorted((project.root / "models").glob("build_*/build_summary.json"))
+    if not builds:
+        return {}
+    from src.model_evaluation import evaluation_status, find_build_candidate
+    from src.review.project import load_project
+
+    summary = json.loads(builds[-1].read_text(encoding="utf-8"))
+    recommended = summary["selection"]["decision"].get("recommended")
+    found: dict[str, Any] = {"build": builds[-1].parent.name, "recommended": recommended}
+    if recommended:
+        review = load_project(project.review_project)
+        artifact = find_build_candidate(project.root, recommended)
+        found["evaluation"] = evaluation_status(project.root, review, artifact)["status"]
+        history = project.root / "models" / "evaluation_history.csv"
+        if history.is_file():
+            uses = pd.read_csv(history, dtype=str, keep_default_na=False)["test_set_uses"]
+            found["test_set_uses"] = int(uses.astype(int).max()) if len(uses) else 0
+    return found
+
+
+def no_model_next_step(status: dict[str, Any]) -> tuple[str, str] | None:
+    """The next builder step for a project without a model, as (command arguments, why)."""
+    if status["stage"] != "ready_for_review":
+        return None
+    label = (
+        "review PROJECT --blind --reviewer NAME",
+        "Label a sample of fibers blind (training mice, and test mice if declared).",
+    )
+    if not any(status.get("blind_labels", {}).values()):
+        return label
+    if "build" not in status:
+        return ("build PROJECT", "Build candidate models from the blind labels of training mice.")
+    chosen = status["recommended"]
+    if not chosen:
+        return (
+            label[0],
+            "No candidate passed the recipe in the latest build; label more fibers, then build "
+            "again. (A candidate can still be evaluated and promoted with --override.)",
+        )
+    evaluation = status["evaluation"]
+    if evaluation == "no_test_mice":
+        return (
+            f"promote PROJECT {chosen}",
+            "No test mice are declared, so there is no independent test; promotion is recorded "
+            "with a warning.",
+        )
+    if evaluation == "current":
+        return (f"promote PROJECT {chosen}", "Switch the project to the evaluated candidate.")
+    why = (
+        "Its evaluation is out of date (labels, masks, or measurements changed); evaluating "
+        "again uses the test mice again."
+        if evaluation == "stale"
+        else "Score the recommended candidate on the test mice before promoting it."
+    )
+    return (f"evaluate PROJECT {chosen}", why)
+
+
 NEXT_STEP = {
     "new": ("run", "Segment and type every image (slow; use a GPU node or a batch job)."),
     "batch_failed": ("run", "No image succeeded; see batch/batch_run.log, fix, and run again."),
@@ -249,14 +309,9 @@ NEXT_STEP = {
     "finalized": ("finalize", "Build the result tables and report."),
     "reported": ("review", "Done. Review more and finalize again, or open the report."),
 }
-# A project without a model is measured, not typed, and its fibers are labelled blind.
+# A project without a model is measured, not typed; see no_model_next_step for later stages.
 NO_MODEL_NEXT_STEP = {
     "new": ("run", "Segment and measure every image (no model: fibers are not typed)."),
-    "ready_for_review": (
-        "review",
-        "Label a sample of fibers: review PROJECT --blind --reviewer NAME (no model yet); then "
-        "build PROJECT, evaluate PROJECT CANDIDATE on test mice, and promote PROJECT CANDIDATE.",
-    ),
 }
 
 
@@ -283,6 +338,26 @@ def command_status(project: ProjectFolder) -> int:
         print(f"Note:    {note}")
     if project.no_model:
         print(f"Model:   none; classes {', '.join(project.classes) or '(panel file missing)'}")
+    if "build" in status:
+        print(f"Build:   {status['build']}: recommended {status['recommended'] or 'none'}")
+    if status.get("evaluation"):
+        state = {
+            "current": "evaluated on the test mice (current)",
+            "stale": "evaluation out of date",
+            "missing": "not evaluated on the test mice yet",
+            "no_test_mice": "no test mice declared",
+        }[status["evaluation"]]
+        uses = status.get("test_set_uses")
+        print(
+            f"Test:    {status['recommended']}: {state}"
+            + (f"; test mice used {uses} time(s)" if uses else "")
+        )
+    builder = no_model_next_step(status) if project.no_model else None
+    if builder is not None:
+        command, explanation = builder
+        print(f"Next:    python -m fibertypeqc {command.replace('PROJECT', str(project.root))}")
+        print(f"         {explanation}")
+        return 0
     step, explanation = (
         NO_MODEL_NEXT_STEP.get(status["stage"]) if project.no_model else None
     ) or NEXT_STEP[status["stage"]]
@@ -592,6 +667,14 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         step = steps.add_parser(name, help=text)
         step.add_argument("project", type=Path, help="Project folder")
+        # Declared here so they may come before or after the project folder.
+        if name == "review":
+            step.add_argument("--blind", action="store_true", help="Blind reference labelling")
+            step.add_argument("--reviewer", help="Reviewer name")
+        if name == "build":
+            step.add_argument(
+                "--reviewer", action="append", help="Use only this reviewer's labels (repeatable)"
+            )
     promote = steps.add_parser(
         "promote",
         help=(
@@ -691,7 +774,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.step == "prepare":
             return command_prepare(project)
         if args.step == "review":
-            return command_review(project, extra)
+            passed = ["--blind"] if args.blind else []
+            passed += ["--reviewer", args.reviewer] if args.reviewer else []
+            return command_review(project, [*passed, *extra])
         if args.step == "improve":
             _require_model(project, args.step)
         if args.step == "evaluate":
@@ -727,6 +812,8 @@ def main(argv: list[str] | None = None) -> int:
                 "--panel-config", str(project.panel),
                 "--output-dir", str(project.root / "models"),
             ]  # fmt: skip
+            for reviewer in args.reviewer or []:
+                arguments += ["--reviewer", reviewer]
             return _run("build_model", [*arguments, *extra])
         if args.step == "improve":
             arguments = [

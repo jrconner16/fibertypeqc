@@ -101,7 +101,7 @@ Decisions:
   documented safeguards, not guarantees of biological validity. Test mice never take part in
   model selection, and a recommended model is never promoted automatically.
 
-Status: E1–E4 merged; E5 and E6 in progress; E7 optional. Tracked in issue #71.
+Status: E1–E6 merged; E7 optional. Tracked in issue #71.
 
 | ID | Task | Priority | Done when |
 |---|---|---|---|

@@ -409,6 +409,8 @@ def test_cli_build_requires_a_no_model_project(tmp_path, monkeypatch, capsys):
     assert cli.main(["build", str(root), "--reviewer", "a"]) == 0
     module, arguments = calls[-1]
     assert module == "build_model" and arguments[-2:] == ["--reviewer", "a"]
+    assert cli.main(["build", "--reviewer", "a", str(root), "--reviewer", "b"]) == 0
+    assert calls[-1][1][-4:] == ["--reviewer", "a", "--reviewer", "b"]  # options in any order
 
     typed = _project_folder(tmp_path / "typed", model="some_model_id")
     assert cli.main(["build", str(typed)]) == 2
