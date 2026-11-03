@@ -51,6 +51,8 @@ HISTORY_COLUMNS = (
     "agree_after",
     "flagged_before",
     "flagged_after",
+    # Rollback only: where the outgoing state (including review decisions) was archived.
+    "outgoing_archive",
 )
 MASK_SUFFIX = "_cellpose_labels.tif"
 TEST_CHECKS_NAME = "independent_test_checks.csv"
@@ -257,8 +259,10 @@ def _append_history(root: Path, row: dict[str, object]) -> None:
         else pd.DataFrame(columns=list(HISTORY_COLUMNS))
     )
     table = pd.concat([table, pd.DataFrame([{k: str(v) for k, v in row.items()}])])
+    # Histories written before a column existed read it as empty.
+    table = table.reindex(columns=list(HISTORY_COLUMNS)).fillna("")
     path.parent.mkdir(parents=True, exist_ok=True)
-    table.to_csv(path, index=False, columns=list(HISTORY_COLUMNS))
+    table.to_csv(path, index=False)
 
 
 def _set_review_model(project: Project, model_id: str) -> None:
@@ -392,6 +396,18 @@ def rollback(root: Path) -> dict:
     if last.name != history[history["action"] == "promote"].index[-1]:
         raise PromotionError("Only the most recent model change can be rolled back.")
     project = load_project(root / "review" / "project.yaml")
+    # Archive the outgoing state first, including review decisions made with the outgoing model;
+    # they are kept for reference and never applied to the restored model. If this fails, the
+    # project has not been touched.
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    outgoing = root / "models" / "history" / f"{stamp}__{last['to_model']}__rolled_back"
+    try:
+        _archive(root, project, outgoing.name)
+    except Exception as exc:
+        shutil.rmtree(outgoing, ignore_errors=True)
+        raise PromotionError(
+            f"Could not archive the current state before rolling back ({exc}); nothing was changed."
+        ) from exc
     _restore(root, project, root / last["archive"])
     row = {
         "changed_at_utc": datetime.now(UTC).isoformat(),
@@ -406,6 +422,7 @@ def rollback(root: Path) -> dict:
         "agree_after": "",
         "flagged_before": "",
         "flagged_after": "",
+        "outgoing_archive": str(outgoing.relative_to(root)),
     }
     _append_history(root, row)
     return row
@@ -433,6 +450,11 @@ def main(argv: list[str] | None = None) -> int:
             row = rollback(root)
             print(
                 f"Rolled back to {row['to_model']}; its outputs, QC, and review state are restored."
+            )
+            print(
+                f"The state with {row['from_model']}, including review decisions made with it, is "
+                f"archived in {row['outgoing_archive']}. Those decisions are not applied to "
+                f"{row['to_model']}."
             )
             return 0
         if not args.candidate:

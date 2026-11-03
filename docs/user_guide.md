@@ -285,6 +285,12 @@ Switching re-types every section on its existing mask (no segmentation), keeps y
 decisions, archives the previous outputs under `myproject/models/history/`, and records the change
 in `myproject/models/model_history.csv`.
 
+`--rollback` undoes the most recent switch exactly. It first archives the outgoing state,
+including review decisions made after the switch, under `myproject/models/history/` (the folder
+ending in `__rolled_back`, also recorded in `model_history.csv` as `outgoing_archive`). Those
+decisions belong to the outgoing model and are not applied to the restored one. If that archive
+cannot be written, nothing is rolled back. Blind labels, candidates, and evaluations are kept.
+
 ## Check a run against a reference
 
 To confirm that a later run (new code version, another computer) reproduces an earlier one, freeze
