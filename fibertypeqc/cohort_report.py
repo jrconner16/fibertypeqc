@@ -27,8 +27,8 @@ CLASS_LABELS = {"i": "Type I", "iia": "IIa", "iix": "IIx", "iib": "IIb", "hybrid
 LABEL_MIN_SHARE = 0.08
 
 
-def _label(name: str) -> str:
-    return CLASS_LABELS.get(name, name)
+def _label(name: str, labels: dict[str, str] = CLASS_LABELS) -> str:
+    return labels.get(name, name)
 
 
 def _pct(value: Any) -> str:
@@ -82,7 +82,9 @@ dt {{ color: var(--ink-2); }}
 """
 
 
-def _composition_chart(mouse: pd.DataFrame, classes: list[str]) -> str:
+def _composition_chart(
+    mouse: pd.DataFrame, classes: list[str], labels: dict[str, str] = CLASS_LABELS
+) -> str:
     """Paired 100% bars per mouse: predicted (model) above finalized (after review)."""
     label_w, bar_w, bar_h, gap, group_gap = 150, 640, 16, 4, 14
     rows = []
@@ -101,7 +103,7 @@ def _composition_chart(mouse: pd.DataFrame, classes: list[str]) -> str:
                     continue
                 width = bar_w * float(share)
                 drawn = max(width - 2, 0.5)  # 2px surface gap between segments
-                tip = f"{row['mouse_id']} {title}: {_label(name)} {_pct(share)}"
+                tip = f"{row['mouse_id']} {title}: {_label(name, labels)} {_pct(share)}"
                 rows.append(
                     f'<rect class="seg" x="{x:.1f}" y="{y}" width="{drawn:.1f}" '
                     f'height="{bar_h}" rx="2" fill="var(--c-{position})">'
@@ -120,9 +122,9 @@ def _composition_chart(mouse: pd.DataFrame, classes: list[str]) -> str:
     )
 
 
-def _legend(classes: list[str]) -> str:
+def _legend(classes: list[str], labels: dict[str, str] = CLASS_LABELS) -> str:
     items = "".join(
-        f'<span style="--swatch: var(--c-{position})">{_label(name)}</span>'
+        f'<span style="--swatch: var(--c-{position})">{html.escape(_label(name, labels))}</span>'
         for position, name in enumerate(classes)
     )
     return f'<div class="legend">{items}</div>'
@@ -149,7 +151,9 @@ def _table(frame: pd.DataFrame, columns: list[tuple[str, str, str]]) -> str:
     )
 
 
-def _cohort_table(cohort: pd.DataFrame, classes: list[str]) -> str:
+def _cohort_table(
+    cohort: pd.DataFrame, classes: list[str], labels: dict[str, str] = CLASS_LABELS
+) -> str:
     group_keys = [
         column
         for column in cohort.columns
@@ -170,13 +174,25 @@ def _cohort_table(cohort: pd.DataFrame, classes: list[str]) -> str:
         rows.append(record)
     frame = pd.DataFrame(rows)
     columns = [(key, key, "text") for key in group_keys] + [("n_mice", "Mice", "int")]
-    columns += [(name, f"{_label(name)} mean ± SD", "text") for name in classes]
+    columns += [(name, f"{_label(name, labels)} mean ± SD", "text") for name in classes]
     return _table(frame, columns)
+
+
+def _class_notes(classes: list[str], labels: dict[str, str]) -> list[str]:
+    if "negative" not in classes:
+        return []
+    name = html.escape(_label("negative", labels))
+    return [
+        f'<p class="note">{name}: negative for every myosin marker this panel measures. It is '
+        "not inferred to be any other fiber type (for example IIx or IIb).</p>"
+    ]
 
 
 def build_cohort_report(results_dir: Path) -> str:
     manifest = json.loads((results_dir / "results_manifest.json").read_text())
     classes: list[str] = manifest["fiber_classes"]
+    # A built model's panel-specific names, e.g. negative -> "I⁻/IIa⁻" (results manifest).
+    labels = {**CLASS_LABELS, **manifest.get("class_labels", {})}
     mouse = pd.read_csv(results_dir / "mouse_summary.csv")
     image = pd.read_csv(results_dir / "image_summary.csv")
     finalization = manifest["inputs"].get("finalization_manifest") or {}
@@ -218,8 +234,9 @@ def build_cohort_report(results_dir: Path) -> str:
         '<p class="note">Predicted: model calls over all analysis fibers. Finalized: final '
         "types over resolved fibers; unresolved fibers are excluded from the denominator and "
         "counted below. Fibers are pooled across each mouse's sections.</p>",
-        _legend(classes),
-        _composition_chart(mouse, classes),
+        *_class_notes(classes, labels),
+        _legend(classes, labels),
+        _composition_chart(mouse, classes, labels),
         "<h2>Mice</h2>",
         _table(
             mouse,
@@ -231,8 +248,8 @@ def build_cohort_report(results_dir: Path) -> str:
                 ("n_unresolved", "Unresolved", "int"),
                 ("n_excluded", "Excluded", "int"),
             ]
-            + [(f"prop_final_{n}", f"{_label(n)} final", "pct") for n in classes]
-            + [(f"prop_predicted_{n}", f"{_label(n)} predicted", "pct") for n in classes],
+            + [(f"prop_final_{n}", f"{_label(n, labels)} final", "pct") for n in classes]
+            + [(f"prop_predicted_{n}", f"{_label(n, labels)} predicted", "pct") for n in classes],
         ),
     ]
     cohort_path = results_dir / "cohort_summary.csv"
@@ -241,7 +258,7 @@ def build_cohort_report(results_dir: Path) -> str:
         sections += [
             "<h2>Cohort (mouse as the unit)</h2>",
             '<p class="note">Mean ± SD across mice of mouse-level finalized proportions.</p>',
-            _cohort_table(cohort, classes),
+            _cohort_table(cohort, classes, labels),
         ]
     roi_path = results_dir / "roi_summary.csv"
     if roi_path.is_file():
@@ -255,7 +272,7 @@ def build_cohort_report(results_dir: Path) -> str:
                     ("roi_name", "ROI", "text"),
                     ("n_resolved", "Resolved", "int"),
                 ]
-                + [(f"prop_final_{n}", f"{_label(n)} final", "pct") for n in classes],
+                + [(f"prop_final_{n}", f"{_label(n, labels)} final", "pct") for n in classes],
             ),
         ]
     sections += [

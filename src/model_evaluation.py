@@ -221,6 +221,10 @@ def evaluate(root: Path, project: Project, candidate: str) -> dict[str, Any]:
     earlier = history[history["test_mice"] == ";".join(test_mice)]
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     folder = root / "models" / "evaluations" / f"{stamp}__{manifest.model_id}"
+    for repeat in range(2, 100):  # two evaluations within the same second
+        if not folder.exists():
+            break
+        folder = folder.with_name(f"{stamp}_{repeat}__{manifest.model_id}")
     folder.mkdir(parents=True, exist_ok=False)
     atomic_write_dataframe(folder / "test_predictions.csv", table)
     atomic_write_dataframe(folder / "metrics_by_mouse.csv", by_mouse)

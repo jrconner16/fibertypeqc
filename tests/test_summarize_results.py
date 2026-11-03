@@ -173,3 +173,28 @@ def test_rewriting_results_is_deterministic(tmp_path: Path):
     assert {k: v["sha256"] for k, v in first["tables"].items()} == {
         k: v["sha256"] for k, v in second["tables"].items()
     }
+
+
+def test_a_built_models_negative_class_is_named_for_its_panel(tmp_path: Path):
+    final_dir = tmp_path / "final"
+    final_dir.mkdir()
+    rows = [("i", "i", "predicted", "", ""), ("negative", "negative", "reviewed", "", "")]
+    _fibers("a1", "mouse_a", rows).to_csv(final_dir / "final_fiber_table.csv", index=False)
+    project = tmp_path / "project.yaml"
+    project.write_text(
+        yaml.safe_dump(
+            {"images": [{"image_id": "a1"}], "class_labels": {"negative": "I⁻/IIa⁻"}},
+            allow_unicode=True,
+        )
+    )
+
+    manifest = write_results(final_dir, tmp_path / "r", project)
+
+    assert manifest["fiber_classes"] == ["i", "negative"]
+    assert manifest["class_labels"] == {"negative": "I⁻/IIa⁻"}
+    report = build_cohort_report(tmp_path / "r")
+    assert "I⁻/IIa⁻ final" in report and "negative final" not in report
+    assert "negative for every myosin marker this panel measures" in report
+    # A project without panel-specific names keeps the manifest as before.
+    project.write_text(yaml.safe_dump({"images": [{"image_id": "a1"}]}))
+    assert "class_labels" not in write_results(final_dir, tmp_path / "r2", project)

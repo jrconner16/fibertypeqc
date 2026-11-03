@@ -191,7 +191,7 @@ classes: [i, iia, negative]      # optional; this is the default for a Type I + 
 After `run` and `prepare`, label fibers with
 `uv run python -m fibertypeqc review myproject/ --blind --reviewer NAME`
 ([Blind reference labels](#blind-reference-labels)); the buttons offer the configured classes.
-`finalize`, `improve`, and `promote` need model calls and refuse a project without a model.
+`finalize` and `improve` need model calls and refuse a project until a model is promoted.
 
 Then build candidate models from the blind labels:
 
@@ -242,6 +242,18 @@ uv run python -m fibertypeqc promote  myproject/ --rollback # back to no model, 
 - Switching re-types every section on its existing mask and first checks that the measurements
   reproduce exactly those the model was built from. Blind labels are never changed, and
   `--rollback` restores the project as it was before the switch.
+
+After the switch the project works like any project with a model: `review` (guided), `finalize`,
+and `improve` are available, and the review buttons keep the classes and the panel's name for
+`negative`. `classes` is removed from `fibertypeqc_project.yaml` because the model now sets them.
+In results, `negative` keeps its panel-specific meaning: `results_manifest.json` records the name
+(`class_labels`), and the cohort report shows it (for example "I⁻/IIa⁻ final") with a note that
+these fibers are negative for every measured myosin marker, not IIx or IIb. The per-section run
+report lists only the standard classes; the counts are in `*_fibers.csv` and the results tables.
+
+Describe the model with the [model-card template](model_cards/built_model_template.md); each field
+names the build or evaluation file it comes from. A model trained on private data, and its card,
+stay in private storage.
 
 ## Adapt the model from your review
 

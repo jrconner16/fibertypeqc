@@ -389,6 +389,7 @@ def test_build_command_runs_and_reports(labelled, capsys):
     assert "430 labelled fibers from 3 training mice" in printed
     assert "test_mice 144" in printed and "reviewer conflicts 2" in printed
     assert "Recommendation:" in printed
+    assert "pooled recall (i, iia, I⁻/IIa⁻)" in printed  # negative is named for the panel
 
 
 def test_cli_build_requires_a_no_model_project(tmp_path, monkeypatch, capsys):

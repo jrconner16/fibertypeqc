@@ -10,10 +10,15 @@ import pandas as pd
 import pytest
 import yaml
 
+from fibertypeqc.cohort_report import build_cohort_report
 from src import cli
+from src.finalize_review_project import main as finalize_main
 from src.model_evaluation import EvaluationError, evaluate, evaluation_status, find_build_candidate
 from src.promote_model import PromotionError, _test_check, promote, rollback
+from src.reference_snapshot import check as check_snapshot
+from src.reference_snapshot import freeze as freeze_snapshot
 from src.review.project import load_project
+from src.summarize_results import write_results
 from tests.test_model_builder import (  # noqa: F401  (pytest fixtures)
     CLASSES,
     TEST_MOUSE,
@@ -57,7 +62,9 @@ def _blind_labels(root):
     }
 
 
-def test_evaluate_promote_and_rollback_restore_the_project_exactly(built, monkeypatch):
+def test_evaluate_promote_and_rollback_restore_the_project_exactly(
+    built, monkeypatch, tmp_path_factory
+):
     root, project, chosen = built
     before = _tree(root)
     labels_before = _blind_labels(root)
@@ -91,6 +98,20 @@ def test_evaluate_promote_and_rollback_restore_the_project_exactly(built, monkey
     assert cli.command_prepare(cli.load_project_folder(root)) == 0
     assert steps == ["generate_review_qc"]  # the review project is kept, not rebuilt
 
+    # The promoted project runs through to results; outputs go outside the project folder.
+    elsewhere = tmp_path_factory.mktemp("after_promotion")
+    snapshot = freeze_snapshot(root / "batch", elsewhere / "snapshot.json")
+    assert snapshot["sections"] and all(
+        check.passed and check.level == "exact"
+        for check in check_snapshot(root / "batch", elsewhere / "snapshot.json")
+    )
+    review = root / "review" / "project.yaml"
+    assert finalize_main(["--project", str(review), "--output-dir", str(elsewhere / "final")]) == 0
+    manifest = write_results(elsewhere / "final", elsewhere / "results", review)
+    assert "negative" in manifest["fiber_classes"]
+    assert manifest["class_labels"] == {"negative": "I⁻/IIa⁻"}
+    assert "I⁻/IIa⁻ final" in build_cohort_report(elsewhere / "results")
+
     rollback(root)
     assert _tree(root) == before  # byte-for-byte, including config and run records
     assert load_project(root / "review" / "project.yaml").model_version == "none"
@@ -117,17 +138,25 @@ def test_promotion_needs_a_current_evaluation_or_a_recorded_override(built):
     }
 
 
-@pytest.mark.integration
-def test_an_override_promotion_is_recorded(built):
+def _skip_retyping(monkeypatch):
+    """Promotion bookkeeping without re-typing every section (covered by the end-to-end test)."""
+    from src import promote_model
+
+    monkeypatch.setattr(promote_model, "_retype", lambda *args, **kwargs: None)
+
+
+def test_an_override_promotion_is_recorded_and_reported(built, monkeypatch, capsys):
+    from src.promote_model import main
+
     root, project, chosen = built
     evaluate(root, project, chosen)
     _label(project, "late", {(f"syn_{TEST_MOUSE}", 1): CLASSES[0]})
-    row = promote(root, chosen, root / "panel.yaml", override=True)
-    assert row["independent_test"] == {
-        **row["independent_test"],
-        "status": "stale",
-        "override": True,
-    }
+    _skip_retyping(monkeypatch)
+    arguments = ["--project-root", str(root), "--panel-config", str(root / "panel.yaml")]
+    assert main([*arguments, "--candidate", chosen]) == 1  # stale: refused
+    assert "changed since" in capsys.readouterr().err
+    assert main([*arguments, "--candidate", chosen, "--override"]) == 0
+    assert "out of date; recorded in models/independent_test_checks.csv" in capsys.readouterr().out
     checks = pd.read_csv(root / "models" / "independent_test_checks.csv")
     assert checks.loc[0, "status"] == "stale" and bool(checks.loc[0, "override"])
 
@@ -159,17 +188,19 @@ def test_without_test_mice_evaluation_is_refused_and_promotion_only_warns(built)
     assert check["status"] == "no_test_mice" and check["override"] is False
 
 
-@pytest.mark.integration
-def test_without_test_mice_promotion_is_recorded(built):
-    root, project, chosen = built
+def test_without_test_mice_promotion_warns_and_is_recorded(built, monkeypatch, capsys):
+    from src.promote_model import main
+
+    root, _, chosen = built
     (root / "evaluation_roles.csv").unlink()
-    row = promote(root, chosen, root / "panel.yaml")
-    assert row["independent_test"]["status"] == "no_test_mice"
+    _skip_retyping(monkeypatch)
+    arguments = ["--project-root", str(root), "--panel-config", str(root / "panel.yaml")]
+    assert main([*arguments, "--candidate", chosen]) == 0  # no override needed
+    assert "WARNING: no test mice are declared" in capsys.readouterr().out
     checks = pd.read_csv(root / "models" / "independent_test_checks.csv")
-    assert checks.loc[0, "status"] == "no_test_mice"
+    assert checks.loc[0, "status"] == "no_test_mice" and not bool(checks.loc[0, "override"])
 
 
-@pytest.mark.integration
 def test_measurements_that_do_not_reproduce_stop_promotion_and_change_nothing(
     built, monkeypatch
 ):
@@ -214,3 +245,31 @@ def test_evaluation_folder_keeps_predictions_metrics_and_inputs(built):
     }
     assert result["recommended_by_builder"] is True
     shutil.rmtree(folder)
+
+
+def test_measurement_check_is_exact_on_model_features_only(tmp_path):
+    from src.promote_model import _same_measurements
+
+    table = pd.DataFrame({"label": [1, 2], "type_i.mean": [0.25, 0.5], "area": [10.0, 20.0]})
+    old, new = tmp_path / "old.csv", tmp_path / "new.csv"
+    table.to_csv(old, index=False)
+    table.assign(area=[11.0, 21.0]).to_csv(new, index=False)
+    assert _same_measurements(old, new, ["type_i.mean"])  # area is not a model feature
+    table.assign(**{"type_i.mean": [0.25, 0.5 + 1e-9]}).to_csv(new, index=False)
+    assert not _same_measurements(old, new, ["type_i.mean"])  # no tolerance
+    table.drop(columns="type_i.mean").to_csv(new, index=False)
+    assert not _same_measurements(old, new, ["type_i.mean"])
+    table.iloc[:1].to_csv(new, index=False)
+    assert not _same_measurements(old, new, ["type_i.mean"])
+
+
+def test_evaluate_command_reports_panel_names_and_repeated_use(built, capsys):
+    from src.evaluate_model import main
+
+    root, _, chosen = built
+    assert main(["--project-root", str(root), "--candidate", chosen]) == 0
+    printed = capsys.readouterr().out
+    assert "recall I⁻/IIa⁻:" in printed and "used for" not in printed
+    assert main(["--project-root", str(root), "--candidate", chosen]) == 0
+    assert "used for 2 evaluations" in capsys.readouterr().out
+    assert main(["--project-root", str(root), "--candidate", "nonexistent"]) == 1

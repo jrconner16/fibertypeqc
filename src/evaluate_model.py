@@ -41,6 +41,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Note: 'build' did not recommend this candidate.")
     print(f"median per-mouse macro-F1: {result['median_mouse_macro_f1']:.3f}")
     for name, value in result["pooled_recall_by_class"].items():
+        name = project.class_labels.get(name, name)  # e.g. negative -> I⁻/IIa⁻
         print(f"  recall {name}: {'N/A' if value is None else f'{value:.2f}'}")
     uses = result["test_set_uses"]
     if uses > 1:

@@ -215,12 +215,19 @@ def load_conditions(project_path: Path) -> dict[str, dict[str, Any]]:
     }
 
 
+def load_class_labels(project_path: Path) -> dict[str, str]:
+    """Panel-specific class names from the review project (models made by the builder)."""
+    raw = yaml.safe_load(project_path.read_text(encoding="utf-8"))
+    return {str(k): str(v) for k, v in (raw.get("class_labels") or {}).items()}
+
+
 def write_results(final_dir: Path, output_dir: Path, project_path: Path | None) -> dict[str, Any]:
     final_table_path = final_dir / "final_fiber_table.csv"
     final = pd.read_csv(
         final_table_path, keep_default_na=False, na_values=[""], low_memory=False
     )
     conditions = load_conditions(project_path) if project_path is not None else None
+    class_labels = load_class_labels(project_path) if project_path is not None else {}
     outputs = summarize(final, conditions)
     classes = outputs.pop("_classes")["fiber_class"].tolist()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -247,6 +254,9 @@ def write_results(final_dir: Path, output_dir: Path, project_path: Path | None) 
         },
         "tables": written,
     }
+    shown = {name: label for name, label in class_labels.items() if name in classes}
+    if shown:
+        manifest["class_labels"] = shown  # e.g. negative -> "I⁻/IIa⁻"; panel-specific names
     (output_dir / "results_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
     )

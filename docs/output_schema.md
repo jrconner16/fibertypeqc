@@ -262,7 +262,9 @@ outside_analysis_roi|fiber_review|edge_of_image`), `n_analysis`, `n_resolved`, `
 analysis fibers), plus median morphology (`median_area`, `median_area_um2`, `median_feret_*`,
 overall and per final class) when present. `results_manifest.json`
 (`fibertypeqc.results.v1`) records definitions, class order, input and table digests, and the
-finalization manifest.
+finalization manifest. For a model made with `build`, it also records `class_labels`, the panel's
+name for a class (for example `negative` → `I⁻/IIa⁻`: negative for every measured myosin marker,
+never IIx or IIb); the cohort report uses these names. The key is absent otherwise.
 
 ## Batch Summary Columns
 
