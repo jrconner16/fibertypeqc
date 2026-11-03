@@ -158,6 +158,32 @@ def test_review_labels_skip_exclusions_and_use_kept_calls():
     assert skipped == {"excluded": 1, "uncertain_or_unresolved": 1, "outside_model_classes": 1}
 
 
+def test_review_labels_keep_negative_and_hybrid_for_a_built_model():
+    session = ReviewSession(project_id="p", model_version="built")
+    for fiber_id, (model, reviewed, status) in enumerate(
+        [
+            ("negative", "negative", ObjectReviewStatus.ACCEPTED),
+            ("i", "negative", ObjectReviewStatus.CORRECTED),
+            ("negative", "hybrid", ObjectReviewStatus.CORRECTED),
+        ],
+        start=1,
+    ):
+        session.record_fiber_type_decision(
+            FiberTypeDecision(
+                image_id="a",
+                fiber_id=fiber_id,
+                model_fiber_type=model,
+                reviewed_fiber_type=reviewed,
+                review_status=status,
+            )
+        )
+
+    labels, skipped = review_labels(session, ["i", "iia", "hybrid", "negative"])
+
+    assert labels["label"].tolist() == ["negative", "negative", "hybrid"]  # never read as IIx
+    assert skipped["outside_model_classes"] == 0
+
+
 def test_default_recipe_declares_candidates_and_rule():
     recipe = load_recipe()
 

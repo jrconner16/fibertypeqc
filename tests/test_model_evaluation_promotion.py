@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 import yaml
 
+from src import cli
 from src.model_evaluation import EvaluationError, evaluate, evaluation_status, find_build_candidate
 from src.promote_model import PromotionError, _test_check, promote, rollback
 from src.review.project import load_project
@@ -56,7 +57,7 @@ def _blind_labels(root):
     }
 
 
-def test_evaluate_promote_and_rollback_restore_the_project_exactly(built):
+def test_evaluate_promote_and_rollback_restore_the_project_exactly(built, monkeypatch):
     root, project, chosen = built
     before = _tree(root)
     labels_before = _blind_labels(root)
@@ -82,6 +83,13 @@ def test_evaluate_promote_and_rollback_restore_the_project_exactly(built):
     fibers = pd.read_csv(root / "batch/syn_m1/syn_m1_fibers.csv")
     assert set(fibers["fiber_type"]) <= set(CLASSES)
     assert _blind_labels(root) == labels_before  # blind labels are never touched
+    # Without 'classes' in the config, the review project keeps the classes and the panel's
+    # name for 'negative', and 'prepare' keeps that review project rather than rebuilding it.
+    assert promoted.class_labels == {"negative": "I⁻/IIa⁻"}
+    steps = []
+    monkeypatch.setattr(cli, "_run", lambda step, arguments: steps.append(step) or 0)
+    assert cli.command_prepare(cli.load_project_folder(root)) == 0
+    assert steps == ["generate_review_qc"]  # the review project is kept, not rebuilt
 
     rollback(root)
     assert _tree(root) == before  # byte-for-byte, including config and run records
