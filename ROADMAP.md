@@ -76,7 +76,7 @@ segmentation and morphometry validation; nuclear analysis accuracy; comparison w
 reported as disagreement rather than error. Deferred: continuous phenotype models, new network
 architectures, feature and classifier ablations, new features.
 
-## Track E — Model builder (planned; does not block the archive or JOSS submission)
+## Track E — Model builder (in development; does not block the archive or JOSS submission)
 
 Goal: a lab whose panel has no model can build one inside FiberTypeQC, with the safeguards the
 model improver already has. Flow: `init` with no model -> `run` (segment and measure; calls
@@ -101,18 +101,22 @@ Decisions:
   documented safeguards, not guarantees of biological validity. Test mice never take part in
   model selection, and a recommended model is never promoted automatically.
 
+Status: E1–E4 merged; E5 and E6 in progress; E7 optional. Tracked in issue #71.
+
 | ID | Task | Priority | Done when |
 |---|---|---|---|
 | E1 | Run a project without a model: segmentation and measurements only, calls `unclassified`; QC, prepare, review, finalization, and summaries accept it | blocker | existing projects, the reference run, and the demo snapshot are unchanged |
 | E2 | Classes from the project configuration, including `negative` and optional `hybrid` | blocker | blind labelling offers the configured classes |
 | E3 | Builder recipe and `build` command (reusing the improver's evaluation) | blocker | candidates, manifests, and report written; recommendation follows the recipe |
 | E4 | `promote` from a project without a model, with rollback to unclassified | blocker | promote and rollback are exact |
-| E5 | Synthetic end-to-end test in CI (run -> labels -> build -> promote -> rollback -> snapshot) | blocker | green in CI |
+| E5 | Synthetic end-to-end test in CI (run -> labels -> build -> evaluate -> promote -> snapshot -> results -> rollback) | blocker | green in CI |
 | E6 | User guide section and model-card template for built models | important | documented |
 | E7 | Public demo of building a model from manual labels on published images | optional | does not delay a release or the submission |
 
 Not in scope: importing labels from other tools, classes other than fiber types, deep-learning
-models, segmentation changes.
+models, segmentation changes. Known limitation: `hybrid` is one class, so on panels with three or
+four myosin markers it pools different co-expression combinations; separate combination classes
+are a possible later extension.
 
 ## Critical path
 

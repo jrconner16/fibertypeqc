@@ -33,8 +33,25 @@
   checks that re-typing reproduces the model's training measurements exactly, removes `classes`
   from the config, and leaves blind labels untouched; `--rollback` restores the project exactly.
   Promotion of improver candidates is unchanged.
+- **Built models after promotion** (roadmap E5/E6): `negative` keeps its panel-specific name
+  in results. `results_manifest.json` records `class_labels` for a built model, and the cohort
+  report shows the name (for example "I⁻/IIa⁻") with a note on what it means. `build` and
+  `evaluate` print it too. Results of projects with other models are unchanged. Two evaluations
+  of the same candidate within one second no longer collide.
 
 ### Documentation and repository
+
+- Model-card template for built models (`docs/model_cards/built_model_template.md`); the user
+  guide describes a project after a built model is promoted.
+- CI now runs the end-to-end builder test through to results: run, blind labels, build,
+  evaluate, promote, reference snapshot, finalize, results, and exact rollback. It also covers
+  the recorded override, promotion without test mice, and the measurement check that stops a
+  promotion.
+- Builder tests on other panels: an end-to-end IIa/IIb panel with `hybrid` and `negative` (build,
+  evaluate, promote, rollback), a three-marker panel's classes, `negative` name, and features,
+  and a check that features and calls follow marker identity, not channel order. The user guide
+  notes that `hybrid` pools different co-expression combinations on panels with three or more
+  myosin markers (#76).
 
 - README and `CITATION.cff` give the Zenodo DOIs (concept DOI 10.5281/zenodo.23893717; v0.4.0
   10.5281/zenodo.23893718).

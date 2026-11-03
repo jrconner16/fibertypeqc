@@ -52,10 +52,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Model building stopped: {exc}", file=sys.stderr)
         return 1
 
+    shown = project.class_labels  # panel-specific names, e.g. negative -> I⁻/IIa⁻
     labels = result["labels"]
     print(
         f"{labels['n_fibers']} labelled fibers from {labels['n_training_mice']} training mice: "
-        + ", ".join(f"{name} {count}" for name, count in labels["by_class"].items())
+        + ", ".join(f"{shown.get(n, n)} {count}" for n, count in labels["by_class"].items())
     )
     left_out = {key: value for key, value in labels["left_out"].items() if value}
     if left_out or labels["conflicting_fibers"]:
@@ -63,7 +64,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"left out: {details or 'none'}; reviewer conflicts {labels['conflicting_fibers']}")
     metrics = result["selection"]["metrics"]
     classes = result["classes"]
-    print(f"\n{'model':<20}{'median mouse macro-F1':>23}  pooled recall ({', '.join(classes)})")
+    header = ", ".join(shown.get(c, c) for c in classes)
+    print(f"\n{'model':<20}{'median mouse macro-F1':>23}  pooled recall ({header})")
     for name, values in metrics.items():
         recalls = ", ".join(f"{values['pooled_recall_by_class'][c]:.2f}" for c in classes)
         print(f"{name:<20}{values['median_mouse_macro_f1']:>23.3f}  {recalls}")
