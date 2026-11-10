@@ -18,7 +18,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 from qtpy.QtCore import QProcess, QProcessEnvironment, Qt, QUrl
-from qtpy.QtGui import QDesktopServices, QFontDatabase, QTextCursor
+from qtpy.QtGui import QColor, QDesktopServices, QFontDatabase, QPalette, QTextCursor
 from qtpy.QtWidgets import (
     QApplication,
     QComboBox,
@@ -73,7 +73,33 @@ from src.workflow_steps import (
 
 COPY_PREFIX = "uv run --frozen python -m fibertypeqc"
 MARKS = {DONE: "✓", CURRENT: "●", UPCOMING: "○", ATTENTION: "!", SKIPPED: "–"}
-MARK_COLORS = {DONE: "#2e7d32", CURRENT: "#1565c0", ATTENTION: "#e65100"}
+MARK_COLORS = {DONE: "done", CURRENT: "current", ATTENTION: "warning"}
+# (light theme, dark theme); Qt follows the system appearance, so pick by the window color.
+COLORS = {
+    "done": ("#2e7d32", "#81c784"),
+    "current": ("#1565c0", "#64b5f6"),
+    "warning": ("#e65100", "#ffb74d"),
+    "error": ("#c62828", "#ef9a9a"),
+}
+
+
+def _dark() -> bool:
+    return QApplication.palette().color(QPalette.Window).lightness() < 128
+
+
+def color(name: str) -> str:
+    return COLORS[name][_dark()]
+
+
+def muted() -> str:
+    """Secondary text: the theme's text color mixed toward its background, readable in both."""
+    palette = QApplication.palette()
+    text, background = palette.color(QPalette.WindowText), palette.color(QPalette.Window)
+    pairs = zip(text.getRgb()[:3], background.getRgb()[:3], strict=True)
+    mixed = [round(0.6 * a + 0.4 * b) for a, b in pairs]
+    return QColor(*mixed).name()
+
+
 ACTIONS = {
     "samples": "Edit samples",
     "run": "Run",
@@ -133,14 +159,14 @@ class StepRow(QFrame):
         mark = QLabel(MARKS[step.state])
         mark.setFixedWidth(18)
         if step.state in MARK_COLORS:
-            mark.setStyleSheet(f"color: {MARK_COLORS[step.state]}; font-weight: bold;")
+            mark.setStyleSheet(f"color: {color(MARK_COLORS[step.state])}; font-weight: bold;")
         title = QLabel(step.title)
         title.setStyleSheet("font-weight: bold;" if step.state == CURRENT else "")
         header.addWidget(mark)
         header.addWidget(title)
         if step.summary and step.state != CURRENT:
             summary = QLabel(step.summary)
-            summary.setStyleSheet("color: palette(mid);")
+            summary.setStyleSheet(f"color: {muted()};")
             summary.setWordWrap(True)
             header.addWidget(summary, 1)
         else:
@@ -158,8 +184,8 @@ class StepRow(QFrame):
         if step.state == CURRENT:
             self._add_current(window, layout)
         if step.state == UPCOMING:
-            title.setEnabled(False)
-            mark.setEnabled(False)
+            for label in (title, mark):
+                label.setStyleSheet(f"color: {muted()};")
 
     def _add_current(self, window: LauncherWindow, layout: QVBoxLayout) -> None:
         step = self.step
@@ -272,7 +298,7 @@ class LauncherWindow(QMainWindow):
             top.addWidget(widget)
         outer.addLayout(top)
         self.path_label = QLabel("")
-        self.path_label.setStyleSheet("color: palette(mid);")
+        self.path_label.setStyleSheet(f"color: {muted()};")
         self.path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.path_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         outer.addWidget(self.path_label)
@@ -597,7 +623,7 @@ class NewProjectDialog(QDialog):
         form.addRow("Project name", self.name_edit)
         form.addRow("Images folder", _with_browse(self.images_edit, self._browse_images))
         self.images_info = QLabel("")
-        self.images_info.setStyleSheet("color: palette(mid);")
+        self.images_info.setStyleSheet(f"color: {muted()};")
         form.addRow("", self.images_info)
 
         self.panel_combo = QComboBox()
@@ -608,7 +634,7 @@ class NewProjectDialog(QDialog):
         self.panel_combo.currentIndexChanged.connect(self._panel_changed)
         form.addRow("Stain panel", self.panel_combo)
         self.panel_info = _wrapped("")
-        self.panel_info.setStyleSheet("color: palette(mid);")
+        self.panel_info.setStyleSheet(f"color: {muted()};")
         form.addRow("", self.panel_info)
         self.channel_box = QWidget()
         channel_form = QFormLayout(self.channel_box)
@@ -631,7 +657,7 @@ class NewProjectDialog(QDialog):
         self.model_combo.activated.connect(self._model_chosen)
         form.addRow("Model", self.model_combo)
         self.model_info = _wrapped("")
-        self.model_info.setStyleSheet("color: palette(mid);")
+        self.model_info.setStyleSheet(f"color: {muted()};")
         form.addRow("", self.model_info)
 
         self.pattern_edit = QLineEdit()
@@ -639,11 +665,11 @@ class NewProjectDialog(QDialog):
         self.pattern_edit.textChanged.connect(self._preview_mice)
         form.addRow("Mouse ID from file name", self.pattern_edit)
         self.mice_preview = QLabel("")
-        self.mice_preview.setStyleSheet("color: palette(mid);")
+        self.mice_preview.setStyleSheet(f"color: {muted()};")
         form.addRow("", self.mice_preview)
 
         self.error_label = _wrapped("")
-        self.error_label.setStyleSheet("color: #c62828;")
+        self.error_label.setStyleSheet(f"color: {color('error')};")
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Ok).setText("Create project")
         buttons.accepted.connect(self.create)
@@ -861,7 +887,7 @@ class SamplesDialog(QDialog):
                 "Prepare has already used this sheet. Changes here are saved but do not reach "
                 "the existing review project."
             )
-            warning.setStyleSheet("color: #e65100;")
+            warning.setStyleSheet(f"color: {color('warning')};")
             layout.addWidget(warning)
         self.table = QTableWidget()
         self._fill()
@@ -893,7 +919,7 @@ class SamplesDialog(QDialog):
                 item = QTableWidgetItem(str(value))
                 if columns[c] in LOCKED_COLUMNS:
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                    item.setForeground(self.palette().mid())
+                    item.setForeground(QColor(muted()))
                 self.table.setItem(r, c, item)
         self.table.resizeColumnsToContents()
         self.table.blockSignals(False)
@@ -918,7 +944,7 @@ class SamplesDialog(QDialog):
             self.message.setText(
                 f"{plural(blank, 'image still needs', 'images still need')} a mouse ID."
             )
-            self.message.setStyleSheet("color: #e65100;")
+            self.message.setStyleSheet(f"color: {color('warning')};")
         else:
             mice = sheet["mouse_id"].nunique()
             self.message.setText(
