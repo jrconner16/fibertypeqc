@@ -11,9 +11,9 @@ desktop session on a suitable node and run steps here, or copy a step's command 
 from __future__ import annotations
 
 import os
+import plistlib
 import re
 import shlex
-import subprocess
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -135,15 +135,18 @@ def _dark() -> bool:
     if chosen in ("light", "dark"):
         return chosen == "dark"
     if sys.platform == "darwin":
-        try:
-            style = subprocess.run(
-                ["defaults", "read", "-g", "AppleInterfaceStyle"],
-                capture_output=True, text=True, timeout=2, check=False,
-            ).stdout  # fmt: skip
-        except (OSError, subprocess.SubprocessError):
-            style = ""
-        return style.strip().lower() == "dark"
+        return _macos_dark(Path.home() / "Library/Preferences/.GlobalPreferences.plist")
     return QApplication.palette().color(QPalette.Window).lightness() < 128
+
+
+def _macos_dark(preferences: Path) -> bool:
+    """macOS dark mode, from the user's global preferences file (no command is run)."""
+    try:
+        with preferences.open("rb") as handle:
+            style = plistlib.load(handle).get("AppleInterfaceStyle", "")
+    except (OSError, ValueError, plistlib.InvalidFileException):
+        return False
+    return str(style).strip().lower() == "dark"
 
 
 def color(name: str) -> str:
