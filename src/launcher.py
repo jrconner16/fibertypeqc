@@ -68,6 +68,7 @@ from src.workflow_steps import (
     Step,
     Workflow,
     can_edit_setup,
+    channels_beyond,
     command_arguments,
     friendly_model_problem,
     plural,
@@ -182,7 +183,7 @@ class StepRow(QFrame):
         if step.key == "samples" and step.state != CURRENT:
             self.again_button = QPushButton("Edit")
             self.again_button.clicked.connect(window.edit_samples)
-        elif step.key == "setup":
+        elif step.key == "setup" and step.fix != "panel":
             self.again_button = QPushButton("Edit")
             self.again_button.clicked.connect(window.edit_setup)
             self.again_allowed = window.project is not None and can_edit_setup(window.project)
@@ -230,7 +231,8 @@ class StepRow(QFrame):
             actions.addWidget(QLabel("Reviewer:"))
             actions.addWidget(self.reviewer_edit)
         if step.key in ACTIONS and step.key not in COPY_ONLY:
-            self.action_button = QPushButton(ACTIONS[step.key])
+            text = "Edit set-up…" if step.fix == "panel" else ACTIONS[step.key]
+            self.action_button = QPushButton(text)
             self.action_button.setDefault(True)
             self.action_button.clicked.connect(lambda: window.start_step(step, self.reviewer()))
             actions.addWidget(self.action_button)
@@ -543,7 +545,10 @@ class LauncherWindow(QMainWindow):
             self.edit_samples()
             return
         if step.key == "setup":
-            self.choose_model_file()
+            if step.fix == "panel":
+                self.edit_setup()
+            else:
+                self.choose_model_file()
             return
         command = step.command or {"label": "review PROJECT --blind --reviewer NAME"}.get(
             step.key, f"{step.key} PROJECT"
@@ -658,6 +663,7 @@ class NewProjectDialog(QDialog):
         self.setWindowTitle("Project set-up" if project else "New project")
         self.created: Path | None = None
         self.model_file = ""
+        self.channel_count: int | None = None
         self._loading = False
         form = QFormLayout()
         # The macOS default keeps fields at their size hint, which clips wrapped help text.
@@ -820,6 +826,17 @@ class NewProjectDialog(QDialog):
             )
         )
         self._fill_channels(channels)
+        self.channel_count = channels
+        if not self._loading and channels and self.panel_combo.currentData() != CUSTOM_PANEL:
+            # Prefer a preset that fits the images over the first one in the list.
+            name = self.panel_combo.currentData()
+            preset = yaml.safe_load(list_presets()[name][0].read_text(encoding="utf-8"))
+            if channels_beyond(preset, channels):
+                for other, (path, _description) in list_presets().items():
+                    mapping = yaml.safe_load(path.read_text(encoding="utf-8"))
+                    if not channels_beyond(mapping, channels):
+                        self.panel_combo.setCurrentIndex(self.panel_combo.findData(other))
+                        break
         self._preview_mice()
 
     def _fill_channels(self, channels: int | None) -> None:
@@ -907,6 +924,18 @@ class NewProjectDialog(QDialog):
             "\n".join(f"{row['image_id']} → {row['mouse_id'] or '(no match)'}" for row in rows)
         )
 
+    def checked_panel(self) -> tuple[dict, str]:
+        """The panel, refused when it uses channels the images do not have."""
+        panel, source = self.panel()
+        beyond = channels_beyond(panel, self.channel_count)
+        if beyond:
+            raise ProjectError(
+                f"This panel expects {', '.join(beyond)}, but the images have "
+                f"{self.channel_count} channels (0 to {self.channel_count - 1}). Choose another "
+                "panel, or Custom to set each channel."
+            )
+        return panel, source
+
     def panel(self) -> tuple[dict, str]:
         choice = self.panel_combo.currentData()
         if choice != CUSTOM_PANEL:
@@ -935,7 +964,7 @@ class NewProjectDialog(QDialog):
                 raise ProjectError("Choose the folder containing your images.")
             root = Path(self.parent_edit.text().strip()).expanduser().resolve() / name
             images_dir = Path(self.images_edit.text().strip()).expanduser().resolve()
-            panel, source = self.panel()
+            panel, source = self.checked_panel()
             create_project(
                 root,
                 images_dir,
@@ -956,7 +985,7 @@ class NewProjectDialog(QDialog):
             if not self.images_edit.text().strip():
                 raise ProjectError("Choose the folder containing your images.")
             images_dir = Path(self.images_edit.text().strip()).expanduser().resolve()
-            panel, source = self.panel()
+            panel, source = self.checked_panel()
             update_setup(self.project, images_dir, panel, source, self.model())
         except ProjectError as exc:
             self.error_label.setText(str(exc))

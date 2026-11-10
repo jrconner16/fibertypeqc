@@ -541,3 +541,49 @@ def test_new_project_form_warns_when_the_model_is_not_on_this_computer(qapp, mon
     assert dialog.model_combo.currentData() == "quad_four_class_rf_v1"
     assert "downloaded separately" in dialog.model_warning.text()
     assert "A model file…" in dialog.model_warning.text()
+
+
+def test_a_panel_that_does_not_fit_the_images_is_caught_before_run(qapp, tmp_path):
+    images = _tif_folder(tmp_path)  # three channels
+    root = tmp_path / "study"
+    cli.main(
+        ["init", str(root), "--images", str(images), "--panel", "four_marker_i_iia_laminin_iib",
+         "--model", "quad_four_class_rf_v1", "--yes"]
+    )  # fmt: skip
+    flow = _flow(root)
+    setup = flow.current
+    assert setup.key == "setup" and setup.command == ""
+    assert "expects Type IIb in channel 3" in setup.explanation
+    assert "m1_s1.tif has 3 channels (numbered 0 to 2)" in setup.explanation
+
+    # A run in which every image failed leaves the set-up editable, so it can be fixed.
+    (root / "batch").mkdir()
+    pd.DataFrame({"image_name": ["m1_s1"], "status": ["failed"]}).to_csv(
+        root / "batch/batch_summary.csv", index=False
+    )
+    project = cli.load_project_folder(root)
+    assert ws.can_edit_setup(project) and _flow(root).current.fix == "panel"
+    window = _window(qapp, root)
+    assert _row(window, "setup").action_button.text() == "Edit set-up…"
+    window.close()
+    pd.DataFrame({"image_name": ["m1_s1"], "status": ["success"]}).to_csv(
+        root / "batch/batch_summary.csv", index=False
+    )
+    assert not ws.can_edit_setup(project)
+
+
+def test_new_project_form_picks_a_panel_that_fits_and_refuses_one_that_does_not(qapp, tmp_path):
+    from src.launcher import NewProjectDialog
+
+    dialog = NewProjectDialog()
+    assert dialog.panel_combo.currentData() == "four_marker_i_iia_laminin_iib"  # list order
+    dialog.parent_edit.setText(str(tmp_path))
+    dialog.name_edit.setText("p")
+    dialog.images_edit.setText(str(_tif_folder(tmp_path)))
+    dialog._images_changed()
+    assert dialog.panel_combo.currentData() == "three_marker_iib_iia_laminin"
+
+    dialog.panel_combo.setCurrentIndex(dialog.panel_combo.findData("four_marker_i_iia_laminin_iib"))
+    dialog.create()
+    assert "expects Type IIb in channel 3" in dialog.error_label.text()
+    assert dialog.created is None and not (tmp_path / "p").exists()

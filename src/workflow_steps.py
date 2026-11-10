@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import yaml
 
 from fibertypeqc.config import load_channel_config
 from fibertypeqc.model_resolution import default_model_id, resolve_model_argument
@@ -24,6 +25,7 @@ from src.cli import (
     ProjectError,
     ProjectFolder,
     check_sample_sheet,
+    image_channel_count,
     image_files,
     next_step,
     project_status,
@@ -66,6 +68,8 @@ class Step:
     # CLI arguments with PROJECT (and NAME for the reviewer) as placeholders; "" if none.
     command: str = ""
     explanation: str = ""
+    # For Project set up when it blocks Run: "panel" or "model", whichever needs fixing.
+    fix: str = ""
 
 
 @dataclass(frozen=True)
@@ -175,13 +179,17 @@ def workflow(project: ProjectFolder) -> Workflow:
     # Steps before the routed one are done, even when the sample sheet takes over as current.
     position = path.index(routed) if routed in path else len(path)
     current = routed
-    problem = model_problem(project) if routed == "run" else ""
+    # Run would stop, or fail on every image; say why here instead, before anything starts.
+    fix = ""
+    problem = panel_problem(project) if routed == "run" else ""
     if problem:
-        # Run would stop at once; say why here instead, before anything starts.
-        current, command = "setup", ""
+        current, command, explanation, fix = "setup", "", problem, "panel"
+    problem = "" if problem or routed != "run" else model_problem(project)
+    if problem:
+        current, command, fix = "setup", "", "model"
         explanation = friendly_model_problem(problem)
     samples_ok, samples_summary, samples_note = _samples(project)
-    if not samples_ok and current not in (None, "run"):
+    if not samples_ok and current == routed and routed not in (None, "run"):
         # Everything after segmentation needs a usable sample sheet.
         current, explanation, command = "samples", "", ""
     summaries = _summaries(project, status)
@@ -210,6 +218,7 @@ def workflow(project: ProjectFolder) -> Workflow:
                 summary=summaries.get(key, ""),
                 command=step_command,
                 explanation=explanation if state == CURRENT else "",
+                fix=fix if key == "setup" else "",
             )
         )
     notes = tuple(note for note in status["notes"] if note != samples_note)
@@ -263,8 +272,52 @@ def set_model(project: ProjectFolder, model: str) -> None:
 
 
 def can_edit_setup(project: ProjectFolder) -> bool:
-    """Panel, images, and model may change only before segmentation has run."""
-    return not (project.batch_dir / "batch_summary.csv").is_file()
+    """Panel, images, and model may change until an image has been segmented successfully."""
+    summary = project.batch_dir / "batch_summary.csv"
+    if not summary.is_file():
+        return True
+    table = pd.read_csv(summary, dtype=str, keep_default_na=False)
+    return not table["status"].eq("success").any()
+
+
+STAIN_NAMES = {
+    "laminin": "laminin",
+    "dapi": "DAPI",
+    "type_i": "Type I",
+    "type_iia": "Type IIa",
+    "type_iib": "Type IIb",
+    "type_iix": "Type IIx",
+    "emhc": "eMHC",
+}
+
+
+def channels_beyond(panel: dict, channel_count: int | None) -> list[str]:
+    """Stains the panel puts in a channel the images do not have, e.g. "Type IIb in channel 3"."""
+    if not channel_count:
+        return []
+    return [
+        f"{STAIN_NAMES.get(name, name)} in channel {channel}"
+        for name, channel in (panel.get("channels") or {}).items()
+        if isinstance(channel, int) and channel >= channel_count
+    ]
+
+
+def panel_problem(project: ProjectFolder) -> str:
+    """Why the panel does not fit the images (from the first image's metadata), or ""."""
+    try:
+        images = image_files(project.images)
+        panel = yaml.safe_load(project.panel.read_text(encoding="utf-8")) or {}
+    except (ProjectError, OSError, yaml.YAMLError):
+        return ""  # status already notes a missing images folder or panel file
+    count = image_channel_count(images[0])
+    beyond = channels_beyond(panel, count)
+    if not beyond:
+        return ""
+    return (
+        f"The stain panel does not fit these images: it expects {', '.join(beyond)}, but "
+        f"{images[0].name} has {count} channels (numbered 0 to {count - 1}). Use Edit to "
+        "choose the right panel or channels."
+    )
 
 
 def update_setup(
