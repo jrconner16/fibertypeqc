@@ -18,7 +18,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 from qtpy.QtCore import QProcess, QProcessEnvironment, Qt, QUrl
-from qtpy.QtGui import QColor, QDesktopServices, QFontDatabase, QPalette, QTextCursor
+from qtpy.QtGui import QDesktopServices, QFontDatabase, QPalette, QTextCursor
 from qtpy.QtWidgets import (
     QApplication,
     QComboBox,
@@ -27,6 +27,7 @@ from qtpy.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -45,7 +46,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from fibertypeqc.model_resolution import released_models
+from fibertypeqc.model_resolution import released_models, resolve_model_argument
 from fibertypeqc.panel_presets import MARKER_LABELS, MARKERS, list_presets, panel_from_channels
 from src.cli import (
     CONFIG_NAME,
@@ -66,9 +67,12 @@ from src.workflow_steps import (
     UPCOMING,
     Step,
     Workflow,
+    can_edit_setup,
     command_arguments,
+    friendly_model_problem,
     plural,
     set_model,
+    update_setup,
     workflow,
 )
 
@@ -92,13 +96,14 @@ def color(name: str) -> str:
     return COLORS[name][_dark()]
 
 
-def muted() -> str:
-    """Secondary text: the theme's text color mixed toward its background, readable in both."""
-    palette = QApplication.palette()
-    text, background = palette.color(QPalette.WindowText), palette.color(QPalette.Window)
-    pairs = zip(text.getRgb()[:3], background.getRgb()[:3], strict=True)
-    mixed = [round(0.6 * a + 0.4 * b) for a, b in pairs]
-    return QColor(*mixed).name()
+def _mute(widget: QWidget) -> QWidget:
+    """Show secondary text faded. Fading keeps the theme's own text color, which matters on
+    macOS: in dark mode Qt can report the light palette while drawing dark, so a grey computed
+    from the palette may be unreadable."""
+    effect = QGraphicsOpacityEffect(widget)
+    effect.setOpacity(0.6)
+    widget.setGraphicsEffect(effect)
+    return widget
 
 
 ACTIONS = {
@@ -152,6 +157,7 @@ class StepRow(QFrame):
         self.again_button: QPushButton | None = None
         self.copy_button: QPushButton | None = None
         self.finalize_button: QPushButton | None = None
+        self.again_allowed = True
         self.reviewer_edit: QLineEdit | None = None
         self.setObjectName("currentStep" if step.state == CURRENT else "step")
         layout = QVBoxLayout(self)
@@ -168,7 +174,7 @@ class StepRow(QFrame):
         header.addWidget(title)
         if step.summary and step.state != CURRENT:
             summary = QLabel(step.summary)
-            summary.setStyleSheet(f"color: {muted()};")
+            _mute(summary)
             summary.setWordWrap(True)
             header.addWidget(summary, 1)
         else:
@@ -176,6 +182,15 @@ class StepRow(QFrame):
         if step.key == "samples" and step.state != CURRENT:
             self.again_button = QPushButton("Edit")
             self.again_button.clicked.connect(window.edit_samples)
+        elif step.key == "setup":
+            self.again_button = QPushButton("Edit")
+            self.again_button.clicked.connect(window.edit_setup)
+            self.again_allowed = window.project is not None and can_edit_setup(window.project)
+            if not self.again_allowed:
+                self.again_button.setToolTip(
+                    "Segmentation has run with these settings. Create a new project to use "
+                    "another panel or images."
+                )
         elif step.state == DONE and step.key in AGAIN and window.can_repeat(step.key):
             self.again_button = QPushButton(AGAIN[step.key])
             self.again_button.clicked.connect(lambda: window.start_step(step))
@@ -187,7 +202,7 @@ class StepRow(QFrame):
             self._add_current(window, layout)
         if step.state == UPCOMING:
             for label in (title, mark):
-                label.setStyleSheet(f"color: {muted()};")
+                _mute(label)
 
     def _add_current(self, window: LauncherWindow, layout: QVBoxLayout) -> None:
         step = self.step
@@ -241,9 +256,10 @@ class StepRow(QFrame):
         return self.reviewer_edit.text().strip() if self.reviewer_edit is not None else ""
 
     def set_busy(self, busy: bool) -> None:
-        for button in (self.again_button, self.finalize_button):
-            if button is not None:
-                button.setEnabled(not busy)
+        if self.again_button is not None:
+            self.again_button.setEnabled(not busy and self.again_allowed)
+        if self.finalize_button is not None:
+            self.finalize_button.setEnabled(not busy)
         if self.action_button is not None:
             needs_name = self.reviewer_edit is not None and not self.reviewer()
             self.action_button.setEnabled(not busy and not needs_name)
@@ -300,7 +316,7 @@ class LauncherWindow(QMainWindow):
             top.addWidget(widget)
         outer.addLayout(top)
         self.path_label = QLabel("")
-        self.path_label.setStyleSheet(f"color: {muted()};")
+        _mute(self.path_label)
         self.path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.path_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         outer.addWidget(self.path_label)
@@ -471,6 +487,13 @@ class LauncherWindow(QMainWindow):
         if dialog.exec() == QDialog.Accepted and dialog.created is not None:
             self.open_project(dialog.created)
 
+    def edit_setup(self) -> None:
+        if self.project is None:
+            return
+        dialog = NewProjectDialog(self, project=self.project)
+        dialog.exec()
+        self.refresh()
+
     def edit_samples(self) -> None:
         if self.project is None:
             return
@@ -623,25 +646,34 @@ MODEL_FILE = "file"
 
 
 class NewProjectDialog(QDialog):
-    """The questions ``init`` asks, as a form; it writes the project with the same code."""
+    """The questions ``init`` asks, as a form; it writes the project with the same code.
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    With ``project``, it edits that project's images, panel, and model instead (only before
+    segmentation has run; see ``update_setup``).
+    """
+
+    def __init__(self, parent: QWidget | None = None, project: ProjectFolder | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("New project")
+        self.project = project
+        self.setWindowTitle("Project set-up" if project else "New project")
         self.created: Path | None = None
         self.model_file = ""
+        self._loading = False
         form = QFormLayout()
+        # The macOS default keeps fields at their size hint, which clips wrapped help text.
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
         self.parent_edit = QLineEdit(str(Path.home()))
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("e.g. ta_cohort_2026")
         self.images_edit = QLineEdit()
         self.images_edit.editingFinished.connect(self._images_changed)
-        form.addRow("Save the project in", _with_browse(self.parent_edit, self._browse_parent))
-        form.addRow("Project name", self.name_edit)
+        if project is None:
+            form.addRow("Save the project in", _with_browse(self.parent_edit, self._browse_parent))
+            form.addRow("Project name", self.name_edit)
         form.addRow("Images folder", _with_browse(self.images_edit, self._browse_images))
         self.images_info = QLabel("")
-        self.images_info.setStyleSheet(f"color: {muted()};")
+        _mute(self.images_info)
         form.addRow("", self.images_info)
 
         self.panel_combo = QComboBox()
@@ -652,7 +684,7 @@ class NewProjectDialog(QDialog):
         self.panel_combo.currentIndexChanged.connect(self._panel_changed)
         form.addRow("Stain panel", self.panel_combo)
         self.panel_info = _wrapped("")
-        self.panel_info.setStyleSheet(f"color: {muted()};")
+        _mute(self.panel_info)
         form.addRow("", self.panel_info)
         self.channel_box = QWidget()
         channel_form = QFormLayout(self.channel_box)
@@ -673,31 +705,86 @@ class NewProjectDialog(QDialog):
         self.model_combo.addItem("None: build a model from my own labels", NO_MODEL)
         self.model_combo.addItem("A model file…", MODEL_FILE)
         self.model_combo.activated.connect(self._model_chosen)
+        self.model_combo.currentIndexChanged.connect(lambda _index: self._check_model())
         form.addRow("Model", self.model_combo)
         self.model_info = _wrapped("")
-        self.model_info.setStyleSheet(f"color: {muted()};")
+        _mute(self.model_info)
         form.addRow("", self.model_info)
+        self.model_warning = _wrapped("")
+        self.model_warning.setStyleSheet(f"color: {color('warning')};")
+        form.addRow("", self.model_warning)
 
         self.pattern_edit = QLineEdit()
         self.pattern_edit.setPlaceholderText(r"optional, e.g. ^(m\d+)_  (first group = mouse ID)")
         self.pattern_edit.textChanged.connect(self._preview_mice)
-        form.addRow("Mouse ID from file name", self.pattern_edit)
         self.mice_preview = QLabel("")
-        self.mice_preview.setStyleSheet(f"color: {muted()};")
-        form.addRow("", self.mice_preview)
+        _mute(self.mice_preview)
+        if project is None:
+            form.addRow("Mouse ID from file name", self.pattern_edit)
+            form.addRow("", self.mice_preview)
 
         self.error_label = _wrapped("")
         self.error_label.setStyleSheet(f"color: {color('error')};")
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Ok).setText("Create project")
-        buttons.accepted.connect(self.create)
+        buttons.button(QDialogButtonBox.Ok).setText("Save" if project else "Create project")
+        buttons.accepted.connect(self.save if project else self.create)
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(self.error_label)
         layout.addWidget(buttons)
         self._panel_changed()
+        if project is not None:
+            self._load(project)
         self.resize(620, 0)
+
+    def _load(self, project: ProjectFolder) -> None:
+        """Show the project's current images, panel, and model."""
+        self._loading = True
+        self.images_edit.setText(str(project.images))
+        self._images_changed()
+        channels = (yaml.safe_load(project.panel.read_text(encoding="utf-8")) or {}).get(
+            "channels", {}
+        )
+        for name, (path, _description) in list_presets().items():
+            preset = yaml.safe_load(path.read_text(encoding="utf-8")).get("channels", {})
+            if preset == channels:
+                self.panel_combo.setCurrentIndex(self.panel_combo.findData(name))
+                break
+        else:
+            self.panel_combo.setCurrentIndex(self.panel_combo.findData(CUSTOM_PANEL))
+            for marker, combo in self.channel_combos.items():
+                index = combo.findData(channels.get(marker))
+                combo.setCurrentIndex(max(index, 0))
+        if project.no_model:
+            self.model_combo.setCurrentIndex(self.model_combo.findData(NO_MODEL))
+        elif project.model and project.model in self.models:
+            self.model_combo.setCurrentIndex(self.model_combo.findData(project.model))
+        elif project.model:
+            self.model_file = project.model
+            index = self.model_combo.findData(MODEL_FILE)
+            self.model_combo.setItemText(index, f"File: {Path(project.model).name}")
+            self.model_combo.setCurrentIndex(index)
+        self._loading = False
+        self._check_model()
+
+    def _check_model(self) -> None:
+        """Warn now, not at Run, when the chosen model is not on this computer."""
+        if not hasattr(self, "model_warning"):
+            return
+        choice = self.model_combo.currentData()
+        value = self.model_file if choice == MODEL_FILE else choice
+        problem = ""
+        if value and value != NO_MODEL:
+            try:
+                resolve_model_argument(value)
+            except ValueError as exc:
+                problem = friendly_model_problem(str(exc)).replace(
+                    "choose it here", 'pick "A model file…" above and choose it'
+                )
+        self.model_warning.setText(problem)
+        self.model_warning.setVisible(bool(problem))
+        self._fit_text()
 
     def _browse_parent(self) -> None:
         folder = QFileDialog.getExistingDirectory(
@@ -757,11 +844,24 @@ class NewProjectDialog(QDialog):
             else presets[name][1]
         )
         self._suggest_model()
+        self._fit_text()
+
+    def _fit_text(self) -> None:
+        """Give wrapped help text the height it needs (a form layout does not ask for it)."""
+        for label in (self.panel_info, self.model_info, self.model_warning, self.error_label):
+            width = label.width() if label.isVisible() else self.width() - 200
+            label.setMinimumHeight(label.heightForWidth(max(width, 300)) if label.text() else 0)
         self.adjustSize()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().resizeEvent(event)
+        for label in (self.panel_info, self.model_info, self.model_warning, self.error_label):
+            if label.isVisible() and label.text():
+                label.setMinimumHeight(label.heightForWidth(label.width()))
 
     def _suggest_model(self) -> None:
         """Select the released model made for exactly these stains, or none when there is none."""
-        if not hasattr(self, "model_combo"):
+        if not hasattr(self, "model_combo") or self._loading:
             return
         try:
             panel, _source = self.panel()
@@ -769,6 +869,7 @@ class NewProjectDialog(QDialog):
             panel = {"channels": {}}
         model_id = matching_model(panel, self.models)
         self.model_combo.setCurrentIndex(self.model_combo.findData(model_id or NO_MODEL))
+        self._check_model()  # also when the suggestion was already selected (no change signal)
         self.model_info.setText(
             f"{model_id} is made for these stains."
             if model_id
@@ -845,8 +946,21 @@ class NewProjectDialog(QDialog):
             )
         except ProjectError as exc:
             self.error_label.setText(str(exc))
+            self._fit_text()
             return
         self.created = root
+        self.accept()
+
+    def save(self) -> None:
+        try:
+            if not self.images_edit.text().strip():
+                raise ProjectError("Choose the folder containing your images.")
+            images_dir = Path(self.images_edit.text().strip()).expanduser().resolve()
+            panel, source = self.panel()
+            update_setup(self.project, images_dir, panel, source, self.model())
+        except ProjectError as exc:
+            self.error_label.setText(str(exc))
+            return
         self.accept()
 
 
@@ -936,8 +1050,8 @@ class SamplesDialog(QDialog):
             for c, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
                 if columns[c] in LOCKED_COLUMNS:
-                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                    item.setForeground(QColor(muted()))
+                    # Disabled items are drawn in the style's own disabled color.
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable & ~Qt.ItemIsEnabled)
                 self.table.setItem(r, c, item)
         self.table.resizeColumnsToContents()
         self.table.blockSignals(False)

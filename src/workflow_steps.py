@@ -18,13 +18,16 @@ import pandas as pd
 
 from fibertypeqc.config import load_channel_config
 from fibertypeqc.model_resolution import default_model_id, resolve_model_argument
+from fibertypeqc.panel_presets import write_panel
 from src.cli import (
     CONFIG_NAME,
     ProjectError,
     ProjectFolder,
     check_sample_sheet,
+    image_files,
     next_step,
     project_status,
+    sample_rows,
 )
 
 DONE, CURRENT, UPCOMING, ATTENTION, SKIPPED = "done", "current", "upcoming", "attention", "skipped"
@@ -176,12 +179,7 @@ def workflow(project: ProjectFolder) -> Workflow:
     if problem:
         # Run would stop at once; say why here instead, before anything starts.
         current, command = "setup", ""
-        missing = problem.removeprefix("--model file not found: ")
-        explanation = (
-            f"The model file is not where the project expects it:\n{missing}\n"
-            if missing != problem
-            else f"The model cannot be used: {problem}\n"
-        ) + "Choose the model file, or put it there and press Refresh."
+        explanation = friendly_model_problem(problem)
     samples_ok, samples_summary, samples_note = _samples(project)
     if not samples_ok and current not in (None, "run"):
         # Everything after segmentation needs a usable sample sheet.
@@ -218,6 +216,24 @@ def workflow(project: ProjectFolder) -> Workflow:
     return Workflow(steps=tuple(steps), status=status, finished=finished, notes=notes)
 
 
+def friendly_model_problem(problem: str) -> str:
+    """The run_batch message about a model, as the launcher says it."""
+    missing = problem.removeprefix("--model file not found: ")
+    if missing != problem:
+        return (
+            f"The model file is not where the project expects it:\n{missing}\n"
+            "Choose the model file, or put it there and press Refresh."
+        )
+    private = re.match(r"Model '([^']+)' is distributed privately", problem)
+    if private:
+        return (
+            f"The model {private.group(1)} is downloaded separately and is not on this computer "
+            f"yet. Download {private.group(1)}.joblib from the FiberTypeQC releases page, then "
+            "choose it here."
+        )
+    return f"The model cannot be used: {problem}\nChoose a model file."
+
+
 def model_problem(project: ProjectFolder) -> str:
     """Why ``run`` could not use the project's model (checked as run_batch does), or ""."""
     if project.no_model:
@@ -229,15 +245,53 @@ def model_problem(project: ProjectFolder) -> str:
     return ""
 
 
-def set_model(project: ProjectFolder, model: str) -> None:
-    """Point the project at another model, keeping the rest of the config file as written."""
+def set_config_value(project: ProjectFolder, key: str, value: str) -> None:
+    """Set one top-level config value, keeping the rest of the file and its comments."""
     config = project.root / CONFIG_NAME
-    line = f"model: {json.dumps(model)}"
+    line = f"{key}: {json.dumps(value)}"
     text = config.read_text(encoding="utf-8")
-    updated, count = re.subn(r"^model:.*$", lambda _match: line, text, flags=re.MULTILINE)
+    pattern = rf"^{re.escape(key)}:.*$"
+    updated, count = re.subn(pattern, lambda _match: line, text, flags=re.MULTILINE)
     if not count:
         updated = text.rstrip("\n") + f"\n{line}\n"
     config.write_text(updated, encoding="utf-8")
+
+
+def set_model(project: ProjectFolder, model: str) -> None:
+    """Point the project at another model."""
+    set_config_value(project, "model", model)
+
+
+def can_edit_setup(project: ProjectFolder) -> bool:
+    """Panel, images, and model may change only before segmentation has run."""
+    return not (project.batch_dir / "batch_summary.csv").is_file()
+
+
+def update_setup(
+    project: ProjectFolder, images_dir: Path, panel: dict, panel_source: str, model: str
+) -> None:
+    """Change a project's images folder, panel, and model before anything has run.
+
+    The sample sheet keeps each image's mouse ID and group columns; images new to the folder get
+    blank rows, and images no longer in it are dropped.
+    """
+    if not can_edit_setup(project):
+        raise ProjectError(
+            "Segmentation has already run with these settings. Create a new project to use "
+            "another panel or images."
+        )
+    rows = pd.DataFrame(sample_rows(image_files(images_dir), None))
+    if project.sample_sheet.is_file():
+        old = pd.read_csv(project.sample_sheet, dtype=str, keep_default_na=False)
+        kept = [name for name in old.columns if name not in ("raw_image_path",)]
+        rows = rows[["image_id", "raw_image_path"]].merge(old[kept], on="image_id", how="left")
+        rows = rows.fillna("")
+        rows = rows[[name for name in old.columns if name in rows.columns]]
+    write_panel(project.root / "panel.yaml", panel, f"Panel for this project ({panel_source}).")
+    rows.to_csv(project.sample_sheet, index=False)
+    set_config_value(project, "images", str(images_dir))
+    set_config_value(project, "panel", "panel.yaml")
+    set_model(project, model)
 
 
 def command_arguments(command: str, project: ProjectFolder, reviewer: str = "") -> list[str]:

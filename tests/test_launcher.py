@@ -481,3 +481,63 @@ def test_choose_model_file_updates_the_project(qapp, tmp_path, monkeypatch):
     setup.action_button.click()
     assert window.project.model == str(chosen)
     window.close()
+
+
+def test_setup_can_be_edited_until_segmentation_runs(qapp, tmp_path):
+    from src.launcher import NO_MODEL, NewProjectDialog
+
+    images = _tif_folder(tmp_path)
+    root = tmp_path / "study"
+    cli.main(
+        ["init", str(root), "--images", str(images), "--panel", "three_marker_iib_iia_laminin",
+         "--model", "ta_three_class_logistic_v1", "--mouse-id-pattern", r"^(m\d+)_", "--yes"]
+    )  # fmt: skip
+    (root / cli.CONFIG_NAME).write_text((root / cli.CONFIG_NAME).read_text() + "# mine\n")
+    window = _window(qapp, root)
+    assert _row(window, "setup").again_button.isEnabled()
+    window.close()
+
+    dialog = NewProjectDialog(project=cli.load_project_folder(root))
+    assert dialog.panel_combo.currentData() == "three_marker_iib_iia_laminin"
+    assert (
+        dialog.model_combo.currentData() == "ta_three_class_logistic_v1"
+    )  # kept, not re-suggested
+    dialog.panel_combo.setCurrentIndex(dialog.panel_combo.findData("custom"))
+    for marker, channel in {"laminin": 0, "type_i": 1, "type_iia": 2}.items():
+        combo = dialog.channel_combos[marker]
+        combo.setCurrentIndex(combo.findData(channel))
+    assert dialog.model_combo.currentData() == NO_MODEL
+    dialog.save()
+
+    project = cli.load_project_folder(root)
+    assert project.no_model and "# mine" in (root / cli.CONFIG_NAME).read_text()
+    sheet = pd.read_csv(root / "samples.csv", keep_default_na=False)
+    assert sheet["mouse_id"].tolist() == ["m1", "m2"]  # mouse IDs survive the edit
+
+    _batch(root)
+    window = _window(qapp, root)
+    edit = _row(window, "setup").again_button
+    assert not edit.isEnabled() and "Create a new project" in edit.toolTip()
+    with pytest.raises(cli.ProjectError):
+        ws.update_setup(project, images, {}, "x", "none")
+    window.close()
+
+
+def test_a_private_model_is_explained_in_plain_words():
+    message = ws.friendly_model_problem(
+        "Model 'quad_four_class_rf_v1' is distributed privately. Set FIBERTYPEQC_MODEL_ROOT to "
+        "the directory containing quad_four_class_rf_v1.joblib."
+    )
+    assert "FIBERTYPEQC_MODEL_ROOT" not in message
+    assert "Download quad_four_class_rf_v1.joblib from the FiberTypeQC releases page" in message
+
+
+def test_new_project_form_warns_when_the_model_is_not_on_this_computer(qapp, monkeypatch):
+    from src.launcher import NewProjectDialog
+
+    monkeypatch.delenv("FIBERTYPEQC_MODEL_ROOT", raising=False)
+    dialog = NewProjectDialog()
+    dialog.panel_combo.setCurrentIndex(dialog.panel_combo.findData("four_marker_i_iia_laminin_iib"))
+    assert dialog.model_combo.currentData() == "quad_four_class_rf_v1"
+    assert "downloaded separately" in dialog.model_warning.text()
+    assert "A model file…" in dialog.model_warning.text()
