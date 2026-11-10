@@ -114,6 +114,11 @@ def test_evaluate_promote_and_rollback_restore_the_project_exactly(
     assert "negative" in manifest["fiber_classes"]
     assert manifest["class_labels"] == {"negative": "I⁻/IIa⁻"}
     assert "I⁻/IIa⁻ final" in build_cohort_report(elsewhere / "results")
+    # The held-out mice are named, and their results are included like any other mouse.
+    assert manifest["inputs"]["finalization_manifest"]["test_mice"] == [TEST_MOUSE]
+    assert f"<dd>{TEST_MOUSE}</dd>" in build_cohort_report(elsewhere / "results")
+    final = pd.read_csv(elsewhere / "final" / "final_fiber_table.csv", dtype=str)
+    assert TEST_MOUSE in set(final["mouse_id"])
 
     # A guided-review decision made with the promoted model.
     session = ReviewSession(project_id=promoted.project_id, model_version=row["to_model"])

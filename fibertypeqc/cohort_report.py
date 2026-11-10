@@ -282,6 +282,9 @@ def build_cohort_report(results_dir: Path) -> str:
         "Code revision": (manifest.get("git_commit") or "–")[:12],
         "Final fiber table SHA-256": manifest["inputs"]["final_fiber_table_sha256"][:16] + "…",
     }
+    if finalization.get("test_mice"):
+        # Included like any other mouse; the model was checked on them, never trained on them.
+        meta["Mice set aside to test the model"] = ", ".join(finalization["test_mice"])
     unverified = [
         item["image_id"]
         for item in finalization.get("images", [])

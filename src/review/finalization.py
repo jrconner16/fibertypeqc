@@ -39,6 +39,7 @@ from src.review.fiber_type_review import load_legacy_fiber_type_decisions
 from src.review.invalidation import StaleProduct
 from src.review.project import Project, ProjectImage
 from src.review.region_review import _point_in_polygon
+from src.review.roles import held_out_mice
 from src.review.schemas import (
     Domain,
     DomainStatus,
@@ -502,6 +503,11 @@ def finalize_project(
             for item in finalized
         ],
     }
+    held_out = held_out_mice(project)
+    if held_out:
+        # Mice set aside to test the model (evaluation_roles.csv). Their results are included
+        # like any other mouse; the model was never trained on them.
+        manifest["test_mice"] = held_out
     (output_dir / "finalization_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )

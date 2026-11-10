@@ -27,6 +27,7 @@ from src.cli import (
     check_sample_sheet,
     image_channel_count,
     image_files,
+    mouse_split_message,
     next_step,
     project_images,
     project_status,
@@ -161,10 +162,15 @@ def _summaries(project: ProjectFolder, status: dict[str, Any]) -> dict[str, str]
         found["prepare"] = f"{status['project_sections']} section(s) ready"
     if "fiber_decisions" in status:
         found["review"] = f"{status['fiber_decisions']} fiber decision(s)"
+    split = ""
+    if "test_mice" in status:
+        split = mouse_split_message(status["test_mice"], status["mice"])
     if status.get("blind_labels"):
         found["label"] = ", ".join(
             f"{name}: {count}" for name, count in status["blind_labels"].items()
-        )
+        ) + (f". {split}" if split else "")
+    elif split:
+        found["label"] = split
     if "build" in status:
         found["build"] = f"{status['build']}: recommended {status['recommended'] or 'none'}"
     if status.get("evaluation"):

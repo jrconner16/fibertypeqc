@@ -46,7 +46,8 @@ workspace** brings back closed docks):
    `reference_export/`.
    For an evaluation, add `evaluation_roles.csv` (`mouse_id`, `role` = `pool` or `test`) beside
    `fibertypeqc_project.yaml`: blind labelling is then limited to test mice, and guided review
-   and `improve` to pool mice.
+   and `improve` to pool mice. Projects without a model get this file automatically; after a
+   built model is promoted, guided review offers every mouse (see the user guide).
 4. **Regions** — draw a polygon in the yellow *Region shapes* layer, pick a domain and action, and
    apply. *Exclude all analysis* / *ignore fiber typing* removes the fibers whose centers fall
    inside (folds, tears, bad staining); *unresolved* marks them unresolved. **Analysis ROI** with a

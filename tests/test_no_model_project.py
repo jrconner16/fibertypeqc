@@ -197,6 +197,8 @@ def test_no_model_steps(tmp_path, monkeypatch, capsys):
         return 0
 
     monkeypatch.setattr(cli, "_run", fake_run)
+    # Test mice are set aside after 'prepare' (and before blind labelling); see test_test_mice.
+    monkeypatch.setattr(cli, "ensure_test_mice", lambda project: calls.append(("split", [])) or "")
 
     assert cli.main(["run", str(root)]) == 0
     module, arguments = calls[-1]
@@ -209,6 +211,7 @@ def test_no_model_steps(tmp_path, monkeypatch, capsys):
     arguments = next(args for name, args in calls if name == "make_review_project")
     assert arguments[arguments.index("--classes") + 1] == "i,iia,negative"
     assert arguments[arguments.index("--negative-label") + 1] == "I⁻/IIa⁻"
+    assert calls[-2:] == [("generate_review_qc", calls[-2][1]), ("split", [])]
 
     (root / "review/qc").mkdir(parents=True)
     (root / "review/qc/fiber_qc.csv").write_text("fiber_id\n")
@@ -217,6 +220,7 @@ def test_no_model_steps(tmp_path, monkeypatch, capsys):
     assert cli.main(["review", str(root), "--blind", "--reviewer", "a"]) == 0
     # Options may also come before the project folder.
     assert cli.main(["review", "--blind", "--reviewer", "a", str(root)]) == 0
+    assert calls[-2][0] == "split"
     module, arguments = calls[-1]
     assert module == "review_project_napari" and arguments[-3:] == ["--blind", "--reviewer", "a"]
     for step in ("finalize", "improve"):
