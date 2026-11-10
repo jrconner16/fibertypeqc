@@ -32,6 +32,7 @@ from src.model_evaluation import (
 )
 from src.review.finalization import image_input_fingerprints
 from src.review.project import Project, load_project
+from src.review.roles import TEST_CHECKS_PATH
 from src.review.schemas import ObjectReviewStatus
 from src.review.session import ReviewSession
 from src.review.storage import load_session, save_session
@@ -55,7 +56,7 @@ HISTORY_COLUMNS = (
     "outgoing_archive",
 )
 MASK_SUFFIX = "_cellpose_labels.tif"
-TEST_CHECKS_NAME = "independent_test_checks.csv"
+TEST_CHECKS_NAME = Path(TEST_CHECKS_PATH).name  # review roles read it too
 TEST_CHECK_COLUMNS = ("changed_at_utc", "to_model", "status", "override", "evaluation")
 
 

@@ -239,11 +239,13 @@ def project_status(project: ProjectFolder) -> dict[str, Any]:
             sections_opened=len(state.get("input_fingerprints", {})),
         )
     if project.no_model:
-        labels = {}
-        for state_path in sorted((project.review_dir / "reference").glob("*/review_state.json")):
-            state = json.loads(state_path.read_text(encoding="utf-8"))
-            labels[state_path.parent.name] = len(state.get("object_decisions", []))
-        status["blind_labels"] = labels
+        status["blind_labels"] = _blind_label_counts(project)
+        split = mouse_split_summary(project)
+        if split is not None:
+            status["test_mice"], status["mice"] = split
+            note = split_changed_note(project)
+            if note:
+                status["notes"].append(note)
         status.update(builder_status(project))
         return status
     manifest_path = project.final_dir / "finalization_manifest.json"
@@ -289,7 +291,8 @@ def no_model_next_step(status: dict[str, Any]) -> tuple[str, str] | None:
         return None
     label = (
         "review PROJECT --blind --reviewer NAME",
-        "Label a sample of fibers blind (training mice, and test mice if declared).",
+        "Label a sample of fibers blind, in every mouse (the test mice too: the model never "
+        "learns from them, it is checked on them).",
     )
     if not any(status.get("blind_labels", {}).values()):
         return label
@@ -367,6 +370,8 @@ def command_status(project: ProjectFolder) -> int:
     if status.get("blind_labels"):
         counts = ", ".join(f"{name} {count}" for name, count in status["blind_labels"].items())
         print(f"Labels:  blind labels by reviewer: {counts}")
+    if "test_mice" in status:
+        print(f"Mice:    {mouse_split_message(status['test_mice'], status['mice'])}")
     if "report" in status:
         print(f"Report:  {status['report']}")
     for note in status["notes"]:
@@ -485,7 +490,90 @@ def command_prepare(project: ProjectFolder) -> int:
         )
         if code != 0:
             return code
-    return _run("generate_review_qc", ["--project", str(project.review_project)])
+    code = _run("generate_review_qc", ["--project", str(project.review_project)])
+    if code == 0 and project.no_model:
+        message = ensure_test_mice(project)
+        if message:
+            print(message)
+    return code
+
+
+def _blind_label_counts(project: ProjectFolder) -> dict[str, int]:
+    labels = {}
+    for state_path in sorted((project.review_dir / "reference").glob("*/review_state.json")):
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        labels[state_path.parent.name] = len(state.get("object_decisions", []))
+    return labels
+
+
+def mouse_split_summary(project: ProjectFolder) -> tuple[int, int] | None:
+    """(test mice, all mice) from the project's evaluation roles, or None without a roles file."""
+    from src.review.roles import ROLES_FILENAME, TEST
+
+    path = project.root / ROLES_FILENAME
+    if not path.is_file():
+        return None
+    table = pd.read_csv(path, dtype=str, keep_default_na=False)
+    if not {"mouse_id", "role"} <= set(table.columns):
+        return None
+    return int(table["role"].str.strip().str.lower().eq(TEST).sum()), len(table)
+
+
+def split_changed_note(project: ProjectFolder) -> str:
+    """A warning when the test mice no longer match the recorded automatic split, or ""."""
+    from src.review.roles import RECORD_FILENAME, ROLES_FILENAME, TEST
+
+    record_path = project.root / RECORD_FILENAME
+    if not record_path.is_file():
+        return ""
+    recorded = set(json.loads(record_path.read_text(encoding="utf-8")).get("test_mice", []))
+    table = pd.read_csv(project.root / ROLES_FILENAME, dtype=str, keep_default_na=False)
+    if not {"mouse_id", "role"} <= set(table.columns):
+        return ""
+    current = set(table.loc[table["role"].str.strip().str.lower().eq(TEST), "mouse_id"].str.strip())
+    if current == recorded:
+        return ""
+    return (
+        f"The test mice in {ROLES_FILENAME} differ from the automatic choice recorded in "
+        f"{RECORD_FILENAME}. If test labels or an evaluation already exist, the model is no "
+        "longer checked independently; say so when reporting it."
+    )
+
+
+def ensure_test_mice(project: ProjectFolder) -> str:
+    """Set test mice aside for a project without a model, before any fiber is labelled.
+
+    Writes ``evaluation_roles.csv`` (and its record) only when there is none and no blind label
+    exists yet, so an existing split, or one made by hand, is never changed. Returns what was
+    done, in plain language, or "".
+    """
+    from src.model_builder import load_recipe
+    from src.review.project import load_project
+    from src.review.roles import ROLES_FILENAME, write_default_roles
+
+    if not project.no_model or (project.root / ROLES_FILENAME).exists():
+        return ""
+    if not project.review_project.is_file() or any(_blind_label_counts(project).values()):
+        return ""
+    minimum = int(load_recipe()["minimums"]["training_mice"])
+    roles = write_default_roles(load_project(project.review_project), minimum)
+    return mouse_split_message(sum(role == "test" for role in roles.values()), len(roles), minimum)
+
+
+def mouse_split_message(n_test: int, n_mice: int, minimum_training: int = 3) -> str:
+    if n_test:
+        return (
+            f"{n_test} of {n_mice} mice are set aside to check the model fairly "
+            f"({ROLES_NOTE}). Label them too; the model never learns from them."
+        )
+    return (
+        f"With {n_mice} mice, none can be set aside to check the model: at least "
+        f"{minimum_training + 1} are needed ({minimum_training} to learn from, 1 to test). The "
+        "model can still be built, but it will not have an independent check."
+    )
+
+
+ROLES_NOTE = "listed in evaluation_roles.csv"
 
 
 def command_review(project: ProjectFolder, extra: list[str]) -> int:
@@ -502,6 +590,10 @@ def command_review(project: ProjectFolder, extra: list[str]) -> int:
             "This project has no model, so there are no calls to review. Label a sample of fibers "
             "instead: python -m fibertypeqc review PROJECT --blind --reviewer NAME"
         )
+    if project.no_model:
+        message = ensure_test_mice(project)  # projects prepared before test mice were automatic
+        if message:
+            print(message)
     return _run("review_project_napari", [*arguments, *extra])
 
 

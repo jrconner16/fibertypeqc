@@ -172,7 +172,8 @@ Cohen's kappa), and review time.
 
 An optional `evaluation_roles.csv` beside `fibertypeqc_project.yaml` (columns `mouse_id`, `role` =
 `pool` or `test`) keeps mice apart: blind labelling offers only test mice, guided review and model
-improvement only pool mice. Without the file nothing is restricted.
+improvement only pool mice. Without the file nothing is restricted. Projects without a model get
+this file automatically (see [Panels without a model](#panels-without-a-model)).
 
 ## Outputs
 
@@ -262,6 +263,15 @@ uv run python -m fibertypeqc build myproject/            # --reviewer NAME to us
 
 - It uses blind labels from training mice only. With `evaluation_roles.csv`, `test` mice are
   never read; every mouse can still be labelled blind, so test mice can be checked later.
+- Test mice are chosen automatically. When `prepare` first runs on a project without a model (or
+  `review --blind`, for projects prepared earlier), it writes `evaluation_roles.csv` and
+  `evaluation_roles_record.json`: about a quarter of the mice are set aside as `test`, keeping at
+  least 3 training mice, so a cohort needs at least 4 mice for an independent test. The split is
+  by mouse, uses the sample sheet's conditions only to spread test mice across groups, and is the
+  same every time for the same mice and groups. It is made before any labels and never uses
+  labels or scores. An existing `evaluation_roles.csv`, or one you write yourself before labelling,
+  is never changed. If you change the test mice later, `status` warns that the test is no longer
+  independent.
 - Labels from several reviewers are combined per fiber: agreement counts once, disagreements are
   dropped and counted, and `exclude`/`uncertain` are left out.
 - It needs at least 3 training mice and, for each class, at least 30 labelled fibers from at least
@@ -305,6 +315,12 @@ uv run python -m fibertypeqc promote  myproject/ --rollback # back to no model, 
 - Switching re-types every section on its existing mask and first checks that the measurements
   reproduce exactly those the model was built from. Blind labels are never changed, and
   `--rollback` restores the project as it was before the switch.
+
+After a switch recorded in `models/independent_test_checks.csv` (with a current evaluation, an
+override, or no test mice), guided review offers every mouse, including the test mice, so the whole
+cohort is reviewed. Blind labelling stays on the test mice, and `improve` still never trains on
+them. The finalization manifest and the cohort report list the test mice; their results are
+included like any other mouse.
 
 After the switch the project works like any project with a model: `review` (guided), `finalize`,
 and `improve` are available, and the review buttons keep the classes and the panel's name for

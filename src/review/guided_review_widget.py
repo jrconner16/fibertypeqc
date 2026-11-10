@@ -32,7 +32,7 @@ from src.review.queues import (
     describe_reason,
     load_fiber_type_rows,
 )
-from src.review.roles import POOL, TEST, allowed_images
+from src.review.roles import POOL, TEST, allowed_images, held_out_mice_released
 from src.review.schemas import Domain, ObjectReviewStatus, Scope
 from src.review.timing import ReviewTimer
 
@@ -73,14 +73,15 @@ class GuidedReviewWidget(QWidget):
         self.show_domain = show_domain
         self.focus_current_object = focus_current_object
         self.rows = load_fiber_type_rows(project, fiber_qc)
-        # With evaluation roles, blind labelling sees only test mice and guided review only pool
-        # mice, so reference labels and training labels can never come from the same animals.
-        # Evaluation roles: blind labels on test mice, guided review on pool mice. A project
+        # Evaluation roles: blind labels on test mice, guided review on pool mice, so test mice
+        # are never shown with model calls while their blind labels are still needed. A project
         # without a model is labelled blind throughout (pool mice train the built model, test
-        # mice evaluate it later), so every mouse is offered; `build` keeps test mice out.
+        # mice evaluate it later), so every mouse is offered; `build` keeps test mice out. Once a
+        # built model is promoted with its independent test recorded, guided review offers every
+        # mouse so the whole cohort is reviewed; `improve` still trains on pool mice only.
         self.allowed_images = (
             None
-            if project.model_version == "none"
+            if project.model_version == "none" or (not blind and held_out_mice_released(project))
             else allowed_images(project, TEST if blind else POOL)
         )
         if self.allowed_images is not None:

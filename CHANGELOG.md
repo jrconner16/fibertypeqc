@@ -4,6 +4,17 @@
 
 ### Added
 
+- **Automatic test mice for the model builder** (#84): `prepare` on a project without a model
+  writes `evaluation_roles.csv` and `evaluation_roles_record.json` when neither exists and no
+  blind label has been made: about 25% of mice become `test` (at least 3 training mice kept; with
+  fewer than 4 mice there are none, and `status` says so), split by mouse, spread over sample-sheet
+  groups, repeatable, and never based on labels or scores. `status` and the launcher say how many
+  mice are set aside, and warn if the test mice are later changed. Existing roles files and
+  projects with a model are unchanged.
+- **Review every mouse after promotion** (#84): once a built model is promoted with its independent
+  test recorded, guided review offers the test mice too. Blind labelling stays on test mice and
+  `improve` still never trains on them. The finalization manifest (`test_mice`) and the cohort
+  report name the mice set aside for testing.
 - **Images in subfolders** (#91, part 1): `init --include PATTERN --exclude PATTERN` (repeatable,
   e.g. `'**/*.czi'`, `'**/Processed/**'`) finds images at any depth, and the patterns are saved
   as `include`/`exclude` in `fibertypeqc_project.yaml`. Interactive `init` offers patterns when
