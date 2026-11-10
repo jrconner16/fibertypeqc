@@ -242,8 +242,14 @@ original fiber-table columns unchanged, prefixed by `image_id`, `mouse_id`, `sec
 - `flagged_unreviewed`: flagged by the model (`needs_review`) but not reviewed.
 - `roi_name`, `roi_role`, `roi_status`: analysis-ROI membership by fiber centroid
   (`assigned`, `outside`, `boundary`, or `ambiguous`).
+- With a DAPI channel (nuclear stage): `nuclei_count`, `central_nuclei_count`,
+  `peripheral_nuclei_count` (nuclei inside the fiber), and `centrally_nucleated` (at least one
+  central nucleus). Absent without nuclear outputs.
 
-`final_fiber_table.csv` stacks all images. `finalization_manifest.json`
+`final_fiber_table.csv` stacks all images. With nuclear outputs, `nuclei_counts.csv` gives per image
+`n_nuclei_central`, `n_nuclei_peripheral`, `n_nuclei_interstitial`, and `n_nuclei_ambiguous` over the
+whole image (images excluded as a whole are left out). Position definitions:
+[result_bundle_schema.md](result_bundle_schema.md). `finalization_manifest.json`
 (`fibertypeqc.finalization.v1`) records input digests, verification status (`verified` when the
 review session recorded input fingerprints), versions, the policies applied, per-source counts,
 and warnings.
@@ -260,7 +266,16 @@ outside_analysis_roi|fiber_review|edge_of_image`), `n_analysis`, `n_resolved`, `
 `unresolved_share`, `n_reviewed`, `n_corrected`, `n_flagged_unreviewed`, and per class
 `n_final_<class>`, `prop_final_<class>` (over resolved fibers), `prop_predicted_<class>` (over
 analysis fibers), plus median morphology (`median_area`, `median_area_um2`, `median_feret_*`,
-overall and per final class) when present. `results_manifest.json`
+overall and per final class) when present.
+
+With nuclear outputs, image and mouse rows add `n_fibers_nuclei_measured`, `n_centrally_nucleated`,
+`prop_centrally_nucleated` (over analysis fibers with nuclear data), `prop_centrally_nucleated_<class>`
+(over resolved fibers of that final class), `mean_nuclei_per_fiber`, and the four `n_nuclei_<position>`
+counts; with conditions, `nuclear_cohort_summary.csv` gives mean, SD, and n across mice of the
+centrally nucleated proportion (`fiber_class` = `all` or a class). The report adds a Nuclei section.
+The central cut-off (halfway from edge to centre) has not been checked against manual counts.
+
+`results_manifest.json`
 (`fibertypeqc.results.v1`) records definitions, class order, input and table digests, and the
 finalization manifest. For a model made with `build`, it also records `class_labels`, the panel's
 name for a class (for example `negative` → `I⁻/IIa⁻`: negative for every measured myosin marker,

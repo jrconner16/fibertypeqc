@@ -141,6 +141,8 @@ def _table(frame: pd.DataFrame, columns: list[tuple[str, str, str]]) -> str:
                 text = _pct(value)
             elif kind == "int":
                 text = "–" if value is None or pd.isna(value) else f"{int(value)}"
+            elif kind == "num":
+                text = "–" if value is None or pd.isna(value) else f"{float(value):.2f}"
             else:
                 text = html.escape(str(value))
             cells.append(f"<td>{text}</td>")
@@ -176,6 +178,79 @@ def _cohort_table(
     columns = [(key, key, "text") for key in group_keys] + [("n_mice", "Mice", "int")]
     columns += [(name, f"{_label(name, labels)} mean ± SD", "text") for name in classes]
     return _table(frame, columns)
+
+
+NUCLEI_NOTE = (
+    "Nucleus positions come from the DAPI and fiber outlines. <b>Central</b>: inside a fiber, at "
+    "least halfway from its edge to its centre. <b>Peripheral</b>: inside a fiber, nearer its "
+    "edge. <b>Interstitial</b>: outside every segmented fiber (this includes nuclei of fibers "
+    "that were not segmented). <b>Ambiguous</b>: no fiber holds most of the nucleus. A centrally "
+    "nucleated fiber has at least one central nucleus; by fiber type, over resolved fibers of that "
+    "type. Nucleus counts are per whole image. The halfway cut-off has not yet been checked "
+    "against manual counts."
+)
+
+
+def _nuclei_sections(
+    mouse: pd.DataFrame,
+    results_dir: Path,
+    classes: list[str],
+    labels: dict[str, str],
+) -> list[str]:
+    if "prop_centrally_nucleated" not in mouse.columns:
+        return []
+    counts = [
+        (f"n_nuclei_{name}", f"{name.capitalize()} nuclei", "int")
+        for name in ("central", "peripheral", "interstitial", "ambiguous")
+        if f"n_nuclei_{name}" in mouse.columns
+    ]
+    sections = [
+        "<h2>Nuclei</h2>",
+        f'<p class="note">{NUCLEI_NOTE}</p>',
+        _table(
+            mouse,
+            [
+                ("mouse_id", "Mouse", "text"),
+                ("n_fibers_nuclei_measured", "Fibers measured", "int"),
+                ("prop_centrally_nucleated", "Centrally nucleated", "pct"),
+            ]
+            + [
+                (f"prop_centrally_nucleated_{n}", f"{_label(n, labels)} centrally nucleated", "pct")
+                for n in classes
+            ]
+            + [("mean_nuclei_per_fiber", "Nuclei per fiber", "num")]
+            + counts,
+        ),
+    ]
+    cohort_path = results_dir / "nuclear_cohort_summary.csv"
+    if cohort_path.is_file():
+        cohort = pd.read_csv(cohort_path, keep_default_na=False, na_values=[""])
+        group_keys = [
+            column
+            for column in cohort.columns
+            if column not in {"fiber_class", "n_mice", "mean_proportion", "sd_proportion"}
+        ]
+        rows = []
+        for group_values, group in cohort.groupby(group_keys, sort=True):
+            group_values = group_values if isinstance(group_values, tuple) else (group_values,)
+            record: dict[str, Any] = dict(zip(group_keys, group_values, strict=True))
+            by_class = group.set_index("fiber_class")
+            record["n_mice"] = int(by_class["n_mice"].max())
+            for name in ["all", *classes]:
+                if name in by_class.index:
+                    mean = by_class.loc[name, "mean_proportion"]
+                    sd = by_class.loc[name, "sd_proportion"]
+                    record[name] = f"{_pct(mean)} ± {_pct(sd)}" if not pd.isna(sd) else _pct(mean)
+            rows.append(record)
+        columns = [(key, key, "text") for key in group_keys] + [("n_mice", "Mice", "int")]
+        columns += [("all", "Centrally nucleated mean ± SD", "text")]
+        columns += [(n, f"{_label(n, labels)} mean ± SD", "text") for n in classes]
+        sections += [
+            '<p class="note">Cohort: mean ± SD across mice of mouse-level centrally nucleated '
+            "proportions.</p>",
+            _table(pd.DataFrame(rows), columns),
+        ]
+    return sections
 
 
 def _class_notes(classes: list[str], labels: dict[str, str]) -> list[str]:
@@ -264,6 +339,7 @@ def build_cohort_report(results_dir: Path) -> str:
             '<p class="note">Mean ± SD across mice of mouse-level finalized proportions.</p>',
             _cohort_table(cohort, classes, labels),
         ]
+    sections += _nuclei_sections(mouse, results_dir, classes, labels)
     roi_path = results_dir / "roi_summary.csv"
     if roi_path.is_file():
         roi = pd.read_csv(roi_path, dtype=ID_DTYPES)

@@ -12,6 +12,10 @@ Policies (approved for the release; recorded in the finalization manifest):
 - Flagged fibers that nobody reviewed keep the model call and are counted as unreviewed.
 - Unresolved fibers have no final type; summaries leave them out of composition denominators and
   report their count.
+- When the nuclear stage ran (DAPI), each fiber carries its nucleus counts (all, central,
+  peripheral) and whether it is centrally nucleated; nucleus positions are also counted per image
+  (central, peripheral, interstitial, ambiguous), over the whole image unless the image is
+  excluded.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ from skimage.measure import regionprops
 
 from fibertypeqc.artifacts import file_sha256, git_commit
 from src.fiber_type_labels import normalize_review_label
+from src.nuclear_association import AMBIGUOUS, CENTRAL, INTERSTITIAL, PERIPHERAL, position_name
 from src.review.fiber_type_review import load_legacy_fiber_type_decisions
 from src.review.invalidation import StaleProduct
 from src.review.project import Project, ProjectImage
@@ -54,7 +59,10 @@ POLICIES = {
     "boundary_centroid": "inside_for_exclusion; unassigned_for_roi",
     "flagged_unreviewed": "keep_prediction_and_report",
     "unresolved_in_composition": "excluded_from_denominator_and_reported",
+    "nucleus_positions": "per fiber from the nuclear stage; per image over the whole image",
 }
+NUCLEUS_POSITIONS = (CENTRAL, PERIPHERAL, INTERSTITIAL, AMBIGUOUS)
+NUCLEUS_COUNTS_FILE = "nuclei_counts.csv"
 EXCLUDING_DOMAIN_STATUSES = frozenset({DomainStatus.EXCLUDED, DomainStatus.FAIL})
 FIBER_DOMAINS = frozenset({Domain.FIBER_SEGMENTATION, Domain.FIBER_TYPING})
 FIBER_EXCLUDING_ACTIONS = frozenset(
@@ -93,6 +101,8 @@ class ImageFinalization:
     verification: str
     counts: dict[str, int] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    # Per-image nucleus positions (whole image); None without a nuclear stage or when excluded.
+    nuclei_counts: dict[str, Any] | None = None
 
 
 def image_input_fingerprints(image: ProjectImage) -> dict[str, str]:
@@ -100,6 +110,34 @@ def image_input_fingerprints(image: ProjectImage) -> dict[str, str]:
     return {
         key: file_sha256(image.outputs[key]) for key in FIBER_INPUT_KEYS if key in image.outputs
     }
+
+
+def nuclear_inputs(image: ProjectImage) -> tuple[Path, Path] | None:
+    """The nuclear stage's per-fiber and per-nucleus tables for an image, when it ran."""
+    folder = image.prediction_directory / "nuclear"
+    fibers = (
+        image.outputs.get("fiber_nuclei_summary") or folder / f"{image.image_id}_fiber_nuclei.csv"
+    )
+    nuclei = image.outputs.get("nuclei_table") or folder / f"{image.image_id}_nuclei.csv"
+    return (fibers, nuclei) if fibers.is_file() and nuclei.is_file() else None
+
+
+def _add_nuclei(table: pd.DataFrame, id_column: str, fiber_nuclei: Path) -> None:
+    """Per-fiber nucleus counts and the centrally nucleated flag, joined by fiber id."""
+    per_fiber = pd.read_csv(fiber_nuclei).set_index("fiber_id")
+    ids = table[id_column].astype(int)
+    total = ids.map(per_fiber["associated_nuclei_count"])
+    central = ids.map(per_fiber["central_nuclei_count"])
+    table["nuclei_count"] = total
+    table["central_nuclei_count"] = central
+    table["peripheral_nuclei_count"] = total - central
+    table["centrally_nucleated"] = central.gt(0).where(central.notna())
+
+
+def _nucleus_positions(nuclei: Path) -> dict[str, int]:
+    positions = pd.read_csv(nuclei, usecols=["association_category"])["association_category"]
+    names = positions.fillna("").astype(str).map(position_name)
+    return {f"n_nuclei_{name}": int((names == name).sum()) for name in NUCLEUS_POSITIONS}
 
 
 def _fiber_id_column(table: pd.DataFrame) -> str:
@@ -318,6 +356,19 @@ def finalize_image(
     table.insert(0, "section_id", image.section_id)
     table.insert(0, "mouse_id", image.mouse_id)
     table.insert(0, "image_id", image.image_id)
+    nuclei_counts = None
+    nuclear = nuclear_inputs(image)
+    if nuclear is not None:
+        fiber_nuclei, nuclei = nuclear
+        _add_nuclei(table, id_column, fiber_nuclei)
+        digests["fiber_nuclei_summary"] = file_sha256(fiber_nuclei)
+        digests["nuclei_table"] = file_sha256(nuclei)
+        if not image_reason:
+            nuclei_counts = {
+                "image_id": image.image_id,
+                "mouse_id": image.mouse_id,
+                **_nucleus_positions(nuclei),
+            }
     counts = {source: int((table["value_source"] == source).sum()) for source in VALUE_SOURCES}
     counts["flagged_unreviewed"] = int(table["flagged_unreviewed"].sum())
     warnings = []
@@ -329,7 +380,9 @@ def finalize_image(
             warnings.append(
                 f"{roi_statuses[status]} fiber centroids are {status} for analysis ROIs"
             )
-    return ImageFinalization(image.image_id, table, digests, verification, counts, warnings)
+    return ImageFinalization(
+        image.image_id, table, digests, verification, counts, warnings, nuclei_counts
+    )
 
 
 def import_legacy_reviews(
@@ -421,6 +474,12 @@ def finalize_project(
     if finalized:
         combined = pd.concat([item.table for item in finalized], ignore_index=True)
         atomic_write_dataframe(output_dir / "final_fiber_table.csv", combined)
+    nucleus_rows = [item.nuclei_counts for item in finalized if item.nuclei_counts]
+    counts_path = output_dir / NUCLEUS_COUNTS_FILE
+    if nucleus_rows:
+        atomic_write_dataframe(counts_path, pd.DataFrame(nucleus_rows))
+    else:
+        counts_path.unlink(missing_ok=True)  # left from an earlier finalize with nuclei
     manifest = {
         "schema_version": FINALIZATION_SCHEMA_VERSION,
         "created_at_utc": datetime.now(UTC).isoformat(),
