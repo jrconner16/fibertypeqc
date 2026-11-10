@@ -217,26 +217,134 @@ def test_only_the_current_step_has_a_main_button(qapp, tmp_path):
     window.close()
 
 
-def test_builder_evaluate_and_promote_are_copy_only(qapp, tmp_path, monkeypatch):
-    root = _project(tmp_path, model="none")
+def _built(root, monkeypatch, evaluation="missing", candidates=("logistic", "forest")):
+    """A labelled builder project with one build (candidate files only) and its status."""
     _prepared(root)
-    monkeypatch.setattr(
-        cli,
-        "builder_status",
-        lambda _p: {"build": "build_1", "recommended": "logistic", "evaluation": "missing"},
-    )
     (root / "review/reference/ann").mkdir(parents=True)
     (root / "review/reference/ann/review_state.json").write_text(
         json.dumps({"object_decisions": [{}]})
     )
+    build = root / "models/build_1"
+    for name in candidates:
+        (build / "candidates" / name).mkdir(parents=True)
+        (build / "candidates" / name / f"{name}.joblib").write_bytes(b"")
+    summary = {"selection": {"decision": {"recommended": candidates[0]}}}
+    (build / "build_summary.json").write_text(json.dumps(summary))
+    monkeypatch.setattr(
+        cli,
+        "builder_status",
+        lambda _p: {
+            "build": "build_1", "recommended": candidates[0], "evaluation": evaluation,
+            "test_set_uses": 2,
+        },
+    )  # fmt: skip
+
+
+def _answer(monkeypatch, answer):
+    """Answer every confirmation; returns the texts asked."""
+    from qtpy.QtWidgets import QMessageBox
+
+    asked = []
+
+    def question(_parent, _title, text, *args, **kwargs):
+        asked.append(text)
+        return QMessageBox.Yes if answer else QMessageBox.No
+
+    monkeypatch.setattr(QMessageBox, "question", question)
+    return asked
+
+
+def _menu_action(window, text):
+    window._update_menu()
+    return next((a for a in window.more_menu.actions() if a.text() == text), None)
+
+
+def test_builder_check_on_test_mice_asks_first(qapp, tmp_path, monkeypatch):
+    root = _project(tmp_path, model="none")
+    _built(root, monkeypatch)
     window = _window(qapp, root)
+    started = []
+    window.start_arguments = started.append
 
     evaluate = _row(window, "evaluate")
     assert evaluate.step.state == "current"
-    assert evaluate.action_button is None and evaluate.copy_button is not None
+    assert evaluate.action_button.text() == "Check on test mice…"
     assert not any(row.step.key in ("review", "finalize") for row in window.rows)
     assert _row(window, "build").again_button.text() == "Build again"
+    asked = _answer(monkeypatch, False)
+    evaluate.action_button.click()
+    assert started == [] and "used 2 times so far" in asked[0]
+    assert "no longer independent" in asked[0]
+    _answer(monkeypatch, True)
+    evaluate.action_button.click()
+    assert started == [["evaluate", str(root), "logistic"]]
     window.close()
+
+
+def test_builder_switch_asks_first_and_can_be_undone(qapp, tmp_path, monkeypatch):
+    root = _project(tmp_path, model="none")
+    _built(root, monkeypatch, evaluation="current")
+    window = _window(qapp, root)
+    started = []
+    window.start_arguments = started.append
+
+    promote = _row(window, "promote")
+    assert promote.step.state == "current" and promote.action_button.text() == "Switch…"
+    asked = _answer(monkeypatch, True)
+    promote.action_button.click()
+    assert started == [["promote", str(root), "logistic"]]
+    assert "Undo the last model switch" in asked[0]
+    assert _menu_action(window, "Undo the last model switch…") is None  # nothing to undo yet
+    window.close()
+
+    # After a switch, the menu offers to undo it (only the latest, as rollback allows).
+    pd.DataFrame(
+        [{"action": "promote", "from_model": "none", "to_model": "built.v1", "archive": "a1"}]
+    ).to_csv(root / "models/model_history.csv", index=False)
+    window = _window(qapp, root)
+    window.start_arguments = started.append
+    undo = _menu_action(window, "Undo the last model switch…")
+    asked = _answer(monkeypatch, True)
+    undo.trigger()
+    assert started[-1] == ["promote", str(root), "--rollback"]
+    assert "returns the project to none" in asked[-1]
+    window.close()
+    with open(root / "models/model_history.csv", "a") as history:
+        history.write("rollback,built.v1,none,a1\n")
+    assert ws.last_switch(cli.load_project_folder(root)) is None
+
+
+def test_switch_without_a_check_needs_a_typed_reason(qapp, tmp_path, monkeypatch):
+    from qtpy.QtWidgets import QInputDialog, QMessageBox
+
+    root = _project(tmp_path, model="none")
+    _built(root, monkeypatch, evaluation="stale")
+    assert ws.built_candidates(cli.load_project_folder(root)) == ["logistic", "forest"]
+    window = _window(qapp, root)
+    started = []
+    window.start_arguments = started.append
+    action = _menu_action(window, "Switch without a current check…")
+    assert action.isEnabled()
+
+    monkeypatch.setattr(QInputDialog, "getItem", lambda *a, **k: ("forest", True))
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("  ", True))
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+    action.trigger()
+    assert started == []  # no reason, no switch
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("test mice too few", True))
+    asked = _answer(monkeypatch, True)
+    action.trigger()
+    assert started == [
+        ["promote", str(root), "forest", "--override", "--reason", "test mice too few"]
+    ]
+    assert "test mice too few" in asked[0]
+    window.close()
+
+
+def test_the_launcher_shows_retyping_progress():
+    from src.launcher import RETYPE_LINE
+
+    assert RETYPE_LINE.findall("re-typing 1/5: a\nre-typing 2/5: b\n")[-1] == ("2", "5")
 
 
 def test_review_offers_finalize_once_there_are_decisions(qapp, tmp_path):

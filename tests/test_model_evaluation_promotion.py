@@ -184,10 +184,14 @@ def test_an_override_promotion_is_recorded_and_reported(built, monkeypatch, caps
     arguments = ["--project-root", str(root), "--panel-config", str(root / "panel.yaml")]
     assert main([*arguments, "--candidate", chosen]) == 1  # stale: refused
     assert "changed since" in capsys.readouterr().err
-    assert main([*arguments, "--candidate", chosen, "--override"]) == 0
+    reason = ["--reason", "labels added after the check"]
+    assert main([*arguments, "--candidate", chosen, "--override", *reason]) == 0
     assert "out of date; recorded in models/independent_test_checks.csv" in capsys.readouterr().out
     checks = pd.read_csv(root / "models" / "independent_test_checks.csv")
     assert checks.loc[0, "status"] == "stale" and bool(checks.loc[0, "override"])
+    assert checks.loc[0, "reason"] == "labels added after the check"
+    history = pd.read_csv(root / "models" / "model_history.csv")
+    assert history.loc[0, "reason"] == "labels added after the check"
 
 
 def test_changed_test_measurements_make_the_evaluation_stale(built):

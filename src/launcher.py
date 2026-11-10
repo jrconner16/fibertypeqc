@@ -90,10 +90,12 @@ from src.workflow_steps import (
     UPCOMING,
     Step,
     Workflow,
+    built_candidates,
     can_edit_setup,
     channels_beyond,
     command_arguments,
     friendly_model_problem,
+    last_switch,
     plural,
     set_model,
     update_setup,
@@ -217,6 +219,8 @@ ACTIONS = {
     "finalize": "Finalize and build report",
     "label": "Open blind labelling",
     "build": "Build",
+    "evaluate": "Check on test mice…",
+    "promote": "Switch…",
 }
 AGAIN = {
     "prepare": "Prepare again",
@@ -225,9 +229,8 @@ AGAIN = {
     "label": "Label more",
     "build": "Build again",
 }
-# Evaluate and promote get their own screens with confirmations (issue #84); until then the
-# launcher shows the command to run in a terminal.
-COPY_ONLY = {"evaluate", "promote"}
+# Evaluate is not offered again from the launcher once done: every check uses the test mice
+# again. Evaluate and promote always ask first (LauncherWindow.confirm_evaluate/confirm_promote).
 LAUNCHER_TEXT = {
     ("run", "new"): (
         "Finds every fiber and measures it (and calls its type when the project has a model). "
@@ -240,6 +243,7 @@ LAUNCHER_TEXT = {
     ),
 }
 DEVICE_LINE = re.compile(r"Cellpose device:\s*(\w+)")
+RETYPE_LINE = re.compile(r"re-typing (\d+)/(\d+)")
 
 
 def copy_text(arguments: list[str]) -> str:
@@ -375,15 +379,14 @@ class StepRow(QWidget):
         stage = window.workflow.status["stage"] if window.workflow else ""
         # The launcher's own wording where the status text speaks of terminal commands.
         explanation = LAUNCHER_TEXT.get((step.key, stage), step.explanation)
+        # The status text names the --override option; the launcher has a menu item instead.
+        explanation = re.sub(
+            r"\(A candidate can still .*--override\.\)",
+            "(To use a model anyway, choose More \u2192 Switch without a current check.)",
+            explanation,
+        )
         if explanation:
             body.addWidget(_wrapped(explanation))
-        if step.key in COPY_ONLY:
-            body.addWidget(
-                _wrapped(
-                    "The launcher does not run this step yet. Copy the command and run it in a "
-                    "terminal from the FiberTypeQC folder, then press Refresh."
-                )
-            )
         actions = QHBoxLayout()
         if step.key == "label":
             self.reviewer_edit = QLineEdit(window.project.reviewer if window.project else "")
@@ -391,7 +394,7 @@ class StepRow(QWidget):
             self.reviewer_edit.setMaximumWidth(180)
             actions.addWidget(QLabel("Reviewer"))
             actions.addWidget(self.reviewer_edit)
-        if step.key in ACTIONS and step.key not in COPY_ONLY:
+        if step.key in ACTIONS:
             text = "Edit set-up…" if step.fix == "panel" else ACTIONS[step.key]
             self.action_button = _role(QPushButton(text), "primary")
             self.action_button.clicked.connect(lambda: window.start_step(step, self.reviewer()))
@@ -662,6 +665,14 @@ class LauncherWindow(QMainWindow):
                 lambda: self.start_arguments(["improve", str(project.root)]),
             )
             action.setEnabled(enabled and project.review_project.is_file())
+        if project is not None and project.no_model and self.workflow is not None:
+            action = self.more_menu.addAction(
+                "Switch without a current check…", self.switch_without_check
+            )
+            action.setEnabled(enabled and bool(built_candidates(project)))
+        if project is not None and last_switch(project) is not None:
+            action = self.more_menu.addAction("Undo the last model switch…", self.confirm_rollback)
+            action.setEnabled(enabled)
         if project is not None:
             action = self.more_menu.addAction("Segment and type again…", self.run_again)
             action.setEnabled(enabled and (project.batch_dir / "batch_summary.csv").is_file())
@@ -743,6 +754,14 @@ class LauncherWindow(QMainWindow):
             else:
                 self.choose_model_file()
             return
+        if step.key in ("evaluate", "promote"):
+            candidate = (self.workflow.status.get("recommended") if self.workflow else "") or ""
+            if candidate:
+                if step.key == "evaluate":
+                    self.confirm_evaluate(candidate)
+                else:
+                    self.confirm_promote(candidate)
+            return
         command = step.command or {"label": "review PROJECT --blind --reviewer NAME"}.get(
             step.key, f"{step.key} PROJECT"
         )
@@ -751,6 +770,98 @@ class LauncherWindow(QMainWindow):
             if not ok or not reviewer.strip():
                 return
         self.start_arguments(command_arguments(command, self.project, reviewer.strip()))
+
+    # --- model builder: check, switch, undo -----------------------------------------------
+
+    def confirm_evaluate(self, candidate: str) -> None:
+        """Score one candidate on the test mice, after saying what that costs."""
+        status = self.workflow.status if self.workflow else {}
+        mice = status.get("test_mice")
+        uses = int(status.get("test_set_uses") or 0)
+        again = status.get("evaluation") == "stale"
+        text = (
+            f"This scores the model '{candidate}' on your blind labels of the test mice"
+            + (f" ({mice} mice)" if mice else "")
+            + ". It does not change the project.\n\n"
+            + ("The earlier check is out of date because labels, masks, or measurements changed. "
+               if again else "")
+            + "Each check uses the test mice again"
+            + (f" (used {uses} time{'s' if uses != 1 else ''} so far)" if uses else "")
+            + ". Checking several models and keeping the best-scoring one means the test is no "
+            "longer independent, so check the model you intend to use.\n\nCheck now?"
+        )  # fmt: skip
+        answer = QMessageBox.question(self, "Check on the test mice?", text)
+        if answer == QMessageBox.Yes and self.project is not None:
+            self.start_arguments(["evaluate", str(self.project.root), candidate])
+
+    def confirm_promote(self, candidate: str, override: bool = False, reason: str = "") -> None:
+        """Switch the project to a built model, after saying what happens and how to undo it."""
+        if self.project is None:
+            return
+        status = self.workflow.status if self.workflow else {}
+        warning = ""
+        if status.get("evaluation") == "no_test_mice":
+            warning = (
+                "This project has no test mice, so the model has had no independent check. "
+                "That is recorded with the switch.\n\n"
+            )
+        elif override:
+            warning = (
+                "The model has no current check on the test mice. The switch is recorded with "
+                f"your reason: \u201c{reason}\u201d.\n\n"
+            )
+        text = (
+            f"Switch this project to the model '{candidate}'?\n\n{warning}"
+            "Every section is typed again with it, on its existing mask; this can take a while. "
+            "Your blind labels are kept. The current state is archived, and More \u2192 Undo the "
+            "last model switch restores it exactly."
+        )
+        answer = QMessageBox.question(self, "Switch to the new model?", text)
+        if answer != QMessageBox.Yes:
+            return
+        arguments = ["promote", str(self.project.root), candidate]
+        if override:
+            arguments += ["--override", "--reason", reason]
+        self.start_arguments(arguments)
+
+    def switch_without_check(self) -> None:
+        """Switch to a built model without a current test check: needs a typed reason."""
+        if self.project is None:
+            return
+        names = built_candidates(self.project)
+        if not names:
+            return
+        candidate, ok = QInputDialog.getItem(
+            self, "Switch without a current check", "Model:", names, 0, False
+        )
+        if not ok:
+            return
+        reason, ok = QInputDialog.getText(
+            self,
+            "Reason (recorded)",
+            "Why switch without a current check on the test mice (or to a model the build did "
+            "not recommend)? This is recorded with the switch.",
+        )
+        if not ok:
+            return
+        if not reason.strip():
+            QMessageBox.information(self, "Reason needed", "Nothing was switched: give a reason.")
+            return
+        self.confirm_promote(candidate, override=True, reason=reason.strip())
+
+    def confirm_rollback(self) -> None:
+        switch = last_switch(self.project) if self.project is not None else None
+        if switch is None:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Undo the last model switch?",
+            f"This returns the project to {switch['from_model']}, exactly as it was before the "
+            f"switch to {switch['to_model']}. Review decisions made since the switch are archived "
+            "in the project's models folder and are not applied. Continue?",
+        )
+        if answer == QMessageBox.Yes:
+            self.start_arguments(["promote", str(self.project.root), "--rollback"])
 
     def copy_command(self, step: Step, reviewer: str = "") -> None:
         if self.project is not None and step.command:
@@ -790,6 +901,10 @@ class LauncherWindow(QMainWindow):
         if match:
             self.device = match.group(1)
             self.activity_label.setText(f"Running on {self.device} …")
+        retyped = RETYPE_LINE.findall(text)
+        if retyped:
+            done, total = retyped[-1]
+            self.activity_label.setText(f"Typing sections with the new model: {done} of {total} …")
 
     def _finished(self, code: int, _status=None) -> None:
         self._read_output()
