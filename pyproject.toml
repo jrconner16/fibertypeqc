@@ -73,4 +73,5 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
   "integration: slow or full-stack tests kept out of the default fast synthetic test path",
+  "check_model: launcher tests that check whether the project's model can be found",
 ]

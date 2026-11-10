@@ -68,6 +68,7 @@ from src.workflow_steps import (
     Workflow,
     command_arguments,
     plural,
+    set_model,
     workflow,
 )
 
@@ -101,6 +102,7 @@ def muted() -> str:
 
 
 ACTIONS = {
+    "setup": "Choose model file…",
     "samples": "Edit samples",
     "run": "Run",
     "prepare": "Prepare",
@@ -476,6 +478,19 @@ class LauncherWindow(QMainWindow):
         dialog.exec()
         self.refresh()
 
+    def choose_model_file(self) -> None:
+        if self.project is None:
+            return
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            "Model file",
+            str(self.project.root.parent),
+            "Model files (*.joblib *.pkl *.pickle)",
+        )
+        if path:
+            set_model(self.project, path)
+            self.refresh()
+
     def open_folder(self) -> None:
         if self.project is not None:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.project.root)))
@@ -503,6 +518,9 @@ class LauncherWindow(QMainWindow):
             return
         if step.key == "samples":
             self.edit_samples()
+            return
+        if step.key == "setup":
+            self.choose_model_file()
             return
         command = step.command or {"label": "review PROJECT --blind --reviewer NAME"}.get(
             step.key, f"{step.key} PROJECT"

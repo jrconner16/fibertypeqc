@@ -16,6 +16,13 @@ from src import cli
 from src import workflow_steps as ws
 
 
+@pytest.fixture(autouse=True)
+def _model_found(request, monkeypatch):
+    """The fixtures name a model file that is not there; only the model tests check for it."""
+    if "check_model" not in request.keywords:
+        monkeypatch.setattr(ws, "model_problem", lambda _project: "")
+
+
 def _project(tmp_path: Path, model: str = "models/my_model.joblib", mice=("m1", "m2")) -> Path:
     root = tmp_path / "proj"
     (root / "images").mkdir(parents=True)
@@ -436,3 +443,41 @@ def test_samples_dialog_saves_mouse_ids_and_keeps_image_columns_fixed(qapp, tmp_
 def test_app_command_rejects_a_folder_that_is_not_a_project(qapp, tmp_path, capsys):
     assert cli.main(["app", str(tmp_path)]) == 2
     assert "not a FiberTypeQC project folder" in capsys.readouterr().err
+
+
+@pytest.mark.check_model
+def test_a_missing_model_is_explained_before_run(tmp_path):
+    root = _project(tmp_path)
+    (root / cli.CONFIG_NAME).write_text(
+        (root / cli.CONFIG_NAME).read_text() + "# keep this comment\n"
+    )
+    flow = _flow(root)
+    setup = flow.current
+    assert setup.key == "setup" and setup.command == ""
+    assert setup.explanation.startswith("The model file is not where the project expects it:")
+    assert _states(flow)["run"] == "upcoming"
+
+    _batch(root)  # once run has happened, the model no longer blocks the next step
+    assert _flow(root).current.key == "prepare"
+
+    ws.set_model(cli.load_project_folder(root), "/models/other model.joblib")
+    text = (root / cli.CONFIG_NAME).read_text()
+    assert "# keep this comment" in text and text.count("model:") == 1
+    assert cli.load_project_folder(root).model == "/models/other model.joblib"
+
+
+@pytest.mark.check_model
+def test_choose_model_file_updates_the_project(qapp, tmp_path, monkeypatch):
+    from qtpy.QtWidgets import QFileDialog
+
+    root = _project(tmp_path)
+    window = _window(qapp, root)
+    setup = _row(window, "setup")
+    assert setup.step.state == "current" and setup.action_button.text() == "Choose model file…"
+    assert _row(window, "run").action_button is None
+
+    chosen = tmp_path / "elsewhere" / "model.joblib"
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: (str(chosen), ""))
+    setup.action_button.click()
+    assert window.project.model == str(chosen)
+    window.close()

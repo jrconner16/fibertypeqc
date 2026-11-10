@@ -8,6 +8,8 @@ prepare -> label -> build -> evaluate -> promote, then continues as a project wi
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -15,7 +17,15 @@ from typing import Any
 import pandas as pd
 
 from fibertypeqc.config import load_channel_config
-from src.cli import ProjectError, ProjectFolder, check_sample_sheet, next_step, project_status
+from fibertypeqc.model_resolution import default_model_id, resolve_model_argument
+from src.cli import (
+    CONFIG_NAME,
+    ProjectError,
+    ProjectFolder,
+    check_sample_sheet,
+    next_step,
+    project_status,
+)
 
 DONE, CURRENT, UPCOMING, ATTENTION, SKIPPED = "done", "current", "upcoming", "attention", "skipped"
 
@@ -162,6 +172,16 @@ def workflow(project: ProjectFolder) -> Workflow:
     # Steps before the routed one are done, even when the sample sheet takes over as current.
     position = path.index(routed) if routed in path else len(path)
     current = routed
+    problem = model_problem(project) if routed == "run" else ""
+    if problem:
+        # Run would stop at once; say why here instead, before anything starts.
+        current, command = "setup", ""
+        missing = problem.removeprefix("--model file not found: ")
+        explanation = (
+            f"The model file is not where the project expects it:\n{missing}\n"
+            if missing != problem
+            else f"The model cannot be used: {problem}\n"
+        ) + "Choose the model file, or put it there and press Refresh."
     samples_ok, samples_summary, samples_note = _samples(project)
     if not samples_ok and current not in (None, "run"):
         # Everything after segmentation needs a usable sample sheet.
@@ -172,7 +192,7 @@ def workflow(project: ProjectFolder) -> Workflow:
     steps = []
     for index, key in enumerate(path):
         if key == "setup":
-            state = DONE
+            state = CURRENT if current == "setup" else DONE
         elif key == "samples":
             state = CURRENT if current == "samples" else (DONE if samples_ok else ATTENTION)
         elif key == current:
@@ -196,6 +216,28 @@ def workflow(project: ProjectFolder) -> Workflow:
         )
     notes = tuple(note for note in status["notes"] if note != samples_note)
     return Workflow(steps=tuple(steps), status=status, finished=finished, notes=notes)
+
+
+def model_problem(project: ProjectFolder) -> str:
+    """Why ``run`` could not use the project's model (checked as run_batch does), or ""."""
+    if project.no_model:
+        return ""
+    try:
+        resolve_model_argument(project.model or default_model_id("fiber_identity") or "")
+    except ValueError as exc:
+        return str(exc)
+    return ""
+
+
+def set_model(project: ProjectFolder, model: str) -> None:
+    """Point the project at another model, keeping the rest of the config file as written."""
+    config = project.root / CONFIG_NAME
+    line = f"model: {json.dumps(model)}"
+    text = config.read_text(encoding="utf-8")
+    updated, count = re.subn(r"^model:.*$", lambda _match: line, text, flags=re.MULTILINE)
+    if not count:
+        updated = text.rstrip("\n") + f"\n{line}\n"
+    config.write_text(updated, encoding="utf-8")
 
 
 def command_arguments(command: str, project: ProjectFolder, reviewer: str = "") -> list[str]:
