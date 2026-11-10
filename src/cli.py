@@ -18,6 +18,7 @@ Usage::
     python -m fibertypeqc prepare  myproject/
     python -m fibertypeqc review   myproject/
     python -m fibertypeqc finalize myproject/
+    python -m fibertypeqc app      myproject/   (the same steps in a window)
 
 Each step calls the corresponding ``scripts.*`` command with paths taken from the project folder.
 """
@@ -789,6 +790,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Regular expression applied to each file name; its first group fills mouse_id",
     )
     init.add_argument("--yes", action="store_true", help="Never prompt; fail if input is missing")
+    app = steps.add_parser(
+        "app",
+        help="Open the project launcher window (experimental)",
+        description=(
+            "A window that shows this project's steps one at a time and runs them. It runs the "
+            "same commands as the terminal, on this computer."
+        ),
+    )
+    app.add_argument("project", type=Path, nargs="?", help="Project folder to open (optional)")
     return parser
 
 
@@ -800,6 +810,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.step == "init":
             return command_init(args)
+        if args.step == "app":
+            from src.launcher import main as launch
+
+            return launch(args.project)
         project = load_project_folder(args.project)
         if args.step == "status":
             return command_status(project)

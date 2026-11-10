@@ -37,6 +37,22 @@ def registered_model_ids(repo_root: Path = REPO_ROOT) -> list[str]:
     return [str(entry["model_id"]) for entry in _registry_entries(repo_root)]
 
 
+def released_models(
+    task: str = "fiber_identity", repo_root: Path = REPO_ROOT
+) -> list[tuple[str, tuple[str, ...]]]:
+    """Released models for a task as (model ID, required markers), the registry default first."""
+    entries = [
+        entry
+        for entry in _registry_entries(repo_root)
+        if entry.get("task") == task and entry.get("status") == "released"
+    ]
+    entries.sort(key=lambda entry: not entry.get("default"))
+    return [
+        (str(entry["model_id"]), tuple(str(m) for m in entry.get("required_markers", [])))
+        for entry in entries
+    ]
+
+
 def resolve_model(
     model_id: str,
     *,

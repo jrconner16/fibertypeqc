@@ -92,6 +92,27 @@ uv run python -m scripts.summarize_results --final-dir myproject/final \
 
 </details>
 
+### The same steps in a window (experimental)
+
+```bash
+uv run python -m fibertypeqc app            # open or create a project
+uv run python -m fibertypeqc app myproject/
+```
+
+The launcher lists the steps for your project, worked out from its files the way `status` does:
+finished steps are ticked, the next one has the only main button, and later ones are greyed out.
+A project with `model: none` shows the builder steps (label, build, evaluate, promote) instead of
+review and finalize. Each button runs the same `python -m fibertypeqc` command in a separate
+process on this computer, with its output in the log, so results are identical to the terminal.
+**Copy command** gives the command for a terminal or a batch job.
+
+- **New project** asks what `init` asks. The model follows the stain panel: a released model made
+  for exactly those stains, otherwise "None", which leads into building a model.
+- **Samples** edits `samples.csv` (mouse IDs and group columns).
+- `evaluate` and `promote` are shown but not run from the window yet; copy their commands.
+- The launcher never submits cluster jobs. On a cluster, open it in a desktop session on a GPU
+  node to run segmentation there, or on a CPU node for the other steps.
+
 ## Review
 
 The review workspace has four parts: cohort QC, per-section pass/fail/exclude, guided

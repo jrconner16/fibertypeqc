@@ -119,7 +119,9 @@ large cohorts, a Slurm array that runs one image per task is faster.
 **Review in Open OnDemand.** Start a Desktop session on a CPU partition, open a terminal inside
 it, set the same `UV_*` variables, and run `fibertypeqc review` from the repository folder.
 Review needs no GPU, but very large sections need more memory than a typical laptop; a session
-with 8 cores and 64 GB worked in testing.
+with 8 cores and 64 GB worked in testing. In a Desktop session on a GPU partition,
+`fibertypeqc app` (experimental) runs every step, segmentation included, from one window without
+a batch job.
 
 ## Model files
 
