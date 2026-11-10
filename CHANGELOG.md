@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Labels and build results in the launcher** (#84): **Label counts…** and **Build results…**
+  show training-mouse labels per class and mouse against the builder recipe (with what is still
+  needed), and the latest build's per-candidate scores, the rule, and why no model was recommended.
+  The window opens by itself when a build stops. `check_minimums` now uses the same counts
+  (`label_progress`); its messages are unchanged.
 - **Check and switch from the launcher** (#84): in a project without a model, **Check on test
   mice…** and **Switch…** run `evaluate` and `promote` after a confirmation that explains the use
   of the test mice, the re-typing, and how to undo it; re-typing progress is shown. **More** offers

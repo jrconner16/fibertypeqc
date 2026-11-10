@@ -84,18 +84,22 @@ from src.cli import (
 from src.make_review_project import used_rows
 from src.workflow_steps import (
     ATTENTION,
+    CLASS_NAMES,
     CURRENT,
     DONE,
     SKIPPED,
     UPCOMING,
     Step,
     Workflow,
+    build_hint,
     built_candidates,
     can_edit_setup,
     channels_beyond,
     command_arguments,
     friendly_model_problem,
+    label_hints,
     last_switch,
+    latest_build,
     plural,
     set_model,
     update_setup,
@@ -318,6 +322,7 @@ class StepRow(QWidget):
         self.action_button: QPushButton | None = None
         self.again_button: QPushButton | None = None
         self.copy_button: QPushButton | None = None
+        self.details_button: QPushButton | None = None
         self.finalize_button: QPushButton | None = None
         self.again_allowed = True
         self.reviewer_edit: QLineEdit | None = None
@@ -365,6 +370,12 @@ class StepRow(QWidget):
             self.again_button.clicked.connect(lambda: window.start_step(step))
         if self.again_button is not None:
             header.addWidget(self.again_button)
+        builder = window.project is not None and window.project.no_model
+        if builder and step.key in ("label", "build") and step.state in (DONE, CURRENT):
+            text = "Label counts…" if step.key == "label" else "Build results…"
+            self.details_button = _role(QPushButton(text), "link")
+            self.details_button.clicked.connect(window.show_build_results)
+            header.addWidget(self.details_button)
         layout.addLayout(header)
         if current:
             self._add_current(window, layout)
@@ -885,6 +896,7 @@ class LauncherWindow(QMainWindow):
         self.log_toggle.setChecked(True)
         self.device = ""
         self.activity_label.setText(f"Running: {arguments[0]} …")
+        self.last_step = arguments[0]
         self.process.start(program, program_arguments)
         self._set_busy(True)
 
@@ -917,6 +929,20 @@ class LauncherWindow(QMainWindow):
         self.activity_label.setText(message)
         self._set_busy(False)
         self.refresh()
+        if code != 0 and getattr(self, "last_step", "") == "build":
+            # Usually too few labels: show what is missing instead of only the log.
+            self.show_build_results()
+
+    def show_build_results(self) -> None:
+        """Labels against the recipe's minimums, and the latest build's results (read only)."""
+        if self.project is None or not self.project.review_project.is_file():
+            return
+        try:
+            self.results_dialog = BuildResultsDialog(self.project, self)
+        except (OSError, ValueError, KeyError) as exc:
+            QMessageBox.warning(self, "Cannot show the labels", str(exc))
+            return
+        self.results_dialog.show()  # not modal: the launcher stays usable
 
     def _process_error(self, error) -> None:
         if error == QProcess.FailedToStart:
@@ -950,6 +976,167 @@ class LauncherWindow(QMainWindow):
             self.process.kill()
             self.process.waitForFinished(3000)
         event.accept()
+
+
+# --- builder: labels and build results ------------------------------------------------------
+
+
+def _check(passed: bool) -> str:
+    return "\u2713" if passed else "\u2717"
+
+
+def _fraction(have: int, need: int) -> str:
+    return f"{have} / {need} {_check(have >= need)}"
+
+
+def _needing(text: str, value: float | None) -> str:
+    return text if value is None else f"{text}\n(need \u2265{value:.2f})"
+
+
+def _grid(headers: list[str], rows: list[list[str]], labels: list[str]) -> QTableWidget:
+    table = QTableWidget(len(rows), len(headers))
+    table.setHorizontalHeaderLabels(headers)
+    table.setVerticalHeaderLabels(labels)
+    table.setEditTriggers(QTableWidget.NoEditTriggers)
+    for r, row in enumerate(rows):
+        for c, value in enumerate(row):
+            item = QTableWidgetItem(value)
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(r, c, item)
+    table.resizeColumnsToContents()
+    table.resizeRowsToContents()
+    table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    header = table.horizontalHeader()
+    height = header.sizeHint().height() + table.verticalHeader().length() + 2 * table.frameWidth()
+    if table.horizontalHeader().length() + table.verticalHeader().sizeHint().width() > 680:
+        height += table.horizontalScrollBar().sizeHint().height()
+    table.setFixedHeight(height)
+    return table
+
+
+class BuildResultsDialog(QDialog):
+    """What Build will use (labels against the recipe) and what the latest build found."""
+
+    def __init__(self, project: ProjectFolder, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        from src.model_builder import current_label_progress
+        from src.review.project import load_project
+
+        self.setWindowTitle("Labels and build results")
+        self.resize(760, 620)
+        review = load_project(project.review_project)
+        names = {**CLASS_NAMES, **review.class_labels}
+        self.progress = current_label_progress(review)
+        progress = self.progress
+
+        inner = QWidget()
+        layout = QVBoxLayout(inner)
+        layout.setSpacing(8)
+        layout.addWidget(_role(QLabel("Labels from training mice"), "step-current"))
+        layout.addWidget(
+            _wrapped(
+                "Build uses blind labels from training mice only; the test mice are kept for the "
+                f"check. Training mice with labels: {progress['training_mice']} (at least "
+                f"{progress['training_mice_needed']} needed)."
+            )
+        )
+        each = progress["labels_per_contributing_mouse"]
+        mice = list(progress["by_mouse"])
+        rows = [
+            [
+                _fraction(row["labels"], row["labels_needed"]),
+                _fraction(row["mice"], row["mice_needed"]),
+                *(str(progress["by_mouse"][mouse][row["class"]]) for mouse in mice),
+            ]
+            for row in progress["classes"]
+        ]
+        self.labels_table = _grid(
+            ["Labelled", f"Mice with \u2265{each}", *mice],
+            rows,
+            [names.get(row["class"], row["class"]) for row in progress["classes"]],
+        )
+        layout.addWidget(self.labels_table)
+        audit = progress.get("audit") or {}
+        left_out = {k: v for k, v in (audit.get("left_out") or {}).items() if v}
+        if audit.get("conflicting_fibers"):
+            left_out["reviewer disagreements"] = audit["conflicting_fibers"]
+        if left_out:
+            text = ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in left_out.items())
+            layout.addWidget(_role(_wrapped(f"Not counted: {text}."), "muted"))
+        hints = label_hints(progress, names)
+        self.hint_label = _wrapped(
+            "Enough labels to build."
+            if progress["ready"]
+            else "Still needed before Build can run:\n" + "\n".join(f"\u2022 {h}" for h in hints)
+        )
+        layout.addWidget(self.hint_label)
+
+        self.build_table: QTableWidget | None = None
+        self.build_label: QLabel | None = None
+        found = latest_build(project)
+        if found is not None:
+            folder, summary, recipe = found
+            layout.addSpacing(8)
+            layout.addWidget(_role(QLabel(f"Latest build: {folder.name}"), "step-current"))
+            built = summary["labels"]
+            layout.addWidget(
+                _wrapped(
+                    f"Built from {built['n_fibers']} labelled fibers on "
+                    f"{built['n_training_mice']} training mice. Each model was scored on each "
+                    "training mouse after learning from the others (macro-F1: per mouse, averaged "
+                    "over classes; recall: share of each class called correctly)."
+                )
+            )
+            rule = recipe.get("recommendation_rule", {})
+            gain = rule.get("minimum_median_mouse_macro_f1_gain_over_baseline")
+            recall = rule.get("minimum_pooled_class_recall")
+            classes = summary["classes"]
+            metrics = summary["selection"]["metrics"]
+            checks = summary["selection"]["decision"]["checks"]
+            headers = [
+                "Median\nmacro-F1",
+                _needing("Gain over\nbaseline", gain),
+                _needing("Lowest\nrecall", recall),
+                *(f"Recall\n{names.get(c, c)}" for c in classes),
+                "Passes",
+            ]
+            rows, labels = [], []
+            for name, values in metrics.items():
+                check = checks.get(name)  # none for the baseline
+                gained = check["median_mouse_macro_f1_gain_over_baseline"] if check else None
+                lowest = check["lowest_pooled_class_recall"] if check else None
+                rows.append(
+                    [
+                        f"{values['median_mouse_macro_f1']:.2f}",
+                        "" if gained is None else f"{gained:+.2f}",
+                        "" if lowest is None else f"{lowest:.2f}",
+                        *(f"{values['pooled_recall_by_class'][c]:.2f}" for c in classes),
+                        _check(check["passes"]) if check else "baseline",
+                    ]
+                )
+                labels.append(name.replace("_", " "))
+            self.build_table = _grid(headers, rows, labels)
+            layout.addWidget(self.build_table)
+            decision = summary["selection"]["decision"]
+            self.build_label = _wrapped(
+                f"Recommended: {decision['recommended'].replace('_', ' ')}. {decision['reason']}"
+                if decision.get("recommended")
+                else "No model is recommended. " + build_hint(summary, recipe, names)
+            )
+            layout.addWidget(self.build_label)
+            if summary.get("caveat"):
+                layout.addWidget(_role(_wrapped(summary["caveat"]), "muted"))
+        layout.addStretch(1)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(inner)
+        outer = QVBoxLayout(self)
+        outer.addWidget(scroll, 1)
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(self.close)
+        outer.addWidget(buttons)
 
 
 # --- new project ----------------------------------------------------------------------------

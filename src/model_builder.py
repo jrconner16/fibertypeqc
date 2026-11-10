@@ -201,23 +201,78 @@ def label_support(table: pd.DataFrame, classes: list[str]) -> pd.DataFrame:
     return counts
 
 
-def check_minimums(table: pd.DataFrame, classes: list[str], recipe: dict[str, Any]) -> None:
+def label_progress(
+    table: pd.DataFrame, classes: list[str], recipe: dict[str, Any]
+) -> dict[str, Any]:
+    """Combined training labels against the recipe's minimums (what ``check_minimums`` checks).
+
+    ``by_mouse`` gives labels per training mouse and class; ``ready`` is True when every minimum
+    is met.
+    """
     rules = recipe["minimums"]
-    problems = []
-    n_mice = table["mouse_id"].nunique()
-    if n_mice < int(rules["training_mice"]):
-        problems.append(f"labels come from {n_mice} training mice; {rules['training_mice']} needed")
+    per_mouse_minimum = int(rules["labels_per_contributing_mouse"])
     support = label_support(table, classes) if len(table) else None
+    rows = []
     for name in classes:
         per_mouse = support.loc[name] if support is not None else pd.Series(dtype=int)
-        total = int(per_mouse.sum())
-        contributing = int((per_mouse >= int(rules["labels_per_contributing_mouse"])).sum())
-        if total < int(rules["labels_per_class"]):
-            problems.append(f"{name}: {total} labelled fibers; {rules['labels_per_class']} needed")
-        if contributing < int(rules["mice_per_class"]):
+        rows.append(
+            {
+                "class": name,
+                "labels": int(per_mouse.sum()),
+                "labels_needed": int(rules["labels_per_class"]),
+                "mice": int((per_mouse >= per_mouse_minimum).sum()),
+                "mice_needed": int(rules["mice_per_class"]),
+            }
+        )
+    n_mice = int(table["mouse_id"].nunique())
+    by_mouse = (
+        {str(mouse): {name: int(support.loc[name, mouse]) for name in classes}
+         for mouse in support.columns}
+        if support is not None
+        else {}
+    )  # fmt: skip
+    return {
+        "training_mice": n_mice,
+        "training_mice_needed": int(rules["training_mice"]),
+        "labels_per_contributing_mouse": per_mouse_minimum,
+        "classes": rows,
+        "by_mouse": by_mouse,
+        "ready": n_mice >= int(rules["training_mice"])
+        and all(r["labels"] >= r["labels_needed"] and r["mice"] >= r["mice_needed"] for r in rows),
+    }
+
+
+def current_label_progress(project: Project, recipe: dict[str, Any] | None = None) -> dict:
+    """``label_progress`` for the blind labels saved now (training mice only), with what was left
+    out (test mice, excluded, uncertain, reviewer conflicts). Reads labels; writes nothing."""
+    classes = list(project.review_classes)
+    try:
+        sessions = blind_label_sessions(project)
+    except BuilderError:
+        sessions = {}
+    if sessions:
+        table, audit = combine_labels(project, sessions, classes)
+    else:
+        table, audit = pd.DataFrame(columns=["mouse_id", "label"]), {}
+    return {**label_progress(table, classes, recipe or load_recipe()), "audit": audit}
+
+
+def check_minimums(table: pd.DataFrame, classes: list[str], recipe: dict[str, Any]) -> None:
+    progress = label_progress(table, classes, recipe)
+    problems = []
+    n_mice, needed = progress["training_mice"], progress["training_mice_needed"]
+    if n_mice < needed:
+        problems.append(f"labels come from {n_mice} training mice; {needed} needed")
+    for row in progress["classes"]:
+        name = row["class"]
+        if row["labels"] < row["labels_needed"]:
             problems.append(
-                f"{name}: {contributing} mice with at least "
-                f"{rules['labels_per_contributing_mouse']} labels; {rules['mice_per_class']} needed"
+                f"{name}: {row['labels']} labelled fibers; {row['labels_needed']} needed"
+            )
+        if row["mice"] < row["mice_needed"]:
+            problems.append(
+                f"{name}: {row['mice']} mice with at least "
+                f"{progress['labels_per_contributing_mouse']} labels; {row['mice_needed']} needed"
             )
     if problems:
         raise BuilderError("Not enough blind labels to build a model: " + "; ".join(problems) + ".")

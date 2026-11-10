@@ -379,16 +379,98 @@ def command_arguments(command: str, project: ProjectFolder, reviewer: str = "") 
 # --- model builder: candidates and switches (read only) -------------------------------------
 
 
-def built_candidates(project: ProjectFolder) -> list[str]:
-    """Candidate names in the latest build, the recommended one first."""
+def latest_build(project: ProjectFolder) -> tuple[Path, dict[str, Any], dict[str, Any]] | None:
+    """(folder, build_summary.json, recipe.yaml) of the latest build run, or None."""
     builds = sorted((project.root / "models").glob("build_*/build_summary.json"))
     if not builds:
-        return []
-    folder = builds[-1].parent / "candidates"
-    names = sorted(path.parent.name for path in folder.glob("*/*.joblib"))
+        return None
+    folder = builds[-1].parent
     summary = json.loads(builds[-1].read_text(encoding="utf-8"))
+    recipe_path = folder / "recipe.yaml"
+    recipe = {}
+    if recipe_path.is_file():
+        recipe = yaml.safe_load(recipe_path.read_text(encoding="utf-8")) or {}
+    return folder, summary, recipe or {}
+
+
+def built_candidates(project: ProjectFolder) -> list[str]:
+    """Candidate names in the latest build, the recommended one first."""
+    found = latest_build(project)
+    if found is None:
+        return []
+    folder, summary, _recipe = found
+    names = sorted(path.parent.name for path in (folder / "candidates").glob("*/*.joblib"))
     recommended = summary["selection"]["decision"].get("recommended")
     return sorted(names, key=lambda name: name != recommended)
+
+
+CLASS_NAMES = {"i": "Type I", "iia": "IIa", "iib": "IIb", "iix": "IIx", "hybrid": "Hybrid"}
+
+
+def label_hints(progress: dict[str, Any], names: dict[str, str] | None = None) -> list[str]:
+    """What is still missing before ``build`` can run, in plain words (empty when ready)."""
+    names = {**CLASS_NAMES, **(names or {})}
+    hints = []
+    short_mice = progress["training_mice_needed"] - progress["training_mice"]
+    if short_mice > 0:
+        hints.append(
+            f"Label fibers in {short_mice} more training mouse{'' if short_mice == 1 else 's'} "
+            f"(labels come from {progress['training_mice']}; {progress['training_mice_needed']} "
+            "needed)."
+        )
+    each = progress["labels_per_contributing_mouse"]
+    for row in progress["classes"]:
+        name = names.get(row["class"], row["class"])
+        if row["labels"] < row["labels_needed"]:
+            hints.append(
+                f"{name}: {row['labels_needed'] - row['labels']} more labelled fibers "
+                f"({row['labels']} of {row['labels_needed']})."
+            )
+        if row["mice"] < row["mice_needed"]:
+            more = row["mice_needed"] - row["mice"]
+            hints.append(
+                f"{name}: at least {each} labels in {more} more mouse{'' if more == 1 else 's'} "
+                f"({row['mice']} of {row['mice_needed']} mice have {each} or more)."
+            )
+    return hints
+
+
+def build_hint(
+    summary: dict[str, Any], recipe: dict[str, Any], names: dict[str, str] | None = None
+) -> str:
+    """Why the latest build recommended no candidate, in plain words ("" if one was)."""
+    names = {**CLASS_NAMES, **(names or {})}
+    decision = summary["selection"]["decision"]
+    if decision.get("recommended"):
+        return ""
+    rule = recipe.get("recommendation_rule", {})
+    gain_needed = rule.get("minimum_median_mouse_macro_f1_gain_over_baseline")
+    recall_needed = rule.get("minimum_pooled_class_recall")
+    metrics = summary["selection"]["metrics"]
+    best: dict[str, float] = {}  # each class's highest recall among the candidates
+    for name in decision["checks"]:
+        for label, recall in metrics[name]["pooled_recall_by_class"].items():
+            best[label] = max(best.get(label, 0.0), float(recall))
+    parts = []
+    if recall_needed is not None:
+        low = sorted(label for label, value in best.items() if value < float(recall_needed))
+        if low:
+            shown = ", ".join(names.get(label, label) for label in low)
+            parts.append(
+                f"No model recognised {shown} well enough (recall below {recall_needed:.2f} "
+                "in every model). More labels of that class, from more mice, usually help; "
+                "also check that its channel is the right stain."
+            )
+    if gain_needed is not None and not any(
+        check["median_mouse_macro_f1_gain_over_baseline"] >= float(gain_needed)
+        for check in decision["checks"].values()
+    ):
+        parts.append(
+            f"No model beat always guessing the most common class by {gain_needed:.2f} "
+            "(median per-mouse macro-F1). The classes may look too alike in these channels, or "
+            "labels may disagree between mice."
+        )
+    return " ".join(parts) or decision.get("reason", "")
 
 
 def last_switch(project: ProjectFolder) -> dict[str, str] | None:
