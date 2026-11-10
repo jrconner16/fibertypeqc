@@ -20,6 +20,23 @@ MARKER_LABELS = {
 RESIDUAL_MARKER_NAMES = {"type_i": "i", "type_iia": "iia", "type_iib": "iib"}
 
 
+def channel_label(index: int, names: list[str] | None = None) -> str:
+    """How a person sees a stored channel: "Channel 2 · AF488" for index 1.
+
+    Panel files count channels from 0; microscopy software (ZEN, Fiji: C1, C2, ...) and
+    everything FiberTypeQC shows count from 1.
+    """
+    label = f"Channel {index + 1}"
+    if names and index < len(names) and names[index]:
+        label += f" · {names[index]}"
+    return label
+
+
+def channel_range(count: int) -> str:
+    """The range a person picks channels from, e.g. "numbered 1 to 3" for three channels."""
+    return f"numbered 1 to {count}" if count > 1 else "numbered 1"
+
+
 def list_presets() -> dict[str, tuple[Path, str]]:
     """Preset name -> (file, one-line description from its leading comment)."""
     presets: dict[str, tuple[Path, str]] = {}

@@ -553,8 +553,8 @@ def test_a_panel_that_does_not_fit_the_images_is_caught_before_run(qapp, tmp_pat
     flow = _flow(root)
     setup = flow.current
     assert setup.key == "setup" and setup.command == ""
-    assert "expects Type IIb in channel 3" in setup.explanation
-    assert "m1_s1.tif has 3 channels (numbered 0 to 2)" in setup.explanation
+    assert "expects Type IIb in channel 4" in setup.explanation
+    assert "m1_s1.tif has 3 channels (numbered 1 to 3)" in setup.explanation
 
     # A run in which every image failed leaves the set-up editable, so it can be fixed.
     (root / "batch").mkdir()
@@ -585,7 +585,7 @@ def test_new_project_form_picks_a_panel_that_fits_and_refuses_one_that_does_not(
 
     dialog.panel_combo.setCurrentIndex(dialog.panel_combo.findData("four_marker_i_iia_laminin_iib"))
     dialog.create()
-    assert "expects Type IIb in channel 3" in dialog.error_label.text()
+    assert "expects Type IIb in channel 4" in dialog.error_label.text()
     assert dialog.created is None and not (tmp_path / "p").exists()
 
 
@@ -633,3 +633,28 @@ def test_editing_setup_keeps_include_patterns_and_use_values(tmp_path):
     assert after["image_id"].tolist() == ["m01_sections", "m02_sections", "other"]
     assert after["use"].tolist() == ["yes", "yes", "no"]
     assert after["mouse_id"].tolist() == ["m01", "m02", "m03"]
+
+
+def test_custom_channels_are_shown_from_1_and_stored_from_0(qapp, tmp_path):
+    from src.launcher import NewProjectDialog
+
+    dialog = NewProjectDialog()
+    dialog.parent_edit.setText(str(tmp_path))
+    dialog.name_edit.setText("ones")
+    dialog.images_edit.setText(str(_tif_folder(tmp_path)))  # three channels
+    dialog._images_changed()
+    assert "numbered 1 to 3" in dialog.images_info.text()
+    dialog.panel_combo.setCurrentIndex(dialog.panel_combo.findData("custom"))
+    laminin = dialog.channel_combos["laminin"]
+    assert [laminin.itemText(i) for i in range(laminin.count())] == [
+        "not stained", "Channel 1", "Channel 2", "Channel 3",
+    ]  # fmt: skip
+    shown_as = {"laminin": "Channel 1", "type_iia": "Channel 2", "type_iib": "Channel 3"}
+    for marker, shown in shown_as.items():
+        combo = dialog.channel_combos[marker]
+        combo.setCurrentIndex(combo.findText(shown))
+    dialog.create()
+
+    panel = yaml.safe_load((tmp_path / "ones" / "panel.yaml").read_text())
+    assert panel["channels"]["laminin"] == 0
+    assert panel["channels"]["type_iia"] == 1 and panel["channels"]["type_iib"] == 2

@@ -44,6 +44,8 @@ from fibertypeqc.model_resolution import default_model_id
 from fibertypeqc.panel_presets import (
     MARKER_LABELS,
     MARKERS,
+    channel_label,
+    channel_range,
     list_presets,
     panel_from_channels,
     preset_path,
@@ -567,6 +569,39 @@ def image_channel_count(path: Path) -> int | None:
     return 1
 
 
+def image_channel_names(path: Path) -> list[str]:
+    """Channel names from file metadata (CZI or OME-TIFF), or [] when there are none."""
+    import xml.etree.ElementTree as ET
+
+    try:
+        if path.suffix.lower() == ".czi":
+            import czifile
+
+            with czifile.CziFile(str(path)) as czi:
+                root = ET.fromstring(czi.metadata())
+            channels = root.findall("./Metadata/Information/Image/Dimensions/Channels/Channel")
+        else:
+            import tifffile
+
+            with tifffile.TiffFile(path) as tif:
+                if not tif.is_ome or not tif.ome_metadata:
+                    return []
+                root = ET.fromstring(tif.ome_metadata)
+            channels = root.findall(".//{*}Image[1]/{*}Pixels/{*}Channel")
+    except Exception:  # unreadable metadata only costs the names
+        return []
+    names = [(channel.get("Name") or "").strip() for channel in channels]
+    return names if any(names) else []
+
+
+def channel_summary(path: Path, count: int, names: list[str]) -> str:
+    """The first image's channels as shown to a person, named when the metadata has names."""
+    if names and len(names) == count:
+        listing = ", ".join(channel_label(index, names) for index in range(count))
+        return f"{path.name} has {count} channel(s): {listing}"
+    return f"{path.name} has {count} channel(s), {channel_range(count)}"
+
+
 def _ask(prompt: str, default: str = "") -> str:
     suffix = f" [{default}]" if default else ""
     answer = input(f"{prompt}{suffix}: ").strip()
@@ -590,7 +625,8 @@ def _choose_panel(images: list[Path], interactive: bool, requested: str | None) 
         raise ProjectError(f"--panel is required (a preset: {', '.join(presets)}; or a file)")
     channels = image_channel_count(images[0]) if images else None
     if channels:
-        print(f"\n{images[0].name} has {channels} channel(s), numbered 0 to {channels - 1}.")
+        channel_names = image_channel_names(images[0])
+        print(f"\n{channel_summary(images[0], channels, channel_names)}.")
     print("Panel presets:")
     names = list(presets)
     for number, name in enumerate(names, start=1):
@@ -602,11 +638,20 @@ def _choose_panel(images: list[Path], interactive: bool, requested: str | None) 
         return yaml.safe_load(presets[name][0].read_text(encoding="utf-8")), f"preset {name}"
     if choice in presets:
         return yaml.safe_load(presets[choice][0].read_text(encoding="utf-8")), f"preset {choice}"
-    print("Enter the channel number for each stain, or leave blank if it is not in your images.")
+    print(
+        "Enter the channel number for each stain, counting from 1 as ZEN and Fiji do (C1, C2, "
+        "...), or leave blank if it is not in your images."
+    )
     answers: dict[str, int | None] = {}
     for marker in MARKERS:
         text = _ask(f"  {MARKER_LABELS[marker]}")
-        answers[marker] = int(text) if text else None
+        if not text:
+            answers[marker] = None
+            continue
+        if not text.isdigit() or int(text) < 1 or (channels and int(text) > channels):
+            limit = f" to {channels}" if channels else " or more"
+            raise ProjectError(f"{MARKER_LABELS[marker]}: channel must be 1{limit}; got {text}")
+        answers[marker] = int(text) - 1  # panel files count from 0
     try:
         return panel_from_channels(answers), "entered interactively"
     except ValueError as exc:

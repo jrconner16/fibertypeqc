@@ -19,7 +19,7 @@ import yaml
 
 from fibertypeqc.config import load_channel_config
 from fibertypeqc.model_resolution import default_model_id, resolve_model_argument
-from fibertypeqc.panel_presets import write_panel
+from fibertypeqc.panel_presets import channel_range, write_panel
 from src.cli import (
     CONFIG_NAME,
     ProjectError,
@@ -302,11 +302,14 @@ STAIN_NAMES = {
 
 
 def channels_beyond(panel: dict, channel_count: int | None) -> list[str]:
-    """Stains the panel puts in a channel the images do not have, e.g. "Type IIb in channel 3"."""
+    """Stains the panel puts in a channel the images do not have, e.g. "Type IIb in channel 4".
+
+    Panel files count from 0; the message counts from 1, as the launcher and microscopes do.
+    """
     if not channel_count:
         return []
     return [
-        f"{STAIN_NAMES.get(name, name)} in channel {channel}"
+        f"{STAIN_NAMES.get(name, name)} in channel {channel + 1}"
         for name, channel in (panel.get("channels") or {}).items()
         if isinstance(channel, int) and channel >= channel_count
     ]
@@ -325,7 +328,7 @@ def panel_problem(project: ProjectFolder) -> str:
         return ""
     return (
         f"The stain panel does not fit these images: it expects {', '.join(beyond)}, but "
-        f"{images[0].name} has {count} channels (numbered 0 to {count - 1}). Use Edit to "
+        f"{images[0].name} has {count} channels ({channel_range(count)}). Use Edit to "
         "choose the right panel or channels."
     )
 

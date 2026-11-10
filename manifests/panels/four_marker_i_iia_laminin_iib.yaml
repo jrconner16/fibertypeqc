@@ -1,4 +1,4 @@
-# Four-marker panel: Type I, IIa, laminin, IIb in channels 0-3. IIx is inferred from absent
+# Four-marker panel: Type I, IIa, laminin, IIb in channels 1-4. IIx is inferred from absent
 # I, IIa, and IIb signal. Works with the default model quad_four_class_rf_v1.
 channels:
   laminin: 2

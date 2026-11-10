@@ -60,14 +60,23 @@ from qtpy.QtWidgets import (
 )
 
 from fibertypeqc.model_resolution import released_models, resolve_model_argument
-from fibertypeqc.panel_presets import MARKER_LABELS, MARKERS, list_presets, panel_from_channels
+from fibertypeqc.panel_presets import (
+    MARKER_LABELS,
+    MARKERS,
+    channel_label,
+    channel_range,
+    list_presets,
+    panel_from_channels,
+)
 from src.cli import (
     CONFIG_NAME,
     REPO_ROOT,
     ProjectError,
     ProjectFolder,
+    channel_summary,
     create_project,
     image_channel_count,
+    image_channel_names,
     image_files,
     load_project_folder,
     sample_rows,
@@ -1016,15 +1025,12 @@ class NewProjectDialog(QDialog):
             self._fill_channels(None)
             return
         channels = image_channel_count(images[0]) if images else None
+        names = image_channel_names(images[0]) if channels else []
         self.images_info.setText(
             f"{len(images)} image(s)"
-            + (
-                f"; {images[0].name} has {channels} channel(s), numbered 0 to {channels - 1}"
-                if channels
-                else ""
-            )
+            + (f"; {channel_summary(images[0], channels, names)}" if channels else "")
         )
-        self._fill_channels(channels)
+        self._fill_channels(channels, names)
         self.channel_count = channels
         if not self._loading and channels and self.panel_combo.currentData() != CUSTOM_PANEL:
             # Prefer a preset that fits the images over the first one in the list.
@@ -1038,13 +1044,15 @@ class NewProjectDialog(QDialog):
                         break
         self._preview_mice()
 
-    def _fill_channels(self, channels: int | None) -> None:
+    def _fill_channels(self, channels: int | None, names: list[str] | None = None) -> None:
+        """Offer Channel 1..N (stored as 0..N-1, as panel files count), named when known."""
+        names = names if names and channels and len(names) == channels else None
         for combo in self.channel_combos.values():
             chosen = combo.currentData()
             combo.clear()
             combo.addItem("not stained", None)
-            for number in range(channels or 8):
-                combo.addItem(f"channel {number}", number)
+            for index in range(channels or 8):
+                combo.addItem(channel_label(index, names), index)
             if chosen is not None and combo.findData(chosen) >= 0:
                 combo.setCurrentIndex(combo.findData(chosen))
 
@@ -1151,8 +1159,8 @@ class NewProjectDialog(QDialog):
         if beyond:
             raise ProjectError(
                 f"This panel expects {', '.join(beyond)}, but the images have "
-                f"{self.channel_count} channels (0 to {self.channel_count - 1}). Choose another "
-                "panel, or Custom to set each channel."
+                f"{self.channel_count} channels ({channel_range(self.channel_count)}). Choose "
+                "another panel, or Custom to set each channel."
             )
         return panel, source
 

@@ -32,9 +32,11 @@ uv run python -m fibertypeqc init myproject/ --images /path/to/images \
 ```
 
 **Panel presets** (`manifests/panels/`): `four_marker_i_iia_laminin_iib` (Type I, IIa, laminin,
-IIb in channels 0–3; IIx inferred) and `three_marker_iib_iia_laminin` (IIb, IIa, laminin; IIx
-inferred). Channels count from 0. If your channel order differs, choose "custom" in the wizard or
-edit `panel.yaml`; details in [panel_schema.md](panel_schema.md).
+IIb in channels 1–4; IIx inferred) and `three_marker_iib_iia_laminin` (IIb, IIa, laminin in
+channels 1–3; IIx inferred). The launcher and `init` count channels from 1, as ZEN and Fiji do
+(C1, C2, …), and show channel names from CZI or OME-TIFF metadata when the file has them.
+`panel.yaml` counts from 0, so Channel 1 is stored as `0`. If your channel order differs, choose
+"custom" in the wizard or edit `panel.yaml`; details in [panel_schema.md](panel_schema.md).
 
 **Model**: a registered model ID, or the path to your model file. With an ID for a model that is
 not in the repository, set `export FIBERTYPEQC_MODEL_ROOT=/folder/containing/the/model`. If no
