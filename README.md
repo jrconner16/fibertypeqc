@@ -60,7 +60,10 @@ uv run python -m fibertypeqc prepare  myproject/   # review project and project 
 uv run python -m fibertypeqc review   myproject/   # guided review in Napari
 uv run python -m fibertypeqc finalize myproject/   # finalized tables and cohort report
 uv run python -m fibertypeqc status   myproject/   # where am I, and what next
+uv run python -m fibertypeqc app      myproject/   # the same steps in a window (experimental)
 ```
+
+<img src="docs/images/launcher_steps.png" width="560" alt="The project launcher: finished steps ticked on a timeline, and the current step, Review, with its buttons">
 
 The [user guide](docs/user_guide.md) covers project setup, outputs, QC checks, models,
 troubleshooting, and single-image commands.

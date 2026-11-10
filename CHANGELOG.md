@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Project launcher** (experimental, #83): `python -m fibertypeqc app [PROJECT]` opens a window
+  that lists the project's steps from its files, the way `status` does, with only the next step
+  active. It creates projects (the `init` questions as a form; the model follows the stain panel,
+  and stains without a released model lead to `model: none`), edits the sample sheet, and runs
+  each step as the same `python -m fibertypeqc` command in a separate process with a live log.
+  Results are identical to the terminal. `evaluate` and `promote` are copy-only for now (#84).
+  `status` output is unchanged; its next-step logic and `init`'s project writing are now shared
+  with the launcher.
 - **Projects without a model** (model builder, roadmap E1/E2): `model: none` in
   `fibertypeqc_project.yaml` segments and measures every fiber without typing it (calls are
   `unclassified`; `run_batch --no-model`, `run_pipeline --no-model`). Optional `classes` (default:

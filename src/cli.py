@@ -18,6 +18,7 @@ Usage::
     python -m fibertypeqc prepare  myproject/
     python -m fibertypeqc review   myproject/
     python -m fibertypeqc finalize myproject/
+    python -m fibertypeqc app      myproject/   (the same steps in a window)
 
 Each step calls the corresponding ``scripts.*`` command with paths taken from the project folder.
 """
@@ -315,6 +316,20 @@ NO_MODEL_NEXT_STEP = {
 }
 
 
+def next_step(project: ProjectFolder, status: dict[str, Any]) -> tuple[str, str]:
+    """The next command (arguments, with ``PROJECT`` for the folder) and why it comes next.
+
+    Shared by ``status`` and the launcher so they always agree.
+    """
+    builder = no_model_next_step(status) if project.no_model else None
+    if builder is not None:
+        return builder
+    step, explanation = (
+        NO_MODEL_NEXT_STEP.get(status["stage"]) if project.no_model else None
+    ) or NEXT_STEP[status["stage"]]
+    return f"{step} PROJECT", explanation
+
+
 def command_status(project: ProjectFolder) -> int:
     status = project_status(project)
     print(f"Project: {project.root}")
@@ -352,16 +367,8 @@ def command_status(project: ProjectFolder) -> int:
             f"Test:    {status['recommended']}: {state}"
             + (f"; test mice used {uses} time(s)" if uses else "")
         )
-    builder = no_model_next_step(status) if project.no_model else None
-    if builder is not None:
-        command, explanation = builder
-        print(f"Next:    python -m fibertypeqc {command.replace('PROJECT', str(project.root))}")
-        print(f"         {explanation}")
-        return 0
-    step, explanation = (
-        NO_MODEL_NEXT_STEP.get(status["stage"]) if project.no_model else None
-    ) or NEXT_STEP[status["stage"]]
-    print(f"Next:    python -m fibertypeqc {step} {project.root}")
+    command, explanation = next_step(project, status)
+    print(f"Next:    python -m fibertypeqc {command.replace('PROJECT', str(project.root))}")
     print(f"         {explanation}")
     return 0
 
@@ -554,11 +561,7 @@ def command_init(args: argparse.Namespace) -> int:
     if not images_text:
         raise ProjectError("--images is required")
     images_dir = Path(images_text).expanduser().resolve()
-    if not images_dir.is_dir():
-        raise ProjectError(f"Images folder not found: {images_dir}")
-    images = sorted(p for p in images_dir.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
-    if not images:
-        raise ProjectError(f"No .czi/.tif/.tiff files found in {images_dir}")
+    images = image_files(images_dir)
     panel, panel_source = _choose_panel(images, interactive, args.panel)
     default_model = default_model_id("fiber_identity") or ""
     model = args.model or (
@@ -570,7 +573,37 @@ def command_init(args: argparse.Namespace) -> int:
         if interactive
         else default_model
     )
-    pattern = re.compile(args.mouse_id_pattern) if args.mouse_id_pattern else None
+    rows = create_project(root, images_dir, panel, panel_source, model, args.mouse_id_pattern)
+    missing_mice = sum(not row["mouse_id"] for row in rows)
+    print(f"\nCreated project in {root}")
+    print(f"  {CONFIG_NAME}: images, panel, sample sheet, model ({model or 'none'})")
+    print(f"  panel.yaml: {panel_source}")
+    print(f"  samples.csv: {len(rows)} image(s)")
+    if missing_mice:
+        print(
+            f"\nBefore 'prepare': open samples.csv and fill in mouse_id for {missing_mice} "
+            "image(s). Rename or add columns (e.g. group, genotype) to define cohort groups."
+        )
+    print(f"\nNext: python -m fibertypeqc run {root}")
+    return 0
+
+
+def image_files(images_dir: Path) -> list[Path]:
+    """The .czi/.tif images in a folder, or a plain-language error."""
+    if not images_dir.is_dir():
+        raise ProjectError(f"Images folder not found: {images_dir}")
+    images = sorted(p for p in images_dir.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
+    if not images:
+        raise ProjectError(f"No .czi/.tif/.tiff files found in {images_dir}")
+    return images
+
+
+def sample_rows(images: list[Path], mouse_id_pattern: str | None) -> list[dict[str, str]]:
+    """Sample-sheet rows; the pattern's first group (or whole match) fills mouse_id."""
+    try:
+        pattern = re.compile(mouse_id_pattern) if mouse_id_pattern else None
+    except re.error as exc:
+        raise ProjectError(f"Mouse ID pattern is not a valid regular expression: {exc}") from exc
     rows = []
     for image in images:
         match = pattern.search(image.stem) if pattern else None
@@ -578,12 +611,27 @@ def command_init(args: argparse.Namespace) -> int:
         rows.append(
             {
                 "image_id": image.stem,
-                "mouse_id": mouse_id,
+                "mouse_id": mouse_id or "",
                 "raw_image_path": str(image),
                 "group": "",
             }
         )
+    return rows
 
+
+def create_project(
+    root: Path,
+    images_dir: Path,
+    panel: dict,
+    panel_source: str,
+    model: str | None,
+    mouse_id_pattern: str | None = None,
+) -> list[dict[str, str]]:
+    """Write a new project folder (config, panel, sample sheet); shared by init and the launcher."""
+    config_path = root / CONFIG_NAME
+    if config_path.exists():
+        raise ProjectError(f"{config_path} already exists; this folder is already a project.")
+    rows = sample_rows(image_files(images_dir), mouse_id_pattern)
     root.mkdir(parents=True, exist_ok=True)
     write_panel(root / "panel.yaml", panel, f"Panel for this project ({panel_source}).")
     pd.DataFrame(rows).to_csv(root / "samples.csv", index=False)
@@ -597,18 +645,7 @@ def command_init(args: argparse.Namespace) -> int:
         "display_downsample": 2,
     }
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
-    missing_mice = sum(not row["mouse_id"] for row in rows)
-    print(f"\nCreated project in {root}")
-    print(f"  {CONFIG_NAME}: images, panel, sample sheet, model ({model or 'none'})")
-    print(f"  panel.yaml: {panel_source}")
-    print(f"  samples.csv: {len(rows)} image(s)")
-    if missing_mice:
-        print(
-            f"\nBefore 'prepare': open samples.csv and fill in mouse_id for {missing_mice} "
-            "image(s). Rename or add columns (e.g. group, genotype) to define cohort groups."
-        )
-    print(f"\nNext: python -m fibertypeqc run {root}")
-    return 0
+    return rows
 
 
 def check_sample_sheet(project: ProjectFolder) -> None:
@@ -753,6 +790,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Regular expression applied to each file name; its first group fills mouse_id",
     )
     init.add_argument("--yes", action="store_true", help="Never prompt; fail if input is missing")
+    app = steps.add_parser(
+        "app",
+        help="Open the project launcher window (experimental)",
+        description=(
+            "A window that shows this project's steps one at a time and runs them. It runs the "
+            "same commands as the terminal, on this computer."
+        ),
+    )
+    app.add_argument("project", type=Path, nargs="?", help="Project folder to open (optional)")
     return parser
 
 
@@ -764,6 +810,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.step == "init":
             return command_init(args)
+        if args.step == "app":
+            from src.launcher import main as launch
+
+            return launch(args.project)
         project = load_project_folder(args.project)
         if args.step == "status":
             return command_status(project)
