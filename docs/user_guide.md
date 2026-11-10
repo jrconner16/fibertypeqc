@@ -42,6 +42,33 @@ channels 1–3; IIx inferred). The launcher and `init` count channels from 1, as
 not in the repository, set `export FIBERTYPEQC_MODEL_ROOT=/folder/containing/the/model`. If no
 model fits your panel, use `model: none` ([Panels without a model](#panels-without-a-model)).
 
+### Images in subfolders
+
+By default only files directly inside `--images` are used. When images sit in subfolders (for
+example `genotype/treatment/mouse/`), choose them with patterns relative to the images folder:
+`**/` means any number of subfolders, and `*` and `?` stay within one file or folder name.
+Matching ignores case, and hidden files (such as macOS `._` files) and other FiberTypeQC project
+folders are skipped. `init` asks for patterns when it finds more images in subfolders than at the
+top, or you can give them as options (each may be repeated):
+
+```bash
+uv run python -m fibertypeqc init myproject/ --images /path/to/study \
+  --include '**/*.czi' --exclude '**/Processed/**' --exclude '**/Split Scenes/**' \
+  --panel four_marker_i_iia_laminin_iib --yes
+```
+
+The patterns are saved as `include` and `exclude` in `fibertypeqc_project.yaml`. Use either the
+original CZIs (multi-scene CZIs are split into sections automatically) or processed TIFFs of the
+same sections, not both: the same fibers would be counted more than once.
+
+With patterns, the sample sheet is the image list. It has one row per matching file, and image IDs
+get their parent folder names when two files share a name (`m01/sections.czi` becomes
+`m01_sections`). A `use` column (`yes` or `no`) says which rows `run` processes, and rows marked
+`no` are also left out of `prepare` and need no mouse ID. `run` writes the rows in use to
+`batch_inputs.csv` in the project folder and passes it to `run_batch --input-manifest`. Projects
+without patterns and without a `use` column work as before. The launcher form does not set
+patterns yet (#91), but Edit set-up keeps them.
+
 ## End-to-end workflow
 
 Each step reads the previous step's files and writes new ones; predictions are never modified.

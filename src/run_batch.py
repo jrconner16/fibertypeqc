@@ -277,7 +277,8 @@ def _load_input_manifest(
     *,
     input_root: Path | None = None,
 ) -> list[tuple[str, Path]]:
-    df = pd.read_csv(path)
+    # As text, so IDs such as "007" are not read as numbers.
+    df = pd.read_csv(path, dtype=str, keep_default_na=False)
     if "image_id" not in df.columns:
         raise ValueError(f"{path} missing column: image_id")
     path_columns = {"input_path", "input_relpath"} & set(df.columns)

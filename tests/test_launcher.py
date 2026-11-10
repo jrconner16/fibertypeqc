@@ -607,6 +607,34 @@ def test_new_project_form_clears_old_errors_and_explains_the_model_choice(qapp, 
     )
 
 
+def test_editing_setup_keeps_include_patterns_and_use_values(tmp_path):
+    from tests.test_cli import _nested_study
+
+    study = _nested_study(tmp_path)
+    root = tmp_path / "proj"
+    cli.main(
+        ["init", str(root), "--images", str(study), "--panel", "three_marker_iib_iia_laminin",
+         "--model", "none", "--include", "**/*.tif", "--exclude", "**/Processed/**",
+         "--exclude", "**/Split Scenes/**", "--yes"]
+    )  # fmt: skip
+    sheet = pd.read_csv(root / "samples.csv", dtype=str, keep_default_na=False)
+    sheet["mouse_id"] = ["m01", "m02", "m03"]
+    sheet.loc[2, "use"] = "no"
+    sheet.to_csv(root / "samples.csv", index=False)
+    project = cli.load_project_folder(root)
+    assert ws.panel_problem(project) == ""  # first matching image has three channels
+
+    panel = yaml.safe_load((root / "panel.yaml").read_text())
+    ws.update_setup(project, study, panel, "kept", "none")
+
+    project = cli.load_project_folder(root)
+    assert project.include == ("**/*.tif",)
+    after = pd.read_csv(root / "samples.csv", dtype=str, keep_default_na=False)
+    assert after["image_id"].tolist() == ["m01_sections", "m02_sections", "other"]
+    assert after["use"].tolist() == ["yes", "yes", "no"]
+    assert after["mouse_id"].tolist() == ["m01", "m02", "m03"]
+
+
 def test_custom_channels_are_shown_from_1_and_stored_from_0(qapp, tmp_path):
     from src.launcher import NewProjectDialog
 

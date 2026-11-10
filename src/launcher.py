@@ -81,6 +81,7 @@ from src.cli import (
     load_project_folder,
     sample_rows,
 )
+from src.make_review_project import used_rows
 from src.workflow_steps import (
     ATTENTION,
     CURRENT,
@@ -1010,7 +1011,11 @@ class NewProjectDialog(QDialog):
 
     def _images(self) -> list[Path]:
         text = self.images_edit.text().strip()
-        return image_files(Path(text).expanduser().resolve()) if text else []
+        if not text:
+            return []
+        # Editing keeps the project's include/exclude patterns (a new project uses the top folder).
+        patterns = (self.project.include, self.project.exclude) if self.project else ((), ())
+        return image_files(Path(text).expanduser().resolve(), *patterns)
 
     def _images_changed(self) -> None:
         try:
@@ -1323,6 +1328,12 @@ class SamplesDialog(QDialog):
 
     def _validate(self) -> bool:
         sheet = self._read()
+        try:
+            sheet = used_rows(sheet)  # rows marked use = no need no mouse ID
+        except ValueError as exc:
+            self.message.setText(str(exc))
+            self.message.setStyleSheet(f"color: {color('warning')};")
+            return False
         blank = int(sheet["mouse_id"].eq("").sum()) if "mouse_id" in sheet else len(sheet)
         if blank:
             self.message.setText(

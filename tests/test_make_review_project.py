@@ -123,3 +123,36 @@ def test_rejects_sample_sheet_without_required_columns(tmp_path, capsys):
         == 2
     )
     assert "missing columns: mouse_id, raw_image_path" in capsys.readouterr().err
+
+
+def test_rows_marked_not_used_are_left_out_and_use_is_not_a_condition(tmp_path, capsys):
+    batch, sheet = _batch(tmp_path), _sheet(tmp_path)
+    table = pd.read_csv(sheet, dtype=str, keep_default_na=False)
+    table["use"] = ["yes", "no", "no"]
+    table.to_csv(sheet, index=False)
+    panel = tmp_path / "panel.yaml"
+    panel.write_text("channels: {}\n")
+    project_dir = tmp_path / "project"
+
+    arguments = ["--batch-dir", str(batch), "--sample-sheet", str(sheet)]
+    arguments += ["--panel-config", str(panel), "--project-dir", str(project_dir)]
+    assert main(arguments) == 0
+
+    project = yaml.safe_load((project_dir / "project.yaml").read_text())
+    assert [image["image_id"] for image in project["images"]] == ["plain"]
+    assert project["images"][0]["condition"] == {"genotype": "wt"}
+    assert "skipped slide_section-01: not in the sample sheet, or marked use = no" in (
+        capsys.readouterr().out
+    )
+
+
+def test_used_rows_refuses_unclear_use_values():
+    import pytest
+
+    from src.make_review_project import used_rows
+
+    sheet = pd.DataFrame({"image_id": ["a", "b", "c"], "use": ["Yes", " n", "maybe"]})
+    with pytest.raises(ValueError, match="yes or no for 1 image"):
+        used_rows(sheet)
+    assert used_rows(sheet.iloc[:2])["image_id"].tolist() == ["a"]
+    assert len(used_rows(sheet.drop(columns="use"))) == 3

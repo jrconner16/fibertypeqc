@@ -412,3 +412,10 @@ def test_failed_image_still_logs_wall_time(tmp_path, monkeypatch, caplog):
 
     assert result["status"] == "failed"
     assert "timing: wall 3.0s (pipeline runtime not reported)" in caplog.text
+
+
+def test_load_input_manifest_keeps_numeric_looking_ids_as_written(tmp_path):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("image_id,input_path\n007,/tmp/007.czi\n", encoding="utf-8")
+
+    assert _load_input_manifest(manifest) == [("007", Path("/tmp/007.czi"))]

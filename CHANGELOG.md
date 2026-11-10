@@ -4,6 +4,14 @@
 
 ### Added
 
+- **Images in subfolders** (#91, part 1): `init --include PATTERN --exclude PATTERN` (repeatable,
+  e.g. `'**/*.czi'`, `'**/Processed/**'`) finds images at any depth, and the patterns are saved
+  as `include`/`exclude` in `fibertypeqc_project.yaml`. Interactive `init` offers patterns when
+  most images are in subfolders. Image IDs that would clash get their parent folder names. The
+  sample sheet gains a `use` column (`yes`/`no`). For such projects `run` processes exactly the
+  `use = yes` rows (`batch_inputs.csv` passed to `run_batch --input-manifest`), and `prepare`
+  leaves out rows marked `no`. Projects without patterns or a `use` column run as before.
+  `run_batch --input-manifest` now reads image IDs as text, so `007` stays `007`.
 - **Nuclei in results** (experimental, #82): with a DAPI channel, nuclei are named by position
   (`central`, `peripheral`, `interstitial`, `ambiguous`; the earlier `central_interior`,
   `peripheral_associated`/`boundary_associated`, and `unassigned_or_interstitial` are still read).
