@@ -3,6 +3,10 @@
 Ready-made panels are in `manifests/panels/`; `python -m fibertypeqc init` writes a panel file from
 a preset or from the channel you give for each stain.
 
+**Channel numbers count from 0 in panel files** (`laminin: 2` is the third channel). The launcher
+and `init` show and ask for channels counting from 1, as ZEN and Fiji do (C1, C2, …), and convert
+at that boundary: choosing "Channel 1" writes `0`. Existing panel files are read unchanged.
+
 FiberTypeQC supports a panel-aware channel schema alongside the frozen `type1/type2` baseline.
 
 This document defines the config contract for `--panel-config` (preferred) and
