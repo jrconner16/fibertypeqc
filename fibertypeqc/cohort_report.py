@@ -188,13 +188,17 @@ def _class_notes(classes: list[str], labels: dict[str, str]) -> list[str]:
     ]
 
 
+# Identifiers are text: read as numbers, mouse "007" becomes 7 and mouse "1" is shown as "1.0".
+ID_DTYPES = {"image_id": str, "mouse_id": str, "section_id": str}
+
+
 def build_cohort_report(results_dir: Path) -> str:
     manifest = json.loads((results_dir / "results_manifest.json").read_text())
     classes: list[str] = manifest["fiber_classes"]
     # A built model's panel-specific names, e.g. negative -> "I⁻/IIa⁻" (results manifest).
     labels = {**CLASS_LABELS, **manifest.get("class_labels", {})}
-    mouse = pd.read_csv(results_dir / "mouse_summary.csv")
-    image = pd.read_csv(results_dir / "image_summary.csv")
+    mouse = pd.read_csv(results_dir / "mouse_summary.csv", dtype=ID_DTYPES)
+    image = pd.read_csv(results_dir / "image_summary.csv", dtype=ID_DTYPES)
     finalization = manifest["inputs"].get("finalization_manifest") or {}
     meta = {
         "Project": finalization.get("project_id", "–"),
@@ -262,7 +266,7 @@ def build_cohort_report(results_dir: Path) -> str:
         ]
     roi_path = results_dir / "roi_summary.csv"
     if roi_path.is_file():
-        roi = pd.read_csv(roi_path)
+        roi = pd.read_csv(roi_path, dtype=ID_DTYPES)
         sections += [
             "<h2>Analysis ROIs</h2>",
             _table(

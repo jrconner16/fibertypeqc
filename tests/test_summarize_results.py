@@ -198,3 +198,25 @@ def test_a_built_models_negative_class_is_named_for_its_panel(tmp_path: Path):
     # A project without panel-specific names keeps the manifest as before.
     project.write_text(yaml.safe_dump({"images": [{"image_id": "a1"}]}))
     assert "class_labels" not in write_results(final_dir, tmp_path / "r2", project)
+
+
+def test_numeric_looking_ids_stay_as_written(tmp_path: Path):
+    final_dir = tmp_path / "final"
+    final_dir.mkdir()
+    pd.concat(
+        [
+            _fibers("001", "007", [("i", "i", "predicted", "", "")]),
+            _fibers("002", "7", [("iia", "iia", "reviewed", "", "")]),
+            _fibers("003", "1", [("iib", "iib", "predicted", "", "")]),
+        ]
+    ).to_csv(final_dir / "final_fiber_table.csv", index=False)
+
+    write_results(final_dir, tmp_path / "r", None)
+
+    mouse = pd.read_csv(tmp_path / "r" / "mouse_summary.csv", dtype=str)
+    image = pd.read_csv(tmp_path / "r" / "image_summary.csv", dtype=str)
+    assert sorted(mouse["mouse_id"]) == ["007", "1", "7"]  # 007 and 7 are different mice
+    assert sorted(image["image_id"]) == ["001", "002", "003"]
+    report = build_cohort_report(tmp_path / "r")
+    assert ">007<" in report and ">1<" in report
+    assert ">1.0<" not in report and ">7.0<" not in report

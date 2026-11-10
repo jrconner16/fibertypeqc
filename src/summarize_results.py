@@ -29,6 +29,7 @@ import pandas as pd
 import yaml
 
 from fibertypeqc.artifacts import file_sha256, git_commit
+from fibertypeqc.cohort_report import ID_DTYPES
 from src.fiber_type_labels import normalize_review_label
 
 RESULTS_SCHEMA_VERSION = "fibertypeqc.results.v1"
@@ -224,7 +225,7 @@ def load_class_labels(project_path: Path) -> dict[str, str]:
 def write_results(final_dir: Path, output_dir: Path, project_path: Path | None) -> dict[str, Any]:
     final_table_path = final_dir / "final_fiber_table.csv"
     final = pd.read_csv(
-        final_table_path, keep_default_na=False, na_values=[""], low_memory=False
+        final_table_path, keep_default_na=False, na_values=[""], low_memory=False, dtype=ID_DTYPES
     )
     conditions = load_conditions(project_path) if project_path is not None else None
     class_labels = load_class_labels(project_path) if project_path is not None else {}
