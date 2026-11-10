@@ -848,6 +848,7 @@ class NewProjectDialog(QDialog):
         self.created: Path | None = None
         self.model_file = ""
         self.channel_count: int | None = None
+        self.suggested: str | None = None
         self._loading = False
         form = QFormLayout()
         # The macOS default keeps fields at their size hint, which clips wrapped help text.
@@ -926,6 +927,10 @@ class NewProjectDialog(QDialog):
         self._panel_changed()
         if project is not None:
             self._load(project)
+        for edit in (self.parent_edit, self.name_edit, self.images_edit, self.pattern_edit):
+            edit.textChanged.connect(lambda _text: self._clear_error())
+        for combo in (self.panel_combo, self.model_combo, *self.channel_combos.values()):
+            combo.currentIndexChanged.connect(lambda _index: self._clear_error())
         self.resize(620, 0)
 
     def _load(self, project: ProjectFolder) -> None:
@@ -956,6 +961,10 @@ class NewProjectDialog(QDialog):
             self.model_combo.setItemText(index, f"File: {Path(project.model).name}")
             self.model_combo.setCurrentIndex(index)
         self._loading = False
+        try:
+            self.suggested = matching_model(self.panel()[0], self.models)
+        except ProjectError:
+            self.suggested = None
         self._check_model()
 
     def _check_model(self) -> None:
@@ -974,6 +983,7 @@ class NewProjectDialog(QDialog):
                 )
         self.model_warning.setText(problem)
         self.model_warning.setVisible(bool(problem))
+        self._describe_model()
         self._fit_text()
 
     def _browse_parent(self) -> None:
@@ -1049,10 +1059,19 @@ class NewProjectDialog(QDialog):
 
     def _fit_text(self) -> None:
         """Give wrapped help text the height it needs (a form layout does not ask for it)."""
-        for label in (self.panel_info, self.model_info, self.model_warning, self.error_label):
-            width = label.width() if label.isVisible() else self.width() - 200
-            label.setMinimumHeight(label.heightForWidth(max(width, 300)) if label.text() else 0)
-        self.adjustSize()
+        labels = (self.panel_info, self.model_info, self.model_warning, self.error_label)
+        for _pass in range(2):  # the second pass uses the widths the first one produced
+            for label in labels:
+                label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+                width = label.width() if label.width() > 150 else max(self.width() - 260, 300)
+                label.setMinimumHeight(label.heightForWidth(width) if label.text() else 0)
+            self.adjustSize()
+
+    def _clear_error(self) -> None:
+        """An error describes the last attempt; any change makes it out of date."""
+        if self.error_label.text():
+            self.error_label.clear()
+            self._fit_text()
 
     def resizeEvent(self, event) -> None:  # noqa: N802 (Qt API)
         super().resizeEvent(event)
@@ -1068,15 +1087,27 @@ class NewProjectDialog(QDialog):
             panel, _source = self.panel()
         except ProjectError:
             panel = {"channels": {}}
-        model_id = matching_model(panel, self.models)
-        self.model_combo.setCurrentIndex(self.model_combo.findData(model_id or NO_MODEL))
+        self.suggested = matching_model(panel, self.models)
+        self.model_combo.setCurrentIndex(self.model_combo.findData(self.suggested or NO_MODEL))
         self._check_model()  # also when the suggestion was already selected (no change signal)
-        self.model_info.setText(
-            f"{model_id} is made for these stains."
-            if model_id
-            else "No released model is made for these stains, so FiberTypeQC will help you "
-            "build one: you label a sample of fibers, and it trains and checks a model for you."
-        )
+
+    def _describe_model(self) -> None:
+        """Say how the chosen model relates to the one made for these stains."""
+        choice, suggested = self.model_combo.currentData(), self.suggested
+        if suggested and choice == suggested:
+            text = f"{suggested} is made for these stains."
+        elif choice == NO_MODEL:
+            text = (
+                f"{suggested} is made for these stains, but you chose to build your own model: "
+                if suggested
+                else "No released model is made for these stains, so FiberTypeQC will help you "
+                "build one: "
+            ) + "you label a sample of fibers, and it trains and checks a model for you."
+        elif suggested:
+            text = f"{suggested} is made for these stains; check that your choice fits them."
+        else:
+            text = "No released model is made for these stains; check that your choice fits them."
+        self.model_info.setText(text)
 
     def _model_chosen(self) -> None:
         if self.model_combo.currentData() != MODEL_FILE:

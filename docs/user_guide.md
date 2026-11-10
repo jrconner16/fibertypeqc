@@ -106,6 +106,10 @@ review and finalize. Each button runs the same `python -m fibertypeqc` command i
 process on this computer, with its output in the log, so results are identical to the terminal.
 **Copy command** gives the command for a terminal or a batch job.
 
+<img src="images/launcher_steps.png" width="560" alt="The launcher on the demo project: four finished steps and the current step, Review">
+
+<img src="images/launcher_new_project.png" width="560" alt="The New project form: images folder, a stain panel that fits the images, and the model made for those stains">
+
 - **New project** asks what `init` asks. The model follows the stain panel: a released model made
   for exactly those stains, otherwise "None", which leads into building a model.
 - **Samples** edits `samples.csv` (mouse IDs and group columns).

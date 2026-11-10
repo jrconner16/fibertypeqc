@@ -587,3 +587,21 @@ def test_new_project_form_picks_a_panel_that_fits_and_refuses_one_that_does_not(
     dialog.create()
     assert "expects Type IIb in channel 3" in dialog.error_label.text()
     assert dialog.created is None and not (tmp_path / "p").exists()
+
+
+def test_new_project_form_clears_old_errors_and_explains_the_model_choice(qapp, tmp_path):
+    from src.launcher import NO_MODEL, NewProjectDialog
+
+    dialog = NewProjectDialog()
+    dialog.create()
+    assert dialog.error_label.text() == "Give the project a name."
+    dialog.name_edit.setText("p")  # any change makes the old error out of date
+    assert dialog.error_label.text() == ""
+
+    dialog.images_edit.setText(str(_tif_folder(tmp_path)))
+    dialog._images_changed()
+    assert dialog.model_info.text() == "ta_three_class_logistic_v1 is made for these stains."
+    dialog.model_combo.setCurrentIndex(dialog.model_combo.findData(NO_MODEL))
+    assert dialog.model_info.text().startswith(
+        "ta_three_class_logistic_v1 is made for these stains, but you chose to build your own"
+    )
