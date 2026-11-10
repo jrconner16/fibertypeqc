@@ -10,15 +10,27 @@ desktop session on a suitable node and run steps here, or copy a step's command 
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
+import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
 import yaml
-from qtpy.QtCore import QProcess, QProcessEnvironment, Qt, QUrl
-from qtpy.QtGui import QDesktopServices, QFontDatabase, QPalette, QTextCursor
+from qtpy.QtCore import QPointF, QProcess, QProcessEnvironment, QRectF, Qt, QUrl
+from qtpy.QtGui import (
+    QColor,
+    QDesktopServices,
+    QFontDatabase,
+    QPainter,
+    QPalette,
+    QPen,
+    QPolygonF,
+    QTextCursor,
+)
 from qtpy.QtWidgets import (
     QApplication,
     QComboBox,
@@ -36,6 +48,7 @@ from qtpy.QtWidgets import (
     QMenu,
     QMessageBox,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -78,29 +91,107 @@ from src.workflow_steps import (
 )
 
 COPY_PREFIX = "uv run --frozen python -m fibertypeqc"
-MARKS = {DONE: "✓", CURRENT: "●", UPCOMING: "○", ATTENTION: "!", SKIPPED: "–"}
-MARK_COLORS = {DONE: "done", CURRENT: "current", ATTENTION: "warning"}
-# (light theme, dark theme); Qt follows the system appearance, so pick by the window color.
-COLORS = {
-    "done": ("#2e7d32", "#81c784"),
-    "current": ("#1565c0", "#64b5f6"),
-    "warning": ("#e65100", "#ffb74d"),
-    "error": ("#c62828", "#ef9a9a"),
-}
+# Colors the launcher sets itself, so text and backgrounds always match. (light, dark)
+THEMES = {
+    False: {
+        "window": "#f5f6f8", "card": "#ffffff", "text": "#1f2328", "muted": "#68707d",
+        "border": "#d9dde3", "rail": "#cfd4dc", "accent": "#2563eb", "accent_text": "#ffffff",
+        "accent_soft": "#edf3ff", "done": "#16a34a", "warning": "#d97706", "error": "#dc2626",
+        "log_bg": "#111827", "log_text": "#e5e7eb",
+    },
+    True: {
+        "window": "#1b1d21", "card": "#25282e", "text": "#e8eaed", "muted": "#9aa1ab",
+        "border": "#3a3f47", "rail": "#4a5059", "accent": "#5b8cff", "accent_text": "#ffffff",
+        "accent_soft": "#1f2940", "done": "#3fbf6a", "warning": "#f0a43a", "error": "#ff6b6b",
+        "log_bg": "#0f1114", "log_text": "#d4d7dc",
+    },
+}  # fmt: skip
 
 
+@lru_cache(maxsize=1)
 def _dark() -> bool:
+    """Whether to use the dark colors. FIBERTYPEQC_THEME=light|dark overrides the system.
+
+    On macOS the setting is read from the system: Qt 5 can report the light palette while the
+    window is drawn dark.
+    """
+    chosen = os.environ.get("FIBERTYPEQC_THEME", "").lower()
+    if chosen in ("light", "dark"):
+        return chosen == "dark"
+    if sys.platform == "darwin":
+        try:
+            style = subprocess.run(
+                ["defaults", "read", "-g", "AppleInterfaceStyle"],
+                capture_output=True, text=True, timeout=2, check=False,
+            ).stdout  # fmt: skip
+        except (OSError, subprocess.SubprocessError):
+            style = ""
+        return style.strip().lower() == "dark"
     return QApplication.palette().color(QPalette.Window).lightness() < 128
 
 
 def color(name: str) -> str:
-    return COLORS[name][_dark()]
+    return THEMES[_dark()][name]
+
+
+def stylesheet() -> str:
+    t = THEMES[_dark()]
+    return f"""
+    QWidget#launcher {{ background: {t["window"]}; color: {t["text"]}; font-size: 13pt; }}
+    QWidget#launcher QLabel {{ color: {t["text"]}; background: transparent; }}
+    QWidget#launcher QLabel[role="muted"] {{ color: {t["muted"]}; font-size: 12pt; }}
+    QWidget#launcher QLabel[role="eyebrow"] {{ color: {t["accent"]}; font-size: 9pt;
+        font-weight: 700; }}
+    QWidget#launcher QLabel[role="title"] {{ font-size: 19pt; font-weight: 600; }}
+    QWidget#launcher QLabel[role="step"] {{ font-size: 13pt; font-weight: 500; }}
+    QWidget#launcher QLabel[role="step-current"] {{ font-size: 14pt; font-weight: 600; }}
+    QWidget#launcher QLabel[role="step-upcoming"] {{ font-size: 13pt; color: {t["muted"]}; }}
+    QLabel#banner {{ background: {t["card"]}; border: 1px solid {t["border"]};
+        border-radius: 8px; padding: 8px 10px; }}
+    QFrame#currentStep {{ background: {t["accent_soft"]}; border: 1px solid {t["accent"]};
+        border-radius: 10px; }}
+    QFrame#step {{ background: transparent; border: none; }}
+    QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
+    QWidget#launcher QPushButton, QWidget#launcher QToolButton {{ background: {t["card"]};
+        color: {t["text"]}; border: 1px solid {t["border"]}; border-radius: 6px;
+        padding: 5px 12px; }}
+    QWidget#launcher QPushButton:hover, QWidget#launcher QToolButton:hover {{
+        border-color: {t["accent"]}; }}
+    QWidget#launcher QPushButton:disabled {{ color: {t["muted"]}; background: {t["window"]}; }}
+    QWidget#launcher QPushButton[role="primary"] {{ background: {t["accent"]};
+        color: {t["accent_text"]}; border: 1px solid {t["accent"]}; font-weight: 600;
+        padding: 6px 16px; }}
+    QWidget#launcher QPushButton[role="primary"]:hover {{ border-color: {t["text"]}; }}
+    QWidget#launcher QPushButton[role="primary"]:disabled {{ background: {t["border"]};
+        color: {t["muted"]}; border-color: {t["border"]}; }}
+    QWidget#launcher QPushButton[role="link"] {{ background: transparent; border: none;
+        color: {t["accent"]}; padding: 5px 6px; }}
+    QScrollBar:vertical {{ background: transparent; width: 8px; margin: 0; }}
+    QScrollBar::handle:vertical {{ background: {t["rail"]}; border-radius: 4px;
+        min-height: 24px; }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
+    QWidget#launcher QLineEdit {{ background: {t["card"]}; color: {t["text"]};
+        border: 1px solid {t["border"]}; border-radius: 6px; padding: 4px 6px; }}
+    QPlainTextEdit#log {{ background: {t["log_bg"]}; color: {t["log_text"]}; border: none;
+        border-radius: 8px; padding: 6px; }}
+    QProgressBar {{ background: {t["border"]}; border: none; border-radius: 2px; }}
+    QProgressBar::chunk {{ background: {t["accent"]}; border-radius: 2px; }}
+    QMenu {{ background: {t["card"]}; color: {t["text"]}; border: 1px solid {t["border"]}; }}
+    QMenu::item {{ padding: 5px 18px; }}
+    QMenu::item:selected {{ background: {t["accent_soft"]}; }}
+    QMenu::item:disabled {{ color: {t["muted"]}; }}
+    """
+
+
+def _role(widget: QWidget, role: str) -> QWidget:
+    widget.setProperty("role", role)
+    return widget
 
 
 def _mute(widget: QWidget) -> QWidget:
-    """Show secondary text faded. Fading keeps the theme's own text color, which matters on
-    macOS: in dark mode Qt can report the light palette while drawing dark, so a grey computed
-    from the palette may be unreadable."""
+    """Faded secondary text in the dialogs, which keep the system look. Fading keeps the
+    theme's own text color (see ``_dark`` on why a computed grey can be unreadable)."""
     effect = QGraphicsOpacityEffect(widget)
     effect.setOpacity(0.6)
     widget.setGraphicsEffect(effect)
@@ -148,10 +239,66 @@ def copy_text(arguments: list[str]) -> str:
 # --- step list ------------------------------------------------------------------------------
 
 
-class StepRow(QFrame):
-    """One step: a mark, the title and summary, and, for the current step, its actions."""
+class StepMarker(QWidget):
+    """The step's place on the timeline: a numbered circle, joined to its neighbours."""
 
-    def __init__(self, window: LauncherWindow, step: Step) -> None:
+    def __init__(
+        self, number: int, state: str, first: bool, last: bool, after_done: bool = False
+    ) -> None:
+        super().__init__()
+        self.number, self.state, self.first, self.last = number, state, first, last
+        self.after_done = after_done  # the line in is green only after a finished step
+        self.setFixedWidth(34)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+
+    def paintEvent(self, _event) -> None:  # noqa: N802 (Qt API)
+        t = THEMES[_dark()]
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        cx, cy, r = self.width() / 2, 24.0, 11.0
+        if not self.first:
+            painter.setPen(QPen(QColor(t["done"] if self.after_done else t["rail"]), 2))
+            painter.drawLine(QPointF(cx, 0), QPointF(cx, cy - r))
+        if not self.last:
+            painter.setPen(QPen(QColor(t["done"] if self.state == DONE else t["rail"]), 2))
+            painter.drawLine(QPointF(cx, cy + r), QPointF(cx, self.height()))
+        fill = {DONE: "done", CURRENT: "accent", ATTENTION: "warning"}.get(self.state)
+        if fill:
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(t[fill]))
+        else:
+            painter.setPen(QPen(QColor(t["rail"]), 1.5))
+            painter.setBrush(QColor(t["window"]))
+        painter.drawEllipse(QPointF(cx, cy), r, r)
+        if self.state == DONE:
+            painter.setPen(QPen(QColor("#ffffff"), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            painter.drawPolyline(
+                QPolygonF(
+                    [QPointF(cx - 4.5, cy), QPointF(cx - 1.5, cy + 3.5), QPointF(cx + 5, cy - 4)]
+                )
+            )
+            return
+        text = {ATTENTION: "!", SKIPPED: "–"}.get(self.state, str(self.number))
+        font = painter.font()
+        font.setBold(True)
+        font.setPixelSize(11)
+        painter.setFont(font)
+        painter.setPen(QColor("#ffffff" if fill else t["muted"]))
+        painter.drawText(QRectF(cx - r, cy - r, 2 * r, 2 * r), Qt.AlignCenter, text)
+
+
+class StepRow(QWidget):
+    """One step: its timeline marker, title and summary, and, for the current step, actions."""
+
+    def __init__(
+        self,
+        window: LauncherWindow,
+        step: Step,
+        number: int = 1,
+        first: bool = True,
+        last: bool = True,
+        after_done: bool = False,
+    ) -> None:
         super().__init__()
         self.step = step
         self.action_button: QPushButton | None = None
@@ -160,27 +307,34 @@ class StepRow(QFrame):
         self.finalize_button: QPushButton | None = None
         self.again_allowed = True
         self.reviewer_edit: QLineEdit | None = None
-        self.setObjectName("currentStep" if step.state == CURRENT else "step")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 6, 10, 6)
+        current = step.state == CURRENT
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(6)
+        outer.addWidget(StepMarker(number, step.state, first, last, after_done))
+        holder = QVBoxLayout()
+        holder.setContentsMargins(0, 4 if current else 0, 0, 4 if current else 0)
+        card = QFrame()
+        card.setObjectName("currentStep" if current else "step")
+        holder.addWidget(card)
+        outer.addLayout(holder, 1)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 10 if current else 12, 12, 12 if current else 10)
+        layout.setSpacing(6)
 
         header = QHBoxLayout()
-        mark = QLabel(MARKS[step.state])
-        mark.setFixedWidth(18)
-        if step.state in MARK_COLORS:
-            mark.setStyleSheet(f"color: {color(MARK_COLORS[step.state])}; font-weight: bold;")
-        title = QLabel(step.title)
-        title.setStyleSheet("font-weight: bold;" if step.state == CURRENT else "")
-        header.addWidget(mark)
+        title = _role(
+            QLabel(step.title),
+            "step-current" if current else ("step-upcoming" if step.state == UPCOMING else "step"),
+        )
         header.addWidget(title)
-        if step.summary and step.state != CURRENT:
-            summary = QLabel(step.summary)
-            _mute(summary)
+        if step.summary and not current:
+            summary = _role(QLabel(step.summary), "muted")
             summary.setWordWrap(True)
             header.addWidget(summary, 1)
         else:
             header.addStretch(1)
-        if step.key == "samples" and step.state != CURRENT:
+        if step.key == "samples" and not current:
             self.again_button = QPushButton("Edit")
             self.again_button.clicked.connect(window.edit_samples)
         elif step.key == "setup" and step.fix != "panel":
@@ -198,17 +352,14 @@ class StepRow(QFrame):
         if self.again_button is not None:
             header.addWidget(self.again_button)
         layout.addLayout(header)
-
-        if step.state == CURRENT:
+        if current:
             self._add_current(window, layout)
-        if step.state == UPCOMING:
-            for label in (title, mark):
-                _mute(label)
 
     def _add_current(self, window: LauncherWindow, layout: QVBoxLayout) -> None:
         step = self.step
         body = QVBoxLayout()
-        body.setContentsMargins(28, 0, 0, 4)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(8)
         if step.summary:
             body.addWidget(_wrapped(step.summary))
         stage = window.workflow.status["stage"] if window.workflow else ""
@@ -228,12 +379,11 @@ class StepRow(QFrame):
             self.reviewer_edit = QLineEdit(window.project.reviewer if window.project else "")
             self.reviewer_edit.setPlaceholderText("Your name")
             self.reviewer_edit.setMaximumWidth(180)
-            actions.addWidget(QLabel("Reviewer:"))
+            actions.addWidget(QLabel("Reviewer"))
             actions.addWidget(self.reviewer_edit)
         if step.key in ACTIONS and step.key not in COPY_ONLY:
             text = "Edit set-up…" if step.fix == "panel" else ACTIONS[step.key]
-            self.action_button = QPushButton(text)
-            self.action_button.setDefault(True)
+            self.action_button = _role(QPushButton(text), "primary")
             self.action_button.clicked.connect(lambda: window.start_step(step, self.reviewer()))
             actions.addWidget(self.action_button)
             if self.reviewer_edit is not None:
@@ -246,8 +396,7 @@ class StepRow(QFrame):
             self.finalize_button.clicked.connect(lambda: window.start_step(finalize))
             actions.addWidget(self.finalize_button)
         if step.command:
-            self.copy_button = QPushButton("Copy command")
-            self.copy_button.setFlat(True)
+            self.copy_button = _role(QPushButton("Copy command"), "link")
             self.copy_button.clicked.connect(lambda: window.copy_command(step, self.reviewer()))
             actions.addWidget(self.copy_button)
         actions.addStretch(1)
@@ -297,11 +446,17 @@ class LauncherWindow(QMainWindow):
         self.process.errorOccurred.connect(self._process_error)
 
         central = QWidget()
+        central.setObjectName("launcher")
         outer = QVBoxLayout(central)
+        outer.setContentsMargins(20, 16, 20, 14)
+        outer.setSpacing(8)
         top = QHBoxLayout()
-        self.project_label = QLabel("No project open")
-        self.project_label.setStyleSheet("font-size: 15px; font-weight: bold;")
+        titles = QVBoxLayout()
+        titles.setSpacing(0)
+        titles.addWidget(_role(QLabel("FIBERTYPEQC"), "eyebrow"))
+        self.project_label = _role(QLabel("No project open"), "title")
         self.project_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        titles.addWidget(self.project_label)
         self.open_button = QPushButton("Open project…")
         self.open_button.clicked.connect(self.choose_project)
         self.new_button = QPushButton("New project…")
@@ -313,31 +468,29 @@ class LauncherWindow(QMainWindow):
         self.more_button.setPopupMode(QToolButton.InstantPopup)
         self.more_menu = QMenu(self.more_button)
         self.more_button.setMenu(self.more_menu)
-        top.addWidget(self.project_label, 1)
+        top.addLayout(titles, 1)
         for widget in (self.open_button, self.new_button, self.refresh_button, self.more_button):
             top.addWidget(widget)
         outer.addLayout(top)
-        self.path_label = QLabel("")
-        _mute(self.path_label)
+        self.path_label = _role(QLabel(""), "muted")
         self.path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.path_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         outer.addWidget(self.path_label)
 
         self.banner = QLabel("")
+        self.banner.setObjectName("banner")
         self.banner.setWordWrap(True)
         self.banner.setVisible(False)
-        self.banner.setStyleSheet(
-            "padding: 6px; border-radius: 4px; background: palette(alternate-base);"
-        )
         outer.addWidget(self.banner)
-        self.report_button = QPushButton("Open report")
+        self.report_button = _role(QPushButton("Open report"), "primary")
         self.report_button.clicked.connect(self.open_report)
         self.report_button.setVisible(False)
         outer.addWidget(self.report_button, 0, Qt.AlignLeft)
 
         self.steps_widget = QWidget()
         self.steps_layout = QVBoxLayout(self.steps_widget)
-        self.steps_layout.setSpacing(2)
+        self.steps_layout.setContentsMargins(0, 6, 0, 6)
+        self.steps_layout.setSpacing(0)  # the timeline runs unbroken from step to step
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -359,7 +512,14 @@ class LauncherWindow(QMainWindow):
         self.stop_button.clicked.connect(self.stop)
         log_header.addWidget(self.stop_button)
         outer.addLayout(log_header)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 0)  # busy: no fraction is known
+        self.progress.setFixedHeight(4)
+        self.progress.setTextVisible(False)
+        self.progress.setVisible(False)
+        outer.addWidget(self.progress)
         self.log = QPlainTextEdit()
+        self.log.setObjectName("log")
         self.log.setReadOnly(True)
         self.log.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
         self.log.setMaximumBlockCount(5000)
@@ -367,9 +527,7 @@ class LauncherWindow(QMainWindow):
         self.log.setMaximumHeight(220)
         outer.addWidget(self.log, 2)
         self.setCentralWidget(central)
-        self.setStyleSheet(
-            "QFrame#currentStep { border: 1px solid palette(highlight); border-radius: 6px; }"
-        )
+        central.setStyleSheet(stylesheet())
         if project_root is not None:
             self.open_project(project_root)
         else:
@@ -402,12 +560,28 @@ class LauncherWindow(QMainWindow):
             self.workflow = None
             self.project_label.setText("No project open")
             self.path_label.setText("")
-            self.steps_layout.addWidget(
+            welcome = QFrame()
+            welcome.setObjectName("currentStep")
+            body = QVBoxLayout(welcome)
+            body.setContentsMargins(20, 18, 20, 18)
+            body.setSpacing(10)
+            body.addWidget(_role(QLabel("Start a project"), "step-current"))
+            body.addWidget(
                 _wrapped(
-                    "Open a project folder, or create a new one from a folder of images. "
-                    "The steps for your project appear here, one at a time."
+                    "Create a project from a folder of images, or open one you already have. "
+                    "The steps for your project then appear here, one at a time."
                 )
             )
+            buttons = QHBoxLayout()
+            create = _role(QPushButton("New project…"), "primary")
+            create.clicked.connect(self.new_project)
+            existing = QPushButton("Open project…")
+            existing.clicked.connect(self.choose_project)
+            buttons.addWidget(create)
+            buttons.addWidget(existing)
+            buttons.addStretch(1)
+            body.addLayout(buttons)
+            self.steps_layout.addWidget(welcome)
             self.steps_layout.addStretch(1)
             self._set_busy(self.running)
             return
@@ -431,8 +605,17 @@ class LauncherWindow(QMainWindow):
                 "All steps are done. Open the report, or review more and finalize again."
             )
             self.report_button.setVisible(True)
-        for step in self.workflow.steps:
-            row = StepRow(self, step)
+        steps = self.workflow.steps
+        for number, step in enumerate(steps, start=1):
+            after_done = number > 1 and steps[number - 2].state == DONE
+            row = StepRow(
+                self,
+                step,
+                number,
+                first=number == 1,
+                last=number == len(steps),
+                after_done=after_done,
+            )
             self.rows.append(row)
             self.steps_layout.addWidget(row)
         self.steps_layout.addStretch(1)
@@ -618,6 +801,7 @@ class LauncherWindow(QMainWindow):
 
     def _set_busy(self, busy: bool) -> None:
         self.stop_button.setVisible(busy)
+        self.progress.setVisible(busy)
         for widget in (self.open_button, self.new_button, self.refresh_button):
             widget.setEnabled(not busy)
         for row in self.rows:
