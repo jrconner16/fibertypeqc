@@ -34,11 +34,11 @@ When a DAPI channel is configured, the pipeline also writes a `nuclear/` subdire
 - `*_nuclei_labels.tif`: integer nuclear segmentation labels;
 - `*_nuclei.csv`: per-nucleus geometry and conservative fiber-association status;
 - `*_nucleus_fiber_links.csv`: assigned nucleus-to-fiber links;
-- `*_fiber_nuclei.csv`: associated and central-interior counts per fiber;
+- `*_fiber_nuclei.csv`: per fiber, the nuclei inside it and how many are central;
 - `*_nuclear_run.json`: nuclear settings, runtime/reuse status, outputs, and terminology.
 
-These are structural association artifacts. They do not assert that every DAPI object is a
-myonucleus or make a nuclear-pathology call.
+Nuclei are placed as central, peripheral, interstitial, or ambiguous
+([definitions](result_bundle_schema.md)); these are positions, not cell identities.
 
 ## Result Bundle
 

@@ -154,7 +154,8 @@ def run_nuclear_analysis(
             "links": str(links_path),
             "fiber_nuclei": str(fiber_nuclei_path),
         },
-        "terminology": "fiber-associated nuclei; no automatic myonucleus call",
+        "terminology": "nucleus positions (central, peripheral, interstitial, ambiguous); "
+        "positions, not cell identities",
     }
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"saved nuclei labels: {nuclei_labels_path}")

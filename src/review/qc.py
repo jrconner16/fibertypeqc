@@ -733,7 +733,9 @@ def _nucleus_metrics_and_rows(
         assigned_ids = pd.to_numeric(
             clean_table["assigned_fiber_id"], errors="coerce"
         ).fillna(0)
-        unassigned = statuses.eq("unassigned_or_interstitial") | assigned_ids.eq(0)
+        # "unassigned_or_interstitial" is the name used before 2026-11.
+        interstitial = statuses.isin(("interstitial", "unassigned_or_interstitial"))
+        unassigned = interstitial | assigned_ids.eq(0)
         ambiguous = statuses.eq("ambiguous")
         overlaps = pd.to_numeric(clean_table["overlap_fraction"], errors="coerce")
         metrics.update(
