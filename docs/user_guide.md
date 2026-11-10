@@ -142,6 +142,11 @@ process on this computer, with its output in the log, so results are identical t
 - **New project** asks what `init` asks. The model follows the stain panel: a released model made
   for exactly those stains, otherwise "None", which leads into building a model.
 - **Samples** edits `samples.csv` (mouse IDs and group columns).
+- In a project without a model, **Label counts…** (label step) and **Build results…** (build
+  step) show the training-mouse labels per class and mouse against the recipe's minimums, what is
+  still needed, and the latest build's scores per candidate with the rule it had to pass. When no
+  model is recommended it says which class no model recognised well enough. It opens by itself
+  when a build stops for too few labels.
 - **Check on test mice…** (`evaluate`) and **Switch…** (`promote`) ask before running. The check
   says how many times the test mice have been used; the switch says that every section is typed
   again and how to undo it, and shows progress. Under **More**, **Switch without a current

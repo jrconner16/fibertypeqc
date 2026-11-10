@@ -766,3 +766,18 @@ def test_custom_channels_are_shown_from_1_and_stored_from_0(qapp, tmp_path):
     panel = yaml.safe_load((tmp_path / "ones" / "panel.yaml").read_text())
     assert panel["channels"]["laminin"] == 0
     assert panel["channels"]["type_iia"] == 1 and panel["channels"]["type_iib"] == 2
+
+
+def test_macos_dark_mode_is_read_from_preferences_without_running_a_command(tmp_path):
+    import plistlib
+
+    from src.launcher import _macos_dark
+
+    path = tmp_path / "prefs.plist"
+    assert _macos_dark(path) is False  # no file: light
+    path.write_bytes(plistlib.dumps({"AppleInterfaceStyle": "Dark"}, fmt=plistlib.FMT_BINARY))
+    assert _macos_dark(path) is True
+    path.write_bytes(plistlib.dumps({"Other": 1}))
+    assert _macos_dark(path) is False
+    path.write_bytes(b"not a plist")
+    assert _macos_dark(path) is False
