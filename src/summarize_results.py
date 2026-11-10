@@ -15,6 +15,14 @@ Definitions (recorded in the manifest):
 - mouse level: fibers pooled across the mouse's sections;
 - cohort level: one value per mouse (mouse-level finalized proportion), summarized as mean, SD,
   and n per condition group.
+
+With nuclear data (DAPI), also (definitions in the manifest when present):
+
+- centrally nucleated fibers: analysis fibers with at least one central nucleus, over analysis
+  fibers with nuclear data; by fiber type, over resolved fibers of that final type;
+- nuclei per fiber: mean nuclei inside each analysis fiber;
+- nucleus positions per image (central, peripheral, interstitial, ambiguous): whole image, from
+  ``nuclei_counts.csv``; images excluded as a whole are left out.
 """
 
 from __future__ import annotations
@@ -43,6 +51,21 @@ DEFINITIONS = {
     "cohort_level": "mean, SD, and n of mouse-level finalized proportions per condition group",
 }
 MORPHOLOGY_COLUMNS = ("area", "area_um2", "feret_min_um", "feret_max_um")
+NUCLEAR_DEFINITIONS = {
+    "nucleus_positions": "central: inside a fiber, at least halfway from its edge to its centre "
+    "(see the nuclear run settings); peripheral: inside a fiber, not central; interstitial: "
+    "outside every segmented fiber; ambiguous: no fiber holds most of the nucleus",
+    "centrally_nucleated": "analysis fibers with at least one central nucleus over analysis fibers "
+    "with nuclear data; by type over resolved fibers of that final type",
+    "nuclei_per_fiber": "mean count of nuclei inside each analysis fiber",
+    "nucleus_position_counts": "whole image; images excluded as a whole are left out",
+}
+NUCLEUS_COUNT_COLUMNS = (
+    "n_nuclei_central",
+    "n_nuclei_peripheral",
+    "n_nuclei_interstitial",
+    "n_nuclei_ambiguous",
+)
 
 
 def ordered_classes(values: set[str]) -> list[str]:
@@ -104,6 +127,8 @@ def _group_summary(group: pd.DataFrame, classes: list[str]) -> dict[str, Any]:
         row[f"prop_predicted_{name}"] = (
             float((analysis["model_class"] == name).mean()) if len(analysis) else None
         )
+    if "centrally_nucleated" in group.columns:
+        row.update(_nuclear_summary(analysis, resolved, classes))
     for column in MORPHOLOGY_COLUMNS:
         if column in resolved.columns and len(resolved):
             row[f"median_{column}"] = float(resolved[column].median())
@@ -113,8 +138,58 @@ def _group_summary(group: pd.DataFrame, classes: list[str]) -> dict[str, Any]:
     return row
 
 
+def _flags(values: pd.Series) -> pd.Series:
+    """True/False from a CSV column that may hold booleans or their text."""
+    return values.map(lambda v: str(v).strip().lower() == "true")
+
+
+def _nuclear_summary(
+    analysis: pd.DataFrame, resolved: pd.DataFrame, classes: list[str]
+) -> dict[str, Any]:
+    measured = analysis[analysis["centrally_nucleated"].notna()]
+    central = _flags(measured["centrally_nucleated"])
+    row: dict[str, Any] = {
+        "n_fibers_nuclei_measured": len(measured),
+        "n_centrally_nucleated": int(central.sum()),
+        "prop_centrally_nucleated": float(central.mean()) if len(measured) else None,
+        "mean_nuclei_per_fiber": (
+            float(pd.to_numeric(measured["nuclei_count"]).mean()) if len(measured) else None
+        ),
+    }
+    typed = resolved[resolved["centrally_nucleated"].notna()]
+    for name in classes:
+        values = _flags(typed.loc[typed["final_class"] == name, "centrally_nucleated"])
+        row[f"prop_centrally_nucleated_{name}"] = float(values.mean()) if len(values) else None
+    return row
+
+
+def _nuclear_cohort(joined: pd.DataFrame, keys: list[str], classes: list[str]) -> pd.DataFrame:
+    """Mean, SD, and n across mice of centrally nucleated proportions, per condition group."""
+    rows = []
+    for group_values, group in joined.groupby(keys, sort=True):
+        group_values = group_values if isinstance(group_values, tuple) else (group_values,)
+        base = dict(zip(keys, group_values, strict=True))
+        for name in ["all", *classes]:
+            column = (
+                "prop_centrally_nucleated" if name == "all" else f"prop_centrally_nucleated_{name}"
+            )
+            values = group[column].dropna()
+            rows.append(
+                {
+                    **base,
+                    "fiber_class": name,
+                    "n_mice": int(len(values)),
+                    "mean_proportion": float(values.mean()) if len(values) else None,
+                    "sd_proportion": float(values.std(ddof=1)) if len(values) > 1 else None,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
 def summarize(
-    final: pd.DataFrame, conditions: dict[str, dict[str, Any]] | None = None
+    final: pd.DataFrame,
+    conditions: dict[str, dict[str, Any]] | None = None,
+    nuclei_counts: pd.DataFrame | None = None,
 ) -> dict[str, pd.DataFrame]:
     table = _prepare(final)
     classes = ordered_classes(
@@ -141,6 +216,13 @@ def summarize(
             for mouse_id, group in table.groupby("mouse_id", sort=True)
         ]
     )
+    if nuclei_counts is not None and not nuclei_counts.empty:
+        counts = nuclei_counts[["image_id", *NUCLEUS_COUNT_COLUMNS]]
+        image = image.merge(counts, on="image_id", how="left")
+        per_mouse = (
+            image.groupby("mouse_id")[list(NUCLEUS_COUNT_COLUMNS)].sum(min_count=1).reset_index()
+        )
+        mouse = mouse.merge(per_mouse, on="mouse_id", how="left")
     outputs = {"image_summary": image, "mouse_summary": mouse}
     if "roi_name" in table.columns:
         roi_rows = table[table["roi_name"].fillna("").astype(str) != ""]
@@ -189,6 +271,8 @@ def summarize(
                             }
                         )
             outputs["cohort_summary"] = pd.DataFrame(rows)
+            if "prop_centrally_nucleated" in joined.columns:
+                outputs["nuclear_cohort_summary"] = _nuclear_cohort(joined, keys, classes)
     outputs["_classes"] = pd.DataFrame({"fiber_class": classes})
     return outputs
 
@@ -229,7 +313,10 @@ def write_results(final_dir: Path, output_dir: Path, project_path: Path | None) 
     )
     conditions = load_conditions(project_path) if project_path is not None else None
     class_labels = load_class_labels(project_path) if project_path is not None else {}
-    outputs = summarize(final, conditions)
+    counts_path = final_dir / "nuclei_counts.csv"
+    nuclei_counts = pd.read_csv(counts_path, dtype=ID_DTYPES) if counts_path.is_file() else None
+    outputs = summarize(final, conditions, nuclei_counts)
+    nuclear = "centrally_nucleated" in final.columns
     classes = outputs.pop("_classes")["fiber_class"].tolist()
     output_dir.mkdir(parents=True, exist_ok=True)
     written = {}
@@ -243,7 +330,7 @@ def write_results(final_dir: Path, output_dir: Path, project_path: Path | None) 
         "created_at_utc": datetime.now(UTC).isoformat(),
         "git_commit": git_commit(),
         "fiber_classes": classes,
-        "definitions": DEFINITIONS,
+        "definitions": {**DEFINITIONS, **(NUCLEAR_DEFINITIONS if nuclear else {})},
         "inputs": {
             "final_fiber_table_sha256": file_sha256(final_table_path),
             "finalization_manifest": (

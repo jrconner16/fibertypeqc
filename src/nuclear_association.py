@@ -1,4 +1,18 @@
-"""Nucleus measurements and conservative association with cached fiber labels."""
+"""Nucleus measurements and their position relative to fibers.
+
+Each nucleus is placed by its centroid and its overlap with the fiber masks:
+
+- ``central``: inside a fiber, at least ``central_normalized_radius`` of the way from the edge to
+  the centre (distance to the edge divided by the fiber's equivalent radius) and more than
+  ``boundary_distance_px`` from the edge;
+- ``peripheral``: inside a fiber and not central;
+- ``interstitial``: not inside any segmented fiber (this includes nuclei of fibers that were not
+  segmented);
+- ``ambiguous``: overlaps fibers, but no fiber holds at least ``min_overlap_fraction`` of it.
+
+These are positions, not cell identities: a peripheral nucleus may be a myonucleus or a satellite
+cell, for example.
+"""
 
 from __future__ import annotations
 
@@ -20,6 +34,22 @@ NUCLEI_TABLE_COLUMNS = (
 )
 
 
+CENTRAL, PERIPHERAL, INTERSTITIAL, AMBIGUOUS = "central", "peripheral", "interstitial", "ambiguous"
+# Names written before 2026-11 (boundary_associated and peripheral_associated are now peripheral).
+LEGACY_NAMES = {
+    "central_interior": CENTRAL,
+    "boundary_associated": PERIPHERAL,
+    "peripheral_associated": PERIPHERAL,
+    "unassigned_or_interstitial": INTERSTITIAL,
+}
+CENTRAL_NAMES = (CENTRAL, "central_interior")
+
+
+def position_name(value: str) -> str:
+    """The current name for a nucleus position, also for tables written with the old names."""
+    return LEGACY_NAMES.get(value, value)
+
+
 def associate_nuclei(
     nuclei_labels: np.ndarray,
     fiber_labels: np.ndarray,
@@ -28,13 +58,7 @@ def associate_nuclei(
     boundary_distance_px: float = 3.0,
     central_normalized_radius: float = 0.5,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Measure nuclei and create explicit nucleus-to-fiber association rows.
-
-    Nuclei with no fiber overlap are marked ``unassigned_or_interstitial``. Nuclei
-    overlapping multiple fibers without a clear majority are marked ``ambiguous``.
-    Assigned nuclei are categorized by distance to the fiber mask boundary; this is
-    a geometric category, not an automatic myonucleus call.
-    """
+    """Measure nuclei and place each one: central, peripheral, interstitial, or ambiguous."""
     nuclei = np.asarray(nuclei_labels, dtype=np.int32)
     fibers = np.asarray(fiber_labels, dtype=np.int32)
     if nuclei.shape != fibers.shape:
@@ -65,14 +89,14 @@ def associate_nuclei(
         if nucleus_fibers.size == 0:
             assigned_fiber = 0
             overlap_fraction = 0.0
-            assignment_status = "unassigned_or_interstitial"
+            assignment_status = INTERSTITIAL
         else:
             fiber_ids, counts = np.unique(nucleus_fibers, return_counts=True)
             top = int(np.argmax(counts))
             assigned_fiber = int(fiber_ids[top])
             overlap_fraction = float(counts[top] / area)
             assignment_status = (
-                "assigned" if overlap_fraction >= min_overlap_fraction else "ambiguous"
+                "assigned" if overlap_fraction >= min_overlap_fraction else AMBIGUOUS
             )
 
         centroid_y = float(y_sum[nucleus_id] / area)
@@ -87,12 +111,11 @@ def associate_nuclei(
         if assignment_status == "assigned":
             equivalent_radius = float(np.sqrt(fiber_areas[assigned_fiber] / np.pi))
             normalized_radius = boundary_distance / max(equivalent_radius, 1e-6)
-            if boundary_distance <= boundary_distance_px:
-                category = "boundary_associated"
-            elif normalized_radius >= central_normalized_radius:
-                category = "central_interior"
-            else:
-                category = "peripheral_associated"
+            central = (
+                boundary_distance > boundary_distance_px
+                and normalized_radius >= central_normalized_radius
+            )
+            category = CENTRAL if central else PERIPHERAL
             links_rows.append(
                 {
                     "nucleus_id": nucleus_id,
@@ -137,7 +160,7 @@ def summarize_fiber_nuclei(
     fiber_labels: np.ndarray,
     nuclei_table: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Return per-fiber counts for associated and central nuclei."""
+    """Return per-fiber counts of nuclei inside the fiber and of central nuclei."""
     fiber_ids = np.unique(fiber_labels)
     fiber_ids = fiber_ids[fiber_ids > 0]
     out = pd.DataFrame({"fiber_id": fiber_ids.astype(np.int32)})
@@ -149,7 +172,7 @@ def summarize_fiber_nuclei(
     assigned = nuclei_table[nuclei_table["assignment_status"].eq("assigned")].copy()
     counts = assigned.groupby("assigned_fiber_id").size().rename("associated_nuclei_count")
     central = (
-        assigned[assigned["association_category"].eq("central_interior")]
+        assigned[assigned["association_category"].isin(CENTRAL_NAMES)]
         .groupby("assigned_fiber_id")
         .size()
         .rename("central_nuclei_count")

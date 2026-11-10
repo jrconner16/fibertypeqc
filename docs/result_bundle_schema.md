@@ -142,9 +142,21 @@ discovery; legacy summary paths may reflect how the pipeline was invoked.
 - `assigned_fiber_id`, `assignment_status`, and `association_category`;
 - `overlap_fraction`, `distance_to_boundary_px`, and `normalized_radial_position`.
 
-`assignment_status` is `assigned`, `ambiguous`, or `unassigned_or_interstitial`. An assigned nucleus
-is categorized as `boundary_associated`, `central_interior`, or `peripheral_associated`. These are
-geometric categories, not automatic myonucleus calls.
+`assignment_status` is `assigned`, `ambiguous`, or `interstitial`. `association_category` gives the
+nucleus position:
+
+- `central`: inside a fiber, at least halfway from the edge to the centre (`normalized_radial_position`
+  ≥ 0.5, the distance to the edge over the fiber's equivalent radius) and more than 3 px from the
+  edge;
+- `peripheral`: inside a fiber and not central;
+- `interstitial`: outside every segmented fiber (including nuclei of fibers that were not
+  segmented);
+- `ambiguous`: no fiber holds at least half of the nucleus.
+
+The cut-offs are run settings (`--central-normalized-radius`, `--boundary-distance-px`) recorded in
+the nuclear run manifest. Positions are not cell identities. Outputs written before 2026-11 use
+`central_interior`, `peripheral_associated` and `boundary_associated` (both now `peripheral`), and
+`unassigned_or_interstitial`; readers accept both.
 
 `nucleus_fiber_associations` requires `nucleus_id`, `fiber_id`, `assignment_status`,
 `association_category`, and `overlap_fraction`. It contains assigned links only.

@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Nuclei in results** (experimental, #82): with a DAPI channel, nuclei are named by position
+  (`central`, `peripheral`, `interstitial`, `ambiguous`; the earlier `central_interior`,
+  `peripheral_associated`/`boundary_associated`, and `unassigned_or_interstitial` are still read).
+  The rule for central is unchanged. `finalize` adds per-fiber nucleus counts and
+  `centrally_nucleated` to the finalized tables and writes `nuclei_counts.csv`; image and mouse
+  summaries add the share of centrally nucleated fibers (overall and per fiber type), nuclei per
+  fiber, and nucleus counts; `nuclear_cohort_summary.csv` gives mean ± SD across mice per
+  condition; the report adds a Nuclei section with the definitions. Results without DAPI are
+  unchanged.
 - **Project launcher** (experimental, #83): `python -m fibertypeqc app [PROJECT]` opens a window
   that lists the project's steps from its files, the way `status` does, with only the next step
   active. It creates projects (the `init` questions as a form; the model follows the stain panel,
@@ -57,6 +66,8 @@
 
 ### Fixed
 
+- Numeric-looking mouse and image IDs (for example `007` or `1`) are kept as written in result
+  tables and the cohort report (#87); before, `007` became `7` and the report showed `1.0`.
 - `promote --rollback` no longer discards review decisions made after a switch (#77). It first
   archives the outgoing state (config, review project and decisions, QC, final and results,
   typing outputs) under `models/history/<time>__<model>__rolled_back/`. It records that folder in

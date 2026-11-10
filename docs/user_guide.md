@@ -381,8 +381,14 @@ uv run python -m scripts.run_pipeline --input image.czi --output-dir out \
 ```
 
 Extra markers are measured in the diagnostics table. A DAPI mapping also runs nuclear segmentation
-and fiber association under `nuclear/`. These outputs are not validated and do not change fiber
-calls. Configuration: [panel_schema.md](panel_schema.md).
+under `nuclear/` and places each nucleus as central (inside a fiber, at least halfway from its edge
+to its centre), peripheral (inside a fiber, nearer its edge), interstitial (outside every segmented
+fiber), or ambiguous. In a project, `finalize` carries these into the fiber tables, and the
+summaries and report add the share of centrally nucleated fibers (overall and by fiber type),
+nuclei per fiber, and nucleus counts per image and mouse
+([output_schema.md](output_schema.md#finalized-review-outputs)). Nuclear outputs do not change fiber
+calls. The central cut-off has not yet been checked against manual counts. In the launcher, DAPI is
+set under Custom panel. Configuration: [panel_schema.md](panel_schema.md).
 
 ### Historical three-class model
 
