@@ -27,9 +27,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -48,6 +50,7 @@ from fibertypeqc.panel_presets import (
     write_panel,
 )
 from src.fiber_type_labels import default_classes, negative_display_label, validate_classes
+from src.make_review_project import USE_COLUMN, used_rows
 from src.reference_snapshot import (
     DEFAULT_COMPOSITION_TOLERANCE,
     DEFAULT_COUNT_TOLERANCE,
@@ -79,6 +82,10 @@ class ProjectFolder:
     no_model: bool = False
     classes: tuple[str, ...] = ()
     negative_label: str = ""
+    # Glob patterns (relative to ``images``) for images in subfolders; empty: files directly
+    # inside ``images``, as before patterns existed.
+    include: tuple[str, ...] = ()
+    exclude: tuple[str, ...] = ()
 
     @property
     def batch_dir(self) -> Path:
@@ -114,6 +121,15 @@ def _resolve(root: Path, value: Any, key: str) -> Path:
         raise ProjectError(f"{CONFIG_NAME}: '{key}' must be a path")
     path = Path(value).expanduser()
     return path if path.is_absolute() else (root / path).resolve()
+
+
+def _patterns(raw: dict, key: str) -> tuple[str, ...]:
+    value = raw.get(key) or []
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
+        raise ProjectError(f"{CONFIG_NAME}: '{key}' must be a list of patterns, e.g. ['**/*.czi']")
+    return tuple(value)
 
 
 def load_project_folder(folder: Path) -> ProjectFolder:
@@ -168,6 +184,8 @@ def load_project_folder(folder: Path) -> ProjectFolder:
         no_model=no_model,
         classes=classes,
         negative_label=negative_label,
+        include=_patterns(raw, "include"),
+        exclude=_patterns(raw, "exclude"),
     )
 
 
@@ -376,9 +394,53 @@ def command_status(project: ProjectFolder) -> int:
 # --- steps ----------------------------------------------------------------------------------
 
 
+def runs_from_sample_sheet(project: ProjectFolder) -> bool:
+    """Whether ``run`` takes its images from the sample sheet rather than the images folder.
+
+    Projects with include patterns or a ``use`` column do; older flat projects keep scanning the
+    folder, so their runs are unchanged.
+    """
+    if project.include:
+        return True
+    if not project.sample_sheet.is_file():
+        return False
+    return USE_COLUMN in pd.read_csv(project.sample_sheet, dtype=str, nrows=0).columns
+
+
+def write_input_manifest(project: ProjectFolder) -> Path:
+    """The ``use = yes`` rows of the sample sheet as a run_batch input manifest."""
+    if not project.sample_sheet.is_file():
+        raise ProjectError(f"Sample sheet not found: {project.sample_sheet}")
+    sheet = pd.read_csv(project.sample_sheet, dtype=str, keep_default_na=False)
+    missing = [name for name in ("image_id", "raw_image_path") if name not in sheet]
+    if missing:
+        raise ProjectError(f"{project.sample_sheet.name} is missing columns: {', '.join(missing)}")
+    try:
+        rows = used_rows(sheet)
+    except ValueError as exc:
+        raise ProjectError(f"{project.sample_sheet.name}: {exc}") from exc
+    if rows.empty:
+        raise ProjectError(f"No image in {project.sample_sheet.name} is marked use = yes.")
+    paths = [
+        path if path.is_absolute() else (project.sample_sheet.parent / path).resolve()
+        for path in (Path(text).expanduser() for text in rows["raw_image_path"])
+    ]
+    absent = [str(path) for path in paths if not path.is_file()]
+    if absent:
+        raise ProjectError(f"Image file(s) in the sample sheet not found: {', '.join(absent[:3])}")
+    manifest = project.root / "batch_inputs.csv"
+    table = {"image_id": rows["image_id"].tolist(), "input_path": [str(path) for path in paths]}
+    pd.DataFrame(table).to_csv(manifest, index=False)
+    return manifest
+
+
 def command_run(project: ProjectFolder, extra: list[str]) -> int:
+    if runs_from_sample_sheet(project):
+        source = ["--input-manifest", str(write_input_manifest(project))]
+    else:
+        source = ["--input-dir", str(project.images)]
     arguments = [
-        "--input-dir", str(project.images),
+        *source,
         "--panel-config", str(project.panel),
         "--output-dir", str(project.batch_dir),
     ]  # fmt: skip
@@ -561,7 +623,28 @@ def command_init(args: argparse.Namespace) -> int:
     if not images_text:
         raise ProjectError("--images is required")
     images_dir = Path(images_text).expanduser().resolve()
-    images = image_files(images_dir)
+    include, exclude = tuple(args.include or ()), tuple(args.exclude or ())
+    if interactive and not include and images_dir.is_dir():
+        flat = [p for p in images_dir.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES]
+        nested = _nested_images(images_dir)
+        if len(nested) > len(flat):
+            print(
+                f"\n{len(nested)} image(s) in {images_dir} and its subfolders, "
+                f"{len(flat)} directly inside it."
+            )
+            print(
+                "Choose which files to use with patterns ('**/' means any subfolders). Use "
+                "either the original CZIs or processed TIFFs, not both, or the same sections "
+                "are counted twice."
+            )
+            text = _ask("Include (comma-separated, blank for top folder only)", "**/*.czi")
+            include = tuple(item.strip() for item in text.split(",") if item.strip())
+            if include:
+                text = _ask("Exclude (comma-separated)", "")
+                exclude = tuple(item.strip() for item in text.split(",") if item.strip())
+    images = image_files(images_dir, include, exclude)
+    if include:
+        print(f"\n{len(images)} image(s) match.")
     panel, panel_source = _choose_panel(images, interactive, args.panel)
     default_model = default_model_id("fiber_identity") or ""
     model = args.model or (
@@ -573,12 +656,19 @@ def command_init(args: argparse.Namespace) -> int:
         if interactive
         else default_model
     )
-    rows = create_project(root, images_dir, panel, panel_source, model, args.mouse_id_pattern)
+    rows = create_project(
+        root, images_dir, panel, panel_source, model, args.mouse_id_pattern, include, exclude
+    )
     missing_mice = sum(not row["mouse_id"] for row in rows)
     print(f"\nCreated project in {root}")
     print(f"  {CONFIG_NAME}: images, panel, sample sheet, model ({model or 'none'})")
     print(f"  panel.yaml: {panel_source}")
     print(f"  samples.csv: {len(rows)} image(s)")
+    if include:
+        print(
+            "  Images come from the sample sheet: set use to 'no' to leave one out. "
+            "Check that no section appears twice (e.g. as a CZI and a processed TIFF)."
+        )
     if missing_mice:
         print(
             f"\nBefore 'prepare': open samples.csv and fill in mouse_id for {missing_mice} "
@@ -588,34 +678,135 @@ def command_init(args: argparse.Namespace) -> int:
     return 0
 
 
-def image_files(images_dir: Path) -> list[Path]:
-    """The .czi/.tif images in a folder, or a plain-language error."""
+def _pattern_regex(pattern: str) -> re.Pattern[str]:
+    """A glob over relative paths: ``**/`` spans folders, ``*`` and ``?`` stay within one name.
+
+    Matching ignores case, so ``**/*.czi`` also finds ``.CZI`` files.
+    """
+    out, index = "", 0
+    while index < len(pattern):
+        if pattern.startswith("**/", index):
+            out, index = out + "(?:.*/)?", index + 3
+        elif pattern.startswith("**", index):
+            out, index = out + ".*", index + 2
+        elif pattern[index] == "*":
+            out, index = out + "[^/]*", index + 1
+        elif pattern[index] == "?":
+            out, index = out + "[^/]", index + 1
+        else:
+            out, index = out + re.escape(pattern[index]), index + 1
+    return re.compile(out, re.IGNORECASE)
+
+
+def _nested_images(images_dir: Path) -> list[Path]:
+    """Image files at any depth, skipping hidden files and folders and other project folders."""
+    found: list[Path] = []
+    for folder, names, files in os.walk(images_dir):
+        here = Path(folder)
+        if here != images_dir and (here / CONFIG_NAME).is_file():
+            names[:] = []  # a FiberTypeQC project (its scene exports are images too)
+            continue
+        names[:] = sorted(name for name in names if not name.startswith("."))
+        found += [
+            here / name
+            for name in files
+            if not name.startswith(".") and Path(name).suffix.lower() in IMAGE_SUFFIXES
+        ]
+    return found
+
+
+def image_files(
+    images_dir: Path, include: tuple[str, ...] = (), exclude: tuple[str, ...] = ()
+) -> list[Path]:
+    """The .czi/.tif images to use, or a plain-language error.
+
+    Without ``include`` patterns: the files directly inside ``images_dir``. With them: files at
+    any depth whose path relative to ``images_dir`` matches an include and no exclude pattern.
+    """
     if not images_dir.is_dir():
         raise ProjectError(f"Images folder not found: {images_dir}")
-    images = sorted(p for p in images_dir.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
+    if not include:
+        images = sorted(p for p in images_dir.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
+        if not images:
+            nested = len(_nested_images(images_dir))
+            hint = (
+                f" ({nested} found in subfolders; choose them with include patterns, e.g. "
+                "init --include '**/*.czi')"
+                if nested
+                else ""
+            )
+            raise ProjectError(f"No .czi/.tif/.tiff files found in {images_dir}{hint}")
+        return images
+    wanted = [_pattern_regex(pattern) for pattern in include]
+    unwanted = [_pattern_regex(pattern) for pattern in exclude]
+    images = []
+    for path in _nested_images(images_dir):
+        relative = path.relative_to(images_dir).as_posix()
+        if any(r.fullmatch(relative) for r in wanted) and not any(
+            r.fullmatch(relative) for r in unwanted
+        ):
+            images.append(path)
     if not images:
-        raise ProjectError(f"No .czi/.tif/.tiff files found in {images_dir}")
-    return images
+        raise ProjectError(
+            f"No .czi/.tif/.tiff files in {images_dir} match include {list(include)}"
+            + (f" and exclude {list(exclude)}" if exclude else "")
+        )
+    return sorted(images, key=lambda path: path.relative_to(images_dir).as_posix().lower())
 
 
-def sample_rows(images: list[Path], mouse_id_pattern: str | None) -> list[dict[str, str]]:
-    """Sample-sheet rows; the pattern's first group (or whole match) fills mouse_id."""
+def project_images(project: ProjectFolder) -> list[Path]:
+    return image_files(project.images, project.include, project.exclude)
+
+
+def _unique_ids(images: list[Path], images_dir: Path | None) -> list[str]:
+    """File stems, with parent folder names added to the ones that would otherwise clash.
+
+    ``m1/s1.czi`` and ``m2/s1.czi`` become ``m1_s1`` and ``m2_s1``; a clash that remains is
+    reported, since run_batch would write both images to one output folder.
+    """
+    ids = [image.stem for image in images]
+    if images_dir is None:
+        return ids
+    parents = [image.relative_to(images_dir).parent.parts for image in images]
+    for depth in range(1, max((len(parts) for parts in parents), default=0) + 1):
+        counts = Counter(ids)
+        if all(count == 1 for count in counts.values()):
+            break
+        ids = [
+            "_".join([*parts[-depth:], image.stem]) if counts[current] > 1 else current
+            for current, image, parts in zip(ids, images, parents, strict=True)
+        ]
+    clashes = sorted(name for name, count in Counter(ids).items() if count > 1)
+    if clashes:
+        raise ProjectError(f"These images would get the same image ID: {', '.join(clashes)}")
+    return ids
+
+
+def sample_rows(
+    images: list[Path], mouse_id_pattern: str | None, images_dir: Path | None = None
+) -> list[dict[str, str]]:
+    """Sample-sheet rows; the pattern's first group (or whole match) fills mouse_id.
+
+    With ``images_dir`` (images found in subfolders), image IDs that would clash get their
+    parent folder names, and each row gets ``use = yes``.
+    """
     try:
         pattern = re.compile(mouse_id_pattern) if mouse_id_pattern else None
     except re.error as exc:
         raise ProjectError(f"Mouse ID pattern is not a valid regular expression: {exc}") from exc
     rows = []
-    for image in images:
+    for image, image_id in zip(images, _unique_ids(images, images_dir), strict=True):
         match = pattern.search(image.stem) if pattern else None
         mouse_id = (match.group(1) if match and match.groups() else match.group(0)) if match else ""
-        rows.append(
-            {
-                "image_id": image.stem,
-                "mouse_id": mouse_id or "",
-                "raw_image_path": str(image),
-                "group": "",
-            }
-        )
+        row = {
+            "image_id": image_id,
+            "mouse_id": mouse_id or "",
+            "raw_image_path": str(image),
+            "group": "",
+        }
+        if images_dir is not None:
+            row[USE_COLUMN] = "yes"
+        rows.append(row)
     return rows
 
 
@@ -626,12 +817,17 @@ def create_project(
     panel_source: str,
     model: str | None,
     mouse_id_pattern: str | None = None,
+    include: tuple[str, ...] = (),
+    exclude: tuple[str, ...] = (),
 ) -> list[dict[str, str]]:
     """Write a new project folder (config, panel, sample sheet); shared by init and the launcher."""
     config_path = root / CONFIG_NAME
     if config_path.exists():
         raise ProjectError(f"{config_path} already exists; this folder is already a project.")
-    rows = sample_rows(image_files(images_dir), mouse_id_pattern)
+    if exclude and not include:
+        raise ProjectError("Exclude patterns need include patterns, e.g. --include '**/*.czi'")
+    images = image_files(images_dir, include, exclude)
+    rows = sample_rows(images, mouse_id_pattern, images_dir if include else None)
     root.mkdir(parents=True, exist_ok=True)
     write_panel(root / "panel.yaml", panel, f"Panel for this project ({panel_source}).")
     pd.DataFrame(rows).to_csv(root / "samples.csv", index=False)
@@ -644,6 +840,9 @@ def create_project(
         "split_czi_scenes": True,
         "display_downsample": 2,
     }
+    if include:
+        config["include"] = list(include)
+        config["exclude"] = list(exclude)
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     return rows
 
@@ -656,6 +855,12 @@ def check_sample_sheet(project: ProjectFolder) -> None:
     missing = [name for name in ("image_id", "mouse_id", "raw_image_path") if name not in sheet]
     if missing:
         raise ProjectError(f"{project.sample_sheet.name} is missing columns: {', '.join(missing)}")
+    try:
+        sheet = used_rows(sheet)
+    except ValueError as exc:
+        raise ProjectError(f"{project.sample_sheet.name}: {exc}") from exc
+    if USE_COLUMN in sheet and sheet.empty:
+        raise ProjectError(f"No image in {project.sample_sheet.name} is marked use = yes.")
     blank = sheet.loc[sheet["mouse_id"].str.strip().eq(""), "image_id"].tolist()
     if blank:
         shown = ", ".join(blank[:5]) + (" …" if len(blank) > 5 else "")
@@ -777,6 +982,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init.add_argument("project", type=Path, help="Project folder to create")
     init.add_argument("--images", help="Folder containing .czi/.tif images")
+    init.add_argument(
+        "--include",
+        action="append",
+        metavar="PATTERN",
+        help=(
+            "Use images in subfolders that match this pattern, relative to --images "
+            "(repeatable; e.g. '**/*.czi'; '**/' means any subfolders). Without it, only files "
+            "directly inside --images are used."
+        ),
+    )
+    init.add_argument(
+        "--exclude",
+        action="append",
+        metavar="PATTERN",
+        help="Leave out images matching this pattern (repeatable; e.g. '**/Processed/**')",
+    )
     init.add_argument(
         "--panel",
         help=f"Panel preset ({', '.join(list_presets())}) or a panel YAML file to copy",

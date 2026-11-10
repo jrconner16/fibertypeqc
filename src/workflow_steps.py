@@ -28,9 +28,11 @@ from src.cli import (
     image_channel_count,
     image_files,
     next_step,
+    project_images,
     project_status,
     sample_rows,
 )
+from src.make_review_project import USE_COLUMN, used_rows
 
 DONE, CURRENT, UPCOMING, ATTENTION, SKIPPED = "done", "current", "upcoming", "attention", "skipped"
 
@@ -116,6 +118,10 @@ def _samples(project: ProjectFolder) -> tuple[bool, str, str]:
         if project.sample_sheet.is_file():
             sheet = pd.read_csv(project.sample_sheet, dtype=str, keep_default_na=False)
             if "mouse_id" in sheet:
+                try:
+                    sheet = used_rows(sheet)
+                except ValueError:
+                    return False, note, note
                 blank = sheet.loc[sheet["mouse_id"].str.strip().eq(""), "image_id"].tolist()
                 if blank:
                     shown = ", ".join(blank[:3]) + (" …" if len(blank) > 3 else "")
@@ -129,8 +135,12 @@ def _samples(project: ProjectFolder) -> tuple[bool, str, str]:
                     )
         return False, note, note
     sheet = pd.read_csv(project.sample_sheet, dtype=str, keep_default_na=False)
-    mice = sheet["mouse_id"].str.strip().nunique()
-    return True, f"{plural(len(sheet), 'image', 'images')} · {plural(mice, 'mouse', 'mice')}", ""
+    used = used_rows(sheet)
+    mice = used["mouse_id"].str.strip().nunique()
+    summary = f"{plural(len(used), 'image', 'images')} · {plural(mice, 'mouse', 'mice')}"
+    if len(used) < len(sheet):
+        summary += f" · {len(sheet) - len(used)} not used"
+    return True, summary, ""
 
 
 def _panel_name(project: ProjectFolder) -> str:
@@ -305,7 +315,7 @@ def channels_beyond(panel: dict, channel_count: int | None) -> list[str]:
 def panel_problem(project: ProjectFolder) -> str:
     """Why the panel does not fit the images (from the first image's metadata), or ""."""
     try:
-        images = image_files(project.images)
+        images = project_images(project)
         panel = yaml.safe_load(project.panel.read_text(encoding="utf-8")) or {}
     except (ProjectError, OSError, yaml.YAMLError):
         return ""  # status already notes a missing images folder or panel file
@@ -326,19 +336,23 @@ def update_setup(
     """Change a project's images folder, panel, and model before anything has run.
 
     The sample sheet keeps each image's mouse ID and group columns; images new to the folder get
-    blank rows, and images no longer in it are dropped.
+    blank rows (``use = yes`` when the sheet has that column), and images no longer in it are
+    dropped. The project's include and exclude patterns apply to the new folder too.
     """
     if not can_edit_setup(project):
         raise ProjectError(
             "Segmentation has already run with these settings. Create a new project to use "
             "another panel or images."
         )
-    rows = pd.DataFrame(sample_rows(image_files(images_dir), None))
+    images = image_files(images_dir, project.include, project.exclude)
+    rows = pd.DataFrame(sample_rows(images, None, images_dir if project.include else None))
     if project.sample_sheet.is_file():
         old = pd.read_csv(project.sample_sheet, dtype=str, keep_default_na=False)
         kept = [name for name in old.columns if name not in ("raw_image_path",)]
         rows = rows[["image_id", "raw_image_path"]].merge(old[kept], on="image_id", how="left")
         rows = rows.fillna("")
+        if USE_COLUMN in rows:
+            rows.loc[rows[USE_COLUMN].eq(""), USE_COLUMN] = "yes"
         rows = rows[[name for name in old.columns if name in rows.columns]]
     write_panel(project.root / "panel.yaml", panel, f"Panel for this project ({panel_source}).")
     rows.to_csv(project.sample_sheet, index=False)

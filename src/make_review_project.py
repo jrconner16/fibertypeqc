@@ -6,6 +6,7 @@ The sample sheet is a CSV with one row per batch input image:
 - ``mouse_id``,
 - ``raw_image_path`` (path to the image run_batch read),
 - optional ``section_id`` (default ``s1``),
+- optional ``use`` (``yes``/``no``; rows marked ``no`` are left out; a missing column uses all),
 - any other columns become per-image ``condition`` fields (e.g. genotype, timepoint).
 
 Images split with ``run_batch --split-czi-scenes`` are expanded to their sections
@@ -27,7 +28,25 @@ import pandas as pd
 import yaml
 
 REQUIRED_COLUMNS = ("image_id", "mouse_id", "raw_image_path")
-RESERVED_COLUMNS = (*REQUIRED_COLUMNS, "section_id")
+USE_COLUMN = "use"
+RESERVED_COLUMNS = (*REQUIRED_COLUMNS, "section_id", USE_COLUMN)
+USE_VALUES = {"yes": True, "y": True, "no": False, "n": False}
+
+
+def used_rows(sheet: pd.DataFrame) -> pd.DataFrame:
+    """The sample-sheet rows to process: all rows, or those with ``use = yes``.
+
+    Any other ``use`` value is an error rather than a guess, since running an image twice or
+    not at all both change the results.
+    """
+    if USE_COLUMN not in sheet.columns:
+        return sheet
+    values = sheet[USE_COLUMN].astype(str).str.strip().str.lower()
+    bad = sheet.loc[~values.isin(list(USE_VALUES)), "image_id"].astype(str).tolist()
+    if bad:
+        shown = ", ".join(bad[:5]) + (" …" if len(bad) > 5 else "")
+        raise ValueError(f"Set the 'use' column to yes or no for {len(bad)} image(s): {shown}")
+    return sheet.loc[values.map(USE_VALUES).astype(bool)]
 SECTION_SUFFIX = re.compile(r"^(?P<base>.+)_section-(?P<number>\d{2})$")
 
 
@@ -68,7 +87,7 @@ def build_project(
         raise ValueError(f"Sample sheet is missing columns: {', '.join(missing)}")
     if sheet["image_id"].duplicated().any():
         raise ValueError("Sample sheet image_id values must be unique")
-    rows = {row["image_id"]: row for row in sheet.to_dict("records")}
+    rows = {row["image_id"]: row for row in used_rows(sheet).to_dict("records")}
     summary = pd.read_csv(batch_dir / "batch_summary.csv", dtype=str, keep_default_na=False)
     warnings: list[str] = []
     images: list[dict[str, Any]] = []
@@ -81,7 +100,7 @@ def build_project(
         match = SECTION_SUFFIX.match(image_id)
         base_id = match.group("base") if match and match.group("base") in rows else image_id
         if base_id not in rows:
-            warnings.append(f"skipped {image_id}: not in the sample sheet")
+            warnings.append(f"skipped {image_id}: not in the sample sheet, or marked use = no")
             continue
         sample = rows[base_id]
         prediction_dir = batch_dir / image_id

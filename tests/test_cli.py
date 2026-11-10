@@ -234,3 +234,142 @@ def test_config_may_name_a_panel_preset(tmp_path):
     root = _project(tmp_path, panel="three_marker_iib_iia_laminin")
 
     assert cli.load_project_folder(root).panel.name == "three_marker_iib_iia_laminin.yaml"
+
+
+def _nested_study(tmp_path: Path) -> Path:
+    """genotype/treatment/mouse folders with originals, processed copies, and clutter."""
+    import numpy as np
+    import tifffile
+
+    study = tmp_path / "study"
+    files = [
+        "geno_a/treated/m01/sections.tif",
+        "geno_a/treated/m01/Processed/001/sections.tif",
+        "geno_a/treated/m01/Split Scenes/section_001.tif",
+        "geno_a/untreated/m02/sections.TIF",
+        "geno_b/treated/m03/other.tif",
+    ]
+    for name in files:
+        path = study / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tifffile.imwrite(
+            path, np.zeros((3, 8, 8), dtype=np.uint16), imagej=True, metadata={"axes": "CYX"}
+        )
+    (study / "geno_a/treated/m01/._sections.tif").write_bytes(b"macOS metadata")
+    (study / ".hidden").mkdir()
+    (study / ".hidden/x.tif").write_bytes(b"")
+    (study / "old_project").mkdir()
+    (study / "old_project" / cli.CONFIG_NAME).write_text("schema_version: x\n")
+    (study / "old_project/batch.tif").write_bytes(b"")
+    return study
+
+
+def test_include_patterns_find_images_in_subfolders(tmp_path):
+    study = _nested_study(tmp_path)
+    relative = lambda paths: [p.relative_to(study).as_posix() for p in paths]  # noqa: E731
+
+    with pytest.raises(cli.ProjectError, match=r"5 found in subfolders.*--include"):
+        cli.image_files(study)
+    assert relative(
+        cli.image_files(study, ("**/*.tif",), ("**/Processed/**", "**/Split Scenes/**"))
+    ) == [
+        "geno_a/treated/m01/sections.tif",
+        "geno_a/untreated/m02/sections.TIF",
+        "geno_b/treated/m03/other.tif",
+    ]
+    assert relative(cli.image_files(study, ("**/Processed/**/*.tif",))) == [
+        "geno_a/treated/m01/Processed/001/sections.tif"
+    ]
+    with pytest.raises(cli.ProjectError, match="match include"):
+        cli.image_files(study, ("*.tif",))  # one star stays in the top folder
+
+
+def test_init_with_patterns_writes_them_and_a_sample_sheet_with_unique_ids(tmp_path, capsys):
+    study = _nested_study(tmp_path)
+    root = tmp_path / "proj"
+    arguments = [
+        "init",
+        str(root),
+        "--images",
+        str(study),
+        "--panel",
+        "three_marker_iib_iia_laminin",
+    ]
+    arguments += ["--model", "none", "--include", "**/*.tif", "--exclude", "**/Processed/**"]
+    assert cli.main([*arguments, "--exclude", "**/Split Scenes/**", "--yes"]) == 0
+
+    config = yaml.safe_load((root / cli.CONFIG_NAME).read_text())
+    assert config["include"] == ["**/*.tif"]
+    assert config["exclude"] == ["**/Processed/**", "**/Split Scenes/**"]
+    sheet = pd.read_csv(root / "samples.csv", dtype=str, keep_default_na=False)
+    assert sheet["image_id"].tolist() == ["m01_sections", "m02_sections", "other"]
+    assert sheet["use"].tolist() == ["yes", "yes", "yes"]
+    assert "use to 'no'" in capsys.readouterr().out
+    project = cli.load_project_folder(root)
+    assert project.include == ("**/*.tif",) and cli.runs_from_sample_sheet(project)
+
+
+def test_unique_ids_go_up_as_many_folders_as_needed(tmp_path):
+    images = [tmp_path / "a/x/m1/s.tif", tmp_path / "b/x/m1/s.tif", tmp_path / "c/t.tif"]
+    assert cli._unique_ids(images, tmp_path) == ["a_x_m1_s", "b_x_m1_s", "t"]
+    with pytest.raises(cli.ProjectError, match="same image ID"):
+        cli._unique_ids([tmp_path / "s.tif", tmp_path / "s.tiff"], tmp_path)
+
+
+def test_run_uses_only_sample_sheet_rows_marked_use_yes(tmp_path, monkeypatch):
+    study = _nested_study(tmp_path)
+    root = tmp_path / "proj"
+    cli.main(
+        ["init", str(root), "--images", str(study), "--panel", "three_marker_iib_iia_laminin",
+         "--model", "none", "--include", "**/*.tif", "--exclude", "**/Processed/**",
+         "--exclude", "**/Split Scenes/**", "--yes"]
+    )  # fmt: skip
+    sheet = pd.read_csv(root / "samples.csv", dtype=str, keep_default_na=False)
+    sheet.loc[sheet["image_id"].eq("other"), "use"] = "no"
+    sheet.to_csv(root / "samples.csv", index=False)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(cli, "_run", lambda module, arguments: calls.append(arguments) or 0)
+
+    assert cli.main(["run", str(root)]) == 0
+    arguments = calls[-1]
+    assert "--input-dir" not in arguments
+    manifest = Path(arguments[arguments.index("--input-manifest") + 1])
+    table = pd.read_csv(manifest, dtype=str)
+    assert table["image_id"].tolist() == ["m01_sections", "m02_sections"]
+    assert table["input_path"].tolist() == [
+        str(study / "geno_a/treated/m01/sections.tif"),
+        str(study / "geno_a/untreated/m02/sections.TIF"),
+    ]
+
+    sheet.loc[0, "use"] = "maybe"
+    sheet.to_csv(root / "samples.csv", index=False)
+    assert cli.main(["run", str(root)]) == 2
+
+
+def test_flat_projects_still_run_from_the_images_folder(tmp_path, monkeypatch):
+    images = _images(tmp_path)
+    root = tmp_path / "flat"
+    cli.main(
+        ["init", str(root), "--images", str(images), "--panel", "three_marker_iib_iia_laminin",
+         "--model", "none", "--yes"]
+    )  # fmt: skip
+    assert "include" not in yaml.safe_load((root / cli.CONFIG_NAME).read_text())
+    assert "use" not in pd.read_csv(root / "samples.csv").columns
+    calls: list[list[str]] = []
+    monkeypatch.setattr(cli, "_run", lambda module, arguments: calls.append(arguments) or 0)
+    assert cli.main(["run", str(root)]) == 0
+    assert calls[-1][:2] == ["--input-dir", str(images)]
+
+
+def test_prepare_ignores_blank_mouse_ids_on_rows_not_used(tmp_path):
+    root = _project(tmp_path)
+    pd.DataFrame(
+        {"image_id": ["a", "b"], "mouse_id": ["m1", ""], "raw_image_path": ["a.tif", "b.tif"],
+         "use": ["yes", "no"]}
+    ).to_csv(root / "samples.csv", index=False)  # fmt: skip
+    cli.check_sample_sheet(cli.load_project_folder(root))
+    pd.DataFrame(
+        {"image_id": ["a"], "mouse_id": ["m1"], "raw_image_path": ["a.tif"], "use": ["no"]}
+    ).to_csv(root / "samples.csv", index=False)
+    with pytest.raises(cli.ProjectError, match="marked use = yes"):
+        cli.check_sample_sheet(cli.load_project_folder(root))
