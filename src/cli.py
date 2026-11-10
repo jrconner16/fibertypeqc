@@ -1076,6 +1076,9 @@ def build_parser() -> argparse.ArgumentParser:
             "no current independent test evaluation (recorded)"
         ),
     )
+    promote.add_argument(
+        "--reason", help="With --override: why you switch anyway (recorded with the change)"
+    )
     promote.add_argument("--rollback", action="store_true", help="Undo the most recent switch")
     evaluate = steps.add_parser(
         "evaluate",
@@ -1202,6 +1205,8 @@ def main(argv: list[str] | None = None) -> int:
                 arguments += ["--candidate", args.candidate]
             if args.override:
                 arguments.append("--override")
+            if args.reason:
+                arguments += ["--reason", args.reason]
             code = _run("promote_model", arguments)
             if code != 0:
                 return code

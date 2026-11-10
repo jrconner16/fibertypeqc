@@ -374,3 +374,32 @@ def command_arguments(command: str, project: ProjectFolder, reviewer: str = "") 
     """CLI arguments for a step command, with the placeholders filled in."""
     filled = {"PROJECT": str(project.root), "NAME": reviewer}
     return [filled.get(word, word) for word in command.split()]
+
+
+# --- model builder: candidates and switches (read only) -------------------------------------
+
+
+def built_candidates(project: ProjectFolder) -> list[str]:
+    """Candidate names in the latest build, the recommended one first."""
+    builds = sorted((project.root / "models").glob("build_*/build_summary.json"))
+    if not builds:
+        return []
+    folder = builds[-1].parent / "candidates"
+    names = sorted(path.parent.name for path in folder.glob("*/*.joblib"))
+    summary = json.loads(builds[-1].read_text(encoding="utf-8"))
+    recommended = summary["selection"]["decision"].get("recommended")
+    return sorted(names, key=lambda name: name != recommended)
+
+
+def last_switch(project: ProjectFolder) -> dict[str, str] | None:
+    """The switch ``promote --rollback`` would undo (the same check as rollback), or None."""
+    path = project.root / "models" / "model_history.csv"
+    if not path.is_file():
+        return None
+    history = pd.read_csv(path, dtype=str, keep_default_na=False)
+    promotions = history[history["action"] == "promote"]
+    undone = set(history.loc[history["action"] == "rollback", "archive"])
+    pending = promotions[~promotions["archive"].isin(undone)]
+    if pending.empty or pending.index[-1] != promotions.index[-1]:
+        return None
+    return {str(key): str(value) for key, value in pending.iloc[-1].items()}

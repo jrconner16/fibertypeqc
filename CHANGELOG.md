@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Check and switch from the launcher** (#84): in a project without a model, **Check on test
+  mice…** and **Switch…** run `evaluate` and `promote` after a confirmation that explains the use
+  of the test mice, the re-typing, and how to undo it; re-typing progress is shown. **More** offers
+  **Switch without a current check…** (a typed reason is required and recorded) and **Undo the
+  last model switch…**. `promote --reason TEXT` records why an override was used, in
+  `model_history.csv` and `independent_test_checks.csv` (new `reason` column; older files read it
+  as empty).
 - **Automatic test mice for the model builder** (#84): `prepare` on a project without a model
   writes `evaluation_roles.csv` and `evaluation_roles_record.json` when neither exists and no
   blind label has been made: about 25% of mice become `test` (at least 3 training mice kept; with

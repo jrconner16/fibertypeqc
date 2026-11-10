@@ -54,10 +54,12 @@ HISTORY_COLUMNS = (
     "flagged_after",
     # Rollback only: where the outgoing state (including review decisions) was archived.
     "outgoing_archive",
+    # Why a switch was made with --override (free text; empty otherwise).
+    "reason",
 )
 MASK_SUFFIX = "_cellpose_labels.tif"
 TEST_CHECKS_NAME = Path(TEST_CHECKS_PATH).name  # review roles read it too
-TEST_CHECK_COLUMNS = ("changed_at_utc", "to_model", "status", "override", "evaluation")
+TEST_CHECK_COLUMNS = ("changed_at_utc", "to_model", "status", "override", "evaluation", "reason")
 
 
 class PromotionError(ValueError):
@@ -296,7 +298,9 @@ def _test_check(root: Path, project: Project, artifact: Path, override: bool) ->
     return {**check, "override": check["status"] in ("missing", "stale")}
 
 
-def promote(root: Path, candidate: str, panel: Path, *, override: bool = False) -> dict:
+def promote(
+    root: Path, candidate: str, panel: Path, *, override: bool = False, reason: str = ""
+) -> dict:
     config = yaml.safe_load((root / CONFIG_NAME).read_text(encoding="utf-8"))
     project = load_project(root / "review" / "project.yaml")
     from_none = project.model_version == "none"
@@ -362,6 +366,7 @@ def promote(root: Path, candidate: str, panel: Path, *, override: bool = False) 
         **counts,
         "flagged_before": flagged_before,
         "flagged_after": _flagged(project),
+        "reason": reason.strip(),
     }
     _append_history(root, row)
     if test_check is not None:
@@ -377,9 +382,12 @@ def promote(root: Path, candidate: str, panel: Path, *, override: bool = False) 
             "status": test_check["status"],
             "override": test_check["override"],
             "evaluation": test_check["evaluation"],
+            "reason": row["reason"],
         }
         checks = pd.concat([checks, pd.DataFrame([{k: str(v) for k, v in entry.items()}])])
-        checks.to_csv(path, index=False, columns=list(TEST_CHECK_COLUMNS))
+        # Files written before a column existed read it as empty.
+        checks = checks.reindex(columns=list(TEST_CHECK_COLUMNS)).fillna("")
+        checks.to_csv(path, index=False)
         row["independent_test"] = entry
     return row
 
@@ -439,6 +447,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Switch even though the improver did not recommend this candidate (recorded).",
     )
+    parser.add_argument(
+        "--reason", default="", help="Why you switch with --override (recorded with the change)"
+    )
     parser.add_argument("--rollback", action="store_true", help="Undo the most recent change")
     return parser
 
@@ -460,7 +471,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if not args.candidate:
             raise PromotionError("Name the candidate to switch to, for example: promote logistic")
-        row = promote(root, args.candidate, args.panel_config, override=args.override)
+        row = promote(
+            root, args.candidate, args.panel_config, override=args.override, reason=args.reason
+        )
     except (PromotionError, ValueError, OSError) as exc:
         print(f"Model change refused: {exc}", file=sys.stderr)
         return 1

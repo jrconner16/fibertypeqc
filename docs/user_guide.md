@@ -142,7 +142,11 @@ process on this computer, with its output in the log, so results are identical t
 - **New project** asks what `init` asks. The model follows the stain panel: a released model made
   for exactly those stains, otherwise "None", which leads into building a model.
 - **Samples** edits `samples.csv` (mouse IDs and group columns).
-- `evaluate` and `promote` are shown but not run from the window yet; copy their commands.
+- **Check on test mice…** (`evaluate`) and **Switch…** (`promote`) ask before running. The check
+  says how many times the test mice have been used; the switch says that every section is typed
+  again and how to undo it, and shows progress. Under **More**, **Switch without a current
+  check…** asks for a reason, which is recorded (`promote --override --reason`), and **Undo the
+  last model switch…** runs `promote --rollback` after asking.
 - The launcher never submits cluster jobs. On a cluster, open it in a desktop session on a GPU
   node to run segmentation there, or on a CPU node for the other steps.
 
@@ -309,7 +313,8 @@ uv run python -m fibertypeqc promote  myproject/ --rollback # back to no model, 
 - An evaluation is tied to the exact candidate file and to the test labels, masks, and
   measurements it used. If any of these change, it is out of date.
 - With test mice declared, `promote` requires a current evaluation of that candidate; `--override`
-  switches anyway and is recorded in `models/independent_test_checks.csv`. Without test mice,
+  switches anyway and is recorded in `models/independent_test_checks.csv`. Add `--reason TEXT` to
+  record why; it is saved there and in `models/model_history.csv`. Without test mice,
   `promote` warns that there was no independent test and records that. Test scores never decide
   for you: switching is your decision.
 - Switching re-types every section on its existing mask and first checks that the measurements
