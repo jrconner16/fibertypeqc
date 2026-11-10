@@ -180,8 +180,8 @@ def test_init_unattended_writes_config_panel_and_sample_sheet(tmp_path, capsys):
 def test_init_interactive_custom_panel(tmp_path, monkeypatch, capsys):
     images = _images(tmp_path, names=("slide",))
     answers = iter(
-        [str(images), "3", "2", "0", "1", "3", "", "", "", "/models/quad.joblib"]
-    )  # images, custom panel, laminin, I, IIa, IIb, IIx, DAPI, eMHC, model
+        [str(images), "3", "3", "1", "2", "4", "", "", "", "/models/quad.joblib"]
+    )  # images, custom panel, laminin, I, IIa, IIb (counted from 1), IIx, DAPI, eMHC, model
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     root = tmp_path / "study"
@@ -189,7 +189,8 @@ def test_init_interactive_custom_panel(tmp_path, monkeypatch, capsys):
     assert cli.main(["init", str(root)]) == 0
 
     output = capsys.readouterr().out
-    assert "slide.tif has 4 channel(s)" in output
+    assert "slide.tif has 4 channel(s), numbered 1 to 4" in output
+    assert "numbered 0" not in output
     assert "fill in mouse_id for 1 image(s)" in output
     panel = yaml.safe_load((root / "panel.yaml").read_text())
     assert panel["channels"] == {
@@ -234,3 +235,35 @@ def test_config_may_name_a_panel_preset(tmp_path):
     root = _project(tmp_path, panel="three_marker_iib_iia_laminin")
 
     assert cli.load_project_folder(root).panel.name == "three_marker_iib_iia_laminin.yaml"
+
+
+def test_init_rejects_channel_zero_and_channels_beyond_the_images(tmp_path, monkeypatch):
+    images = _images(tmp_path, names=("slide",))  # four channels
+    for laminin in ("0", "5"):
+        answers = iter([str(images), "3", laminin])
+        monkeypatch.setattr("builtins.input", lambda prompt="", answers=answers: next(answers))
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        assert cli.main(["init", str(tmp_path / f"study{laminin}")]) == 2
+
+
+def test_channel_names_come_from_ome_metadata(tmp_path):
+    import numpy as np
+    import tifffile
+
+    from fibertypeqc.panel_presets import channel_label
+
+    named = tmp_path / "named.ome.tif"
+    tifffile.imwrite(
+        named,
+        np.zeros((2, 8, 8), dtype=np.uint16),
+        ome=True,
+        metadata={"axes": "CYX", "Channel": {"Name": ["DAPI", "AF488"]}},
+    )
+    assert cli.image_channel_names(named) == ["DAPI", "AF488"]
+    assert cli.channel_summary(named, 2, ["DAPI", "AF488"]) == (
+        "named.ome.tif has 2 channel(s): Channel 1 · DAPI, Channel 2 · AF488"
+    )
+    plain = _images(tmp_path, names=("plain",)) / "plain.tif"
+    assert cli.image_channel_names(plain) == []
+    assert channel_label(0) == "Channel 1"
+    assert channel_label(1, ["DAPI", ""]) == "Channel 2"
