@@ -132,6 +132,10 @@
   terminal afterwards. A Windows section (untested) covers one-line commands, Windows paths,
   keeping images and the project on one drive, closing files open in other programs, and WSL2
   as a fallback.
+- HPC install no longer asks users to set `uv` folders to an example path (copied unchanged, it
+  stopped `uv` with "Permission denied"). Install is the same as on a laptop; a separate
+  download folder is an optional, one-time line in `~/.bashrc` for small home quotas. The user
+  guide's troubleshooting covers the cache error and `--` turned into a dash when copied.
 
 - Model-card template for built models (`docs/model_cards/built_model_template.md`); the user
   guide describes a project after a built model is promoted.
