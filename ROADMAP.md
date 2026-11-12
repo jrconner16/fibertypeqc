@@ -12,8 +12,8 @@ outside Git.
 ## Scope
 
 v0.3.0 and v0.4.0 are released and immutable. Tracks A–C polish the existing software and add no
-features. The model builder (Track E) is planned development for a later release; it adds a new
-path for panels without a model and does not change existing behavior. Production code paths (`src/`, `fibertypeqc/`, `scripts/`, `manifests/`, `configs/`,
+features. The model builder (Track E) is delivered in v0.5.0; it adds a new path for panels
+without a model and does not change existing behavior. Production code paths (`src/`, `fibertypeqc/`, `scripts/`, `manifests/`, `configs/`,
 `examples/`) do not move, so imports, commands, model loading, and output paths stay compatible.
 Method validation is a separate track (D) and does not block JOSS unless it finds a software bug.
 
@@ -24,6 +24,8 @@ C1; C2. HPC use (Slurm batch, Open OnDemand review) is documented in `docs/insta
 checked on a cluster: the demo batch agreed with the macOS reference snapshot within tolerance.
 
 v0.4.0 is released and archived on Zenodo (concept DOI 10.5281/zenodo.23893717; B3, B4 done).
+v0.5.0 (model builder, launcher, nuclei in results, images in subfolders) is in preparation. The
+paper only claims released features, so v0.5.0 is tagged before C5 is finished.
 
 In progress: C3 (outside install and demo run); C5 (paper). C3 fixes ship in a later release; the
 concept DOI covers every version.
@@ -76,7 +78,7 @@ segmentation and morphometry validation; nuclear analysis accuracy; comparison w
 reported as disagreement rather than error. Deferred: continuous phenotype models, new network
 architectures, feature and classifier ablations, new features.
 
-## Track E — Model builder (in development; does not block the archive or JOSS submission)
+## Track E — Model builder (complete for v0.5.0; does not block the archive or JOSS submission)
 
 Goal: a lab whose panel has no model can build one inside FiberTypeQC, with the safeguards the
 model improver already has. Flow: `init` with no model -> `run` (segment and measure; calls
@@ -101,7 +103,9 @@ Decisions:
   documented safeguards, not guarantees of biological validity. Test mice never take part in
   model selection, and a recommended model is never promoted automatically.
 
-Status: E1–E6 merged; E7 optional. Tracked in issue #71.
+Status: E1–E6 merged, plus the launcher's builder steps and test mice set aside automatically
+(#84, closed). E7 is optional. Tracked in issue #71; follow-ups are #76 (hybrid classes) and #98
+(setting test mice in the samples table).
 
 | ID | Task | Priority | Done when |
 |---|---|---|---|

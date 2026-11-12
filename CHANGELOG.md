@@ -1,6 +1,24 @@
 # Changelog
 
-## Unreleased
+## v0.5.0
+
+### Release summary
+
+- **Model builder:** a staining panel without a released model can be taken from blind labels to
+  a checked model. The steps are `model: none`, blind labelling, `build`, a check on test mice set
+  aside automatically (`evaluate`), and an explicit switch with exact rollback (`promote`). Each
+  step runs from the command line or the launcher, with the same safeguards as model improvement.
+- **Project launcher** (experimental): a window that shows a project's steps and runs them as the
+  same commands as the terminal, including the builder's checks and confirmations.
+- **Nuclei in results** (experimental): with a DAPI channel, the finalized tables, summaries, and
+  cohort report include nucleus counts and centrally nucleated fibers. The cut-off for "central"
+  has not yet been checked against manual counts.
+- **Images in subfolders:** include and exclude patterns, and a `use` column in the sample sheet.
+  The launcher and `init` now number image channels from 1.
+- **Fixes:** numeric-looking mouse and image IDs are kept as written. `promote --rollback` now
+  archives review decisions made after a switch instead of discarding them.
+- No change to segmentation, feature extraction, or the released models. v0.4.0 projects and
+  model files work unchanged.
 
 ### Added
 
@@ -49,7 +67,8 @@
   active. It creates projects (the `init` questions as a form; the model follows the stain panel,
   and stains without a released model lead to `model: none`), edits the sample sheet, and runs
   each step as the same `python -m fibertypeqc` command in a separate process with a live log.
-  Results are identical to the terminal. `evaluate` and `promote` are copy-only for now (#84).
+  Results are identical to the terminal. The builder steps `evaluate` and `promote` have their own
+  confirmations (see the #84 entries above).
   `status` output is unchanged; its next-step logic and `init`'s project writing are now shared
   with the launcher.
 - **Projects without a model** (model builder, roadmap E1/E2): `model: none` in
@@ -113,6 +132,10 @@
   terminal afterwards. A Windows section (untested) covers one-line commands, Windows paths,
   keeping images and the project on one drive, closing files open in other programs, and WSL2
   as a fallback.
+- HPC install no longer asks users to set `uv` folders to an example path (copied unchanged, it
+  stopped `uv` with "Permission denied"). Install is the same as on a laptop; a separate
+  download folder is an optional, one-time line in `~/.bashrc` for small home quotas. The user
+  guide's troubleshooting covers the cache error and `--` turned into a dash when copied.
 
 - Model-card template for built models (`docs/model_cards/built_model_template.md`); the user
   guide describes a project after a built model is promoted.

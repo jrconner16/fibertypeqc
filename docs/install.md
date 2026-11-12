@@ -71,20 +71,38 @@ Extras combine, for example `uv sync --frozen --extra dev --extra notebook`.
 
 ## HPC clusters (Slurm and Open OnDemand)
 
-Install once into shared storage that both the compute nodes and your desktop sessions can see.
-Keep the `uv` cache and Python installs on the same filesystem as the environment; otherwise
-`uv sync` warns that it cannot hardlink and copies every package:
+Install once, in a folder that both the compute nodes and your desktop sessions can see (your
+home folder usually works). The commands are the same as on a laptop:
 
 ```bash
-export WORK_ROOT=/path/to/shared/work
-export UV_CACHE_DIR="$WORK_ROOT/uv-cache"
-export UV_PYTHON_INSTALL_DIR="$WORK_ROOT/uv-python"
-cd "$WORK_ROOT" && git clone https://github.com/jrconner16/fibertypeqc.git
-cd fibertypeqc && uv sync --frozen
+cd ~
+git clone https://github.com/jrconner16/fibertypeqc.git
+cd fibertypeqc
+uv sync --frozen
 ```
 
-The first sync on Linux downloads the CUDA build of PyTorch. Run everything else, including
-`run_reference`, on a compute node: login nodes often limit threads and fail with
+Each later session needs only:
+
+```bash
+cd ~/fibertypeqc
+uv run --frozen python -m fibertypeqc app      # or any other command
+```
+
+The first sync on Linux downloads the CUDA build of PyTorch, several GB. `uv` keeps its
+downloads in `~/.cache/uv`. If your home folder has a small quota (the sync fails with
+`Disk quota exceeded`), or `uv sync` warns that it cannot hardlink, keep the download folder on
+the same larger storage as the repository. Add one line to `~/.bashrc` so every new terminal
+picks it up, then open a new terminal:
+
+```bash
+echo 'export UV_CACHE_DIR="$HOME/fibertypeqc-uv-cache"' >> ~/.bashrc
+```
+
+To use other storage, replace `$HOME/fibertypeqc-uv-cache` with a folder you can write to.
+Copy commands by typing them or from this page: email and word processors can turn `--` into a
+single dash, and the command then fails.
+
+Run everything else, including `run_reference`, on a compute node: login nodes often limit threads and fail with
 `RuntimeError: can't start new thread`.
 
 **Segmentation (`run`) on a GPU node.** A batch job such as:
@@ -100,10 +118,7 @@ The first sync on Linux downloads the CUDA build of PyTorch. Run everything else
 #SBATCH --time=01:00:00
 #SBATCH --output=fibertypeqc-run-%j.log
 set -euo pipefail
-WORK_ROOT=/path/to/shared/work
-export UV_CACHE_DIR="$WORK_ROOT/uv-cache"
-export UV_PYTHON_INSTALL_DIR="$WORK_ROOT/uv-python"
-cd "$WORK_ROOT/fibertypeqc"
+cd ~/fibertypeqc                  # the folder you cloned into
 uv run --frozen python -m fibertypeqc run /path/to/project
 uv run --frozen python -m fibertypeqc status /path/to/project
 ```
@@ -117,7 +132,7 @@ large cohorts, a Slurm array that runs one image per task is faster.
 **`prepare` and `finalize`** need no GPU; submit them the same way on a CPU partition.
 
 **Review in Open OnDemand.** Start a Desktop session on a CPU partition, open a terminal inside
-it, set the same `UV_*` variables, and run `fibertypeqc review` from the repository folder.
+it, and run `fibertypeqc review` from the repository folder.
 Review needs no GPU, but very large sections need more memory than a typical laptop; a session
 with 8 cores and 64 GB worked in testing. In a Desktop session on a GPU partition,
 `fibertypeqc app` (experimental) runs every step, segmentation included, from one window without

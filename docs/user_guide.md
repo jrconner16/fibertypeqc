@@ -395,6 +395,12 @@ contain image IDs and counts from your data, so keep snapshots of private data p
 
 - **`No module named …`, or the wrong Python version**: you are not in the repository root.
 - **Not sure what to run next**: `uv run python -m fibertypeqc status myproject/`.
+- **`uv`: "Failed to initialize cache" … "Permission denied"**: `UV_CACHE_DIR` points at a folder
+  you cannot create, often an example path copied unchanged. Check with `echo $UV_CACHE_DIR`;
+  open a new terminal, and if it is still set, remove or correct the line in `~/.bashrc`. Unset,
+  `uv` uses `~/.cache/uv`. See [install.md](install.md#hpc-clusters-slurm-and-open-ondemand).
+- **`uv` fails on `–frozen` (for example "Failed to spawn")**: email or a word processor turned
+  the two hyphens into a dash; type `--frozen`.
 - **"distributed privately" / "not a registered model"**: pass `--model /path/to/model.joblib` or
   set `FIBERTYPEQC_MODEL_ROOT`; the file must be the registered model (checked by SHA-256).
 - **"contains N scenes"**: set `split_czi_scenes: true` in the project config (or add
