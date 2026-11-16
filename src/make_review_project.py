@@ -27,6 +27,8 @@ from typing import Any
 import pandas as pd
 import yaml
 
+from src.fiber_type_labels import class_labels_for
+
 REQUIRED_COLUMNS = ("image_id", "mouse_id", "raw_image_path")
 USE_COLUMN = "use"
 RESERVED_COLUMNS = (*REQUIRED_COLUMNS, "section_id", USE_COLUMN)
@@ -162,8 +164,9 @@ def build_project(
         if not classes:
             raise ValueError("The batch ran without a model; pass the label classes (--classes)")
         project["review_classes"] = list(classes)
-        if negative_label:
-            project["class_labels"] = {"negative": negative_label}
+        labels = class_labels_for(classes, negative_label)
+        if labels:
+            project["class_labels"] = labels
     elif classes:
         raise ValueError("--classes is only used for a batch run without a model")
     return project, warnings

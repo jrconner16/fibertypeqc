@@ -102,7 +102,8 @@ class GuidedReviewWidget(QWidget):
             & {"i", "iia", "iib", "iix"}
             or {"i", "iia", "iib", "iix"}
         )
-        # (shortcut key, button text, class); hybrid and negative only appear when configured.
+        # (shortcut key, button text, class); eMHC, hybrid, and negative only appear when
+        # configured.
         self.class_buttons = tuple(
             (key, name, value)
             for key, name, value in (
@@ -110,6 +111,8 @@ class GuidedReviewWidget(QWidget):
                 ("2", "IIa", "iia"),
                 ("3", "IIb", "iib"),
                 ("4", "IIx", "iix"),
+                # eMHC is never offered with myosin classes, so it can share key 1.
+                ("1", project.class_labels.get("emhc", "eMHC⁺"), "emhc"),
                 ("5", "Hybrid", "hybrid"),
                 ("6", project.class_labels.get("negative", "Negative"), "negative"),
             )

@@ -41,7 +41,7 @@ from fibertypeqc.cohort_report import ID_DTYPES
 from src.fiber_type_labels import normalize_review_label
 
 RESULTS_SCHEMA_VERSION = "fibertypeqc.results.v1"
-CLASS_ORDER = ("i", "iia", "iix", "iib", "hybrid")
+CLASS_ORDER = ("i", "iia", "iix", "iib", "emhc", "hybrid")
 DEFINITIONS = {
     "analysis_fibers": "value_source != excluded",
     "finalized_composition": "final_type over resolved analysis fibers; unresolved reported "

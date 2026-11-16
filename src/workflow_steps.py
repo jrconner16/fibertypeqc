@@ -146,7 +146,7 @@ def _samples(project: ProjectFolder) -> tuple[bool, str, str]:
 
 def _panel_name(project: ProjectFolder) -> str:
     try:
-        markers = load_channel_config(project.panel).available_markers
+        markers = load_channel_config(project.panel).panel_markers
     except (OSError, ValueError):
         return project.panel.name
     names = {"i": "I", "iia": "IIa", "iib": "IIb", "iix": "IIx", "emhc": "eMHC"}
@@ -404,7 +404,9 @@ def built_candidates(project: ProjectFolder) -> list[str]:
     return sorted(names, key=lambda name: name != recommended)
 
 
-CLASS_NAMES = {"i": "Type I", "iia": "IIa", "iib": "IIb", "iix": "IIx", "hybrid": "Hybrid"}
+CLASS_NAMES = {
+    "i": "Type I", "iia": "IIa", "iib": "IIb", "iix": "IIx", "emhc": "eMHC⁺", "hybrid": "Hybrid",
+}  # fmt: skip
 
 
 def label_hints(progress: dict[str, Any], names: dict[str, str] | None = None) -> list[str]:

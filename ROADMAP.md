@@ -113,10 +113,11 @@ Status: E1–E6 merged; E7 optional. Tracked in issue #71.
 | E6 | User guide section and model-card template for built models | important | documented |
 | E7 | Public demo of building a model from manual labels on published images | optional | does not delay a release or the submission |
 
-Not in scope: importing labels from other tools, classes other than fiber types, deep-learning
-models, segmentation changes. Known limitation: `hybrid` is one class, so on panels with three or
-four myosin markers it pools different co-expression combinations; separate combination classes
-are a possible later extension.
+Not in scope: importing labels from other tools, deep-learning models, segmentation changes.
+Classes other than fiber types: eMHC on panels without a myosin marker (#102); eMHC combined with
+fiber types in one project is not supported. Known limitation: `hybrid` is one class, so on
+panels with three or four myosin markers it pools different co-expression combinations; separate
+combination classes are a possible later extension.
 
 ## Critical path
 

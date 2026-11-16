@@ -4,6 +4,13 @@
 
 ### Added
 
+- **eMHC as a model-builder class** (#102): a panel with eMHC and no myosin marker gets the
+  classes `emhc` and `negative` (shown as eMHC⁺ and eMHC⁻) in a project without a model, so
+  regeneration panels can be labelled, built, evaluated, and promoted like fiber-type panels. The
+  model reads the nine eMHC intensity measures only (not size, shape, or nuclei). `emhc` cannot be
+  combined with myosin classes; fiber-type classes, features, and models are unchanged.
+  `ChannelConfig.panel_markers` lists the myosin markers plus eMHC when mapped.
+
 - **Labels and build results in the launcher** (#84): **Label counts…** and **Build results…**
   show training-mouse labels per class and mouse against the builder recipe (with what is still
   needed), and the latest build's per-candidate scores, the rule, and why no model was recommended.

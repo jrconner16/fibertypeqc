@@ -29,7 +29,7 @@ from fibertypeqc.feature_schema import (
     SEMANTIC_DIAGNOSTIC_SUFFIXES,
     SEMANTIC_MARKER_NAMES,
 )
-from src.fiber_type_labels import MYOSIN_CLASSES, normalize_review_label
+from src.fiber_type_labels import EMHC_CLASS, MYOSIN_CLASSES, normalize_review_label
 from src.model_improver import build_estimator
 from src.review.finalization import image_input_fingerprints
 from src.review.project import Project
@@ -60,15 +60,27 @@ def load_recipe(path: Path | None = None) -> dict[str, Any]:
     return recipe
 
 
-def training_features(markers: tuple[str, ...] | list[str]) -> list[str]:
-    """Marker-intensity features for the panel's myosin markers, in a fixed order.
+def model_markers(
+    markers: tuple[str, ...] | list[str], classes: tuple[str, ...] | list[str] = ()
+) -> list[str]:
+    """The stains a built model reads: eMHC for eMHC classes, else the panel's myosin markers."""
+    if EMHC_CLASS in classes:
+        return [EMHC_CLASS] if EMHC_CLASS in markers else []
+    return [marker for marker in MYOSIN_CLASSES if marker in markers]
 
-    Fiber area, shape, DAPI, and eMHC are deliberately not used to type fibers.
+
+def training_features(
+    markers: tuple[str, ...] | list[str], classes: tuple[str, ...] | list[str] = ()
+) -> list[str]:
+    """Marker-intensity features for the stains the model reads, in a fixed order.
+
+    Fiber typing uses the panel's myosin markers only; eMHC classes use the eMHC stain only.
+    Fiber area, shape, and DAPI (nuclei) are deliberately never used: an eMHC call must mean
+    eMHC stain, not features of regeneration such as small size or central nuclei.
     """
     return [
         f"{SEMANTIC_MARKER_NAMES[marker]}.{suffix}"
-        for marker in MYOSIN_CLASSES
-        if marker in markers
+        for marker in model_markers(markers, classes)
         for suffix in SEMANTIC_DIAGNOSTIC_SUFFIXES
     ]
 
@@ -467,9 +479,12 @@ def build(
         raise BuilderError(
             "This project already has a model; adapt it with 'improve' instead of 'build'."
         )
-    feature_names = training_features(markers)
+    feature_names = training_features(markers, classes)
     if not feature_names:
-        raise BuilderError("The panel maps no myosin marker, so there is nothing to type from.")
+        raise BuilderError(
+            "The panel maps no myosin marker (or eMHC for eMHC classes), so there is nothing "
+            "to call fibers from."
+        )
     settings, channels = measurement_settings(project)
     labels, audit = combine_labels(project, sessions, classes)
     check_minimums(labels, classes, recipe)
@@ -492,7 +507,7 @@ def build(
 
     # 2. Final fit: every candidate refitted on all eligible training mice.
     stamp = output_dir.name
-    required = ["laminin", *(SEMANTIC_MARKER_NAMES[m] for m in MYOSIN_CLASSES if m in markers)]
+    required = ["laminin", *(SEMANTIC_MARKER_NAMES[m] for m in model_markers(markers, classes))]
     candidates: dict[str, Any] = {}
     for name, spec in recipe["candidates"].items():
         folder = output_dir / "candidates" / name

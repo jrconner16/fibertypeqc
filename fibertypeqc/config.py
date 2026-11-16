@@ -42,6 +42,11 @@ class ChannelConfig:
                 markers.append(marker)
         return tuple(markers)
 
+    @property
+    def panel_markers(self) -> tuple[str, ...]:
+        """The myosin markers plus eMHC when mapped: the stains a model's classes can come from."""
+        return self.available_markers + (("emhc",) if self.emhc_channel is not None else ())
+
 DEFAULT_CHANNEL_CONFIG = ChannelConfig()
 
 _LEGACY_CHANNEL_KEY_ALIASES = {
