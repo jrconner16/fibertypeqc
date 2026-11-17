@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from src.model_builder import BuilderError
-from src.model_evaluation import EvaluationError, evaluate
+from src.model_evaluation import EvaluationError, evaluate, recall_warning
 from src.review.project import load_project
 
 
@@ -43,6 +43,11 @@ def main(argv: list[str] | None = None) -> int:
     for name, value in result["pooled_recall_by_class"].items():
         name = project.class_labels.get(name, name)  # e.g. negative -> I⁻/IIa⁻
         print(f"  recall {name}: {'N/A' if value is None else f'{value:.2f}'}")
+    warning = recall_warning(
+        result["classes_below_recall_bar"], result["recall_bar"], project.class_labels
+    )
+    if warning:
+        print(f"\nWarning: {warning}")
     uses = result["test_set_uses"]
     if uses > 1:
         print(

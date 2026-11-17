@@ -27,11 +27,15 @@
   needed), and the latest build's per-candidate scores, the rule, and why no model was recommended.
   The window opens by itself when a build stops. `check_minimums` now uses the same counts
   (`label_progress`); its messages are unchanged.
-- **Check and switch from the launcher** (#84): in a project without a model, **Check on test
-  mice…** and **Switch…** run `evaluate` and `promote` after a confirmation that explains the use
-  of the test mice, the re-typing, and how to undo it; re-typing progress is shown. **More** offers
-  **Switch without a current check…** (a typed reason is required and recorded) and **Undo the
-  last model switch…**. `promote --reason TEXT` records why an override was used, in
+- **Check and apply from the launcher** (#84): in a project without a model, **Check on test
+  mice…** and **Apply…** (step **Apply the new model**) run `evaluate` and `promote` after a
+  confirmation that explains the use of the test mice, the re-typing, and how to undo it; re-typing
+  progress is shown. **More** offers **Apply without a current check…** (a typed reason is
+  required and recorded) and **Undo the last model change…**.
+- **Test-recall warning** (found while building a model from real images): `evaluate` records the
+  recall bar of the build's recipe and which classes fell below it on the test mice, and
+  `evaluate`, `status`, and the launcher's Apply confirmation warn about them. A warning only:
+  promotion is never blocked or changed by test scores. `promote --reason TEXT` records why an override was used, in
   `model_history.csv` and `independent_test_checks.csv` (new `reason` column; older files read it
   as empty).
 - **Automatic test mice for the model builder** (#84): `prepare` on a project without a model
@@ -113,6 +117,13 @@
   date, or missing. "Next:" moves from blind labelling to `build`, `evaluate`, and `promote`,
   and now includes `--blind`. `review --blind --reviewer NAME` and `build --reviewer NAME` accept
   their options before or after the project folder.
+- Blind labelling says what its plans do (found while building a model from real images). The
+  random-sample button names its size and scope (for example **Label 150 random fibers from every
+  section**), and starting it reports how many fibers it holds and how many are already labelled,
+  and that it resumes at the first unlabelled fiber. The sample settings (Advanced review options)
+  can be changed before a plan starts. While labelling, the dock shows how many fibers in the plan
+  are labelled. **Go to next section** says that it only changes the section on screen. Which
+  fibers a sample contains is unchanged.
 
 ### Fixed
 

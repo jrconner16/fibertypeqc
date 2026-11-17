@@ -227,7 +227,7 @@ ACTIONS = {
     "label": "Open blind labelling",
     "build": "Build",
     "evaluate": "Check on test mice…",
-    "promote": "Switch…",
+    "promote": "Apply…",  # the first model of a project that had none
 }
 AGAIN = {
     "prepare": "Prepare again",
@@ -396,7 +396,7 @@ class StepRow(QWidget):
         # The status text names the --override option; the launcher has a menu item instead.
         explanation = re.sub(
             r"\(A candidate can still .*--override\.\)",
-            "(To use a model anyway, choose More \u2192 Switch without a current check.)",
+            "(To use a model anyway, choose More \u2192 Apply without a current check.)",
             explanation,
         )
         if explanation:
@@ -681,11 +681,11 @@ class LauncherWindow(QMainWindow):
             action.setEnabled(enabled and project.review_project.is_file())
         if project is not None and project.no_model and self.workflow is not None:
             action = self.more_menu.addAction(
-                "Switch without a current check…", self.switch_without_check
+                "Apply without a current check…", self.switch_without_check
             )
             action.setEnabled(enabled and bool(built_candidates(project)))
         if project is not None and last_switch(project) is not None:
-            action = self.more_menu.addAction("Undo the last model switch…", self.confirm_rollback)
+            action = self.more_menu.addAction("Undo the last model change…", self.confirm_rollback)
             action.setEnabled(enabled)
         if project is not None:
             action = self.more_menu.addAction("Segment and type again…", self.run_again)
@@ -785,7 +785,7 @@ class LauncherWindow(QMainWindow):
                 return
         self.start_arguments(command_arguments(command, self.project, reviewer.strip()))
 
-    # --- model builder: check, switch, undo -----------------------------------------------
+    # --- model builder: check, apply, undo ------------------------------------------------
 
     def confirm_evaluate(self, candidate: str) -> None:
         """Score one candidate on the test mice, after saying what that costs."""
@@ -809,7 +809,8 @@ class LauncherWindow(QMainWindow):
             self.start_arguments(["evaluate", str(self.project.root), candidate])
 
     def confirm_promote(self, candidate: str, override: bool = False, reason: str = "") -> None:
-        """Switch the project to a built model, after saying what happens and how to undo it."""
+        """Apply a built model to a project without one, after saying what happens and how to
+        undo it."""
         if self.project is None:
             return
         status = self.workflow.status if self.workflow else {}
@@ -817,20 +818,23 @@ class LauncherWindow(QMainWindow):
         if status.get("evaluation") == "no_test_mice":
             warning = (
                 "This project has no test mice, so the model has had no independent check. "
-                "That is recorded with the switch.\n\n"
+                "That is recorded with the change.\n\n"
             )
         elif override:
             warning = (
-                "The model has no current check on the test mice. The switch is recorded with "
+                "The model has no current check on the test mice. The change is recorded with "
                 f"your reason: \u201c{reason}\u201d.\n\n"
             )
+        recall = status.get("recall_warning") if not override else ""
+        if recall:
+            warning += f"Warning: {recall}\n\n"
         text = (
-            f"Switch this project to the model '{candidate}'?\n\n{warning}"
-            "Every section is typed again with it, on its existing mask; this can take a while. "
-            "Your blind labels are kept. The current state is archived, and More \u2192 Undo the "
-            "last model switch restores it exactly."
+            f"Apply the model '{candidate}' to this project?\n\n{warning}"
+            "The project has no model yet: every section is typed with this one, on its existing "
+            "mask; this can take a while. Your blind labels are kept. The current state is "
+            "archived, and More \u2192 Undo the last model change restores it exactly."
         )
-        answer = QMessageBox.question(self, "Switch to the new model?", text)
+        answer = QMessageBox.question(self, "Apply the new model?", text)
         if answer != QMessageBox.Yes:
             return
         arguments = ["promote", str(self.project.root), candidate]
@@ -839,27 +843,27 @@ class LauncherWindow(QMainWindow):
         self.start_arguments(arguments)
 
     def switch_without_check(self) -> None:
-        """Switch to a built model without a current test check: needs a typed reason."""
+        """Apply a built model without a current test check: needs a typed reason."""
         if self.project is None:
             return
         names = built_candidates(self.project)
         if not names:
             return
         candidate, ok = QInputDialog.getItem(
-            self, "Switch without a current check", "Model:", names, 0, False
+            self, "Apply without a current check", "Model:", names, 0, False
         )
         if not ok:
             return
         reason, ok = QInputDialog.getText(
             self,
             "Reason (recorded)",
-            "Why switch without a current check on the test mice (or to a model the build did "
-            "not recommend)? This is recorded with the switch.",
+            "Why apply a model without a current check on the test mice (or one the build did "
+            "not recommend)? This is recorded with the change.",
         )
         if not ok:
             return
         if not reason.strip():
-            QMessageBox.information(self, "Reason needed", "Nothing was switched: give a reason.")
+            QMessageBox.information(self, "Reason needed", "Nothing was applied: give a reason.")
             return
         self.confirm_promote(candidate, override=True, reason=reason.strip())
 
@@ -867,11 +871,16 @@ class LauncherWindow(QMainWindow):
         switch = last_switch(self.project) if self.project is not None else None
         if switch is None:
             return
+        before = (
+            "having no model"
+            if switch["from_model"] == "none"
+            else f"the model {switch['from_model']}"
+        )
         answer = QMessageBox.question(
             self,
-            "Undo the last model switch?",
-            f"This returns the project to {switch['from_model']}, exactly as it was before the "
-            f"switch to {switch['to_model']}. Review decisions made since the switch are archived "
+            "Undo the last model change?",
+            f"This returns the project to {before}, exactly as it was before "
+            f"{switch['to_model']} was applied. Review decisions made since then are archived "
             "in the project's models folder and are not applied. Continue?",
         )
         if answer == QMessageBox.Yes:

@@ -37,7 +37,11 @@ workspace** brings back closed docks):
    accuracy reference, or a second reviewer), start the reviewer with
    `python -m fibertypeqc review PROJECT --blind --reviewer NAME`. Model calls, confidence, QC
    reasons, the call overlay, and the cohort dashboard are withheld; choose **Review this section**
-   (every fiber) or **Label a random sample**. These labels are saved per reviewer under
+   (every fiber) or the random sample (**Label 150 random fibers from every section**; set the
+   number under **Advanced review options** first). The random sample is one list that goes through
+   every section in turn and resumes at the first fiber you have not labelled, so you can stop at
+   any time. **Go to next section** only changes the section on screen, for field labelling.
+   These labels are saved per reviewer under
    `review/reference/<reviewer>/`, separately from review decisions, and finalization never uses
    them. Each session's decision count and active time are written to `review_sessions.csv`.
    To label a region exhaustively, draw shapes in the orange `review_analysis_rois` layer and choose
