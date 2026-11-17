@@ -12,11 +12,17 @@ afterwards which values came from software and which from a person. FiberTypeQC 
 workflow for multi-channel muscle sections (Zeiss CZI or TIFF) that keeps every step inspectable:
 it segments fibers, types them with a model matched to the staining panel, flags results that need
 a human look, records the reviewer's decisions separately from the model's predictions, and builds
-image-, mouse-, and cohort-level tables and a report.
+image-, mouse-, and cohort-level tables and a report. If no released model fits your stains, it
+helps you build one from a sample of fibers you label; if a model does poorly on your images, your
+review corrections can train a better one. Either way the new model is checked on mice set aside
+for testing, and switching to it is your decision and can be undone.
 
 ```text
 images ─► segment (Cellpose) ─► type (panel-specific model) ─► QC flags
        ─► guided review (Napari) ─► finalize (predictions untouched) ─► tables + HTML report
+
+no model for your stains:   label fibers blind ─► build ─► check on test mice ─► apply (undoable)
+model does poorly:          review corrections ─► improve ─► compare by a fixed rule ─► switch
 ```
 
 ![Review workspace on a demo field: each fiber outlined in the color of its current call over the raw stain channels](docs/images/demo_review_workspace.png)
@@ -25,9 +31,16 @@ images ─► segment (Cellpose) ─► type (panel-specific model) ─► QC fl
 
 Version 0.5.1. Read before relying on results:
 
-- **Models are panel-specific.** A model works only on the staining panel it was trained on; the
-  pipeline refuses a mismatched panel. The default, `quad_four_class_rf_v1`, is for laminin, Type I,
-  IIa, and IIb panels (IIx inferred from absent signal).
+- **Models are panel-specific.** A model works only on the staining panel it was trained on, and
+  the pipeline refuses a mismatched panel. Two are released:
+
+  | Model | Stains | Classes |
+  |---|---|---|
+  | `quad_four_class_rf_v1` (default) | laminin, Type I, IIa, IIb | I, IIa, IIb, IIx (inferred from absent signal) |
+  | `ta_three_class_logistic_v1` | laminin, IIa, IIb | IIa, IIb, IIx (inferred) |
+
+  For any other combination of stains, [build a model](#no-model-for-your-stains) from your own
+  labels.
 - **No accuracy claims yet.** The released models have not been validated on a blinded random
   hold-out sample; see their [model cards](docs/model_cards/). Use them for review-assisted
   analysis.
@@ -65,6 +78,39 @@ uv run python -m fibertypeqc app      myproject/   # the same steps in a window 
 
 <img src="docs/images/launcher_steps.png" width="560" alt="The project launcher: finished steps ticked on a timeline, and the current step, Review, with its buttons">
 
+### No model for your stains
+
+Start the project without a model; fibers are segmented and measured but not typed. Label a sample
+of them blind (the model's answer is never shown), and build one:
+
+```bash
+uv run python -m fibertypeqc init     myproject/ --images /path/to/images --model none
+uv run python -m fibertypeqc run      myproject/   # segment and measure
+uv run python -m fibertypeqc prepare  myproject/   # with 4+ mice, sets some aside for testing
+uv run python -m fibertypeqc review   myproject/ --blind --reviewer YOUR_NAME   # label fibers
+uv run python -m fibertypeqc build    myproject/   # candidates, compared mouse by mouse
+uv run python -m fibertypeqc evaluate myproject/ logistic   # check the recommended one on test mice
+uv run python -m fibertypeqc promote  myproject/ logistic   # apply it (promote --rollback undoes)
+```
+
+`build` recommends a model only when it beats a simple baseline by a margin fixed in advance and
+recognises every class; the test mice never take part in training or choosing. The
+[builder demo](docs/demo.md#build-a-model-no-model-to-start-from) runs these steps on public data
+with labels included. Details: [Panels without a model](docs/user_guide.md#panels-without-a-model).
+
+### Improve a model from your corrections
+
+When the model does poorly on your images, the fibers you corrected in review can train a
+replacement:
+
+```bash
+uv run python -m fibertypeqc improve myproject/            # candidates vs the current model
+uv run python -m fibertypeqc promote myproject/ CANDIDATE  # switch (promote --rollback undoes)
+```
+
+Nothing changes until you promote. Details:
+[Adapt the model from your review](docs/user_guide.md#adapt-the-model-from-your-review).
+
 The [user guide](docs/user_guide.md) covers project setup, outputs, QC checks, models,
 troubleshooting, and single-image commands.
 
@@ -88,11 +134,11 @@ troubleshooting, and single-image commands.
 - **Build a first model:** for a panel with no model, measure fibers without typing them, label
   a sample blind, and build candidate models under a declared recipe (leave-one-mouse-out against
   a baseline, minimum labels per class and mouse). Check the chosen one on independent test mice
-  before an explicit, reversible switch. See
-  [Panels without a model](docs/user_guide.md#panels-without-a-model).
-- **Measure and adapt:** blind reference labelling (model output hidden) with reviewer agreement;
-  candidate models trained from review decisions and compared under a rule fixed in advance;
-  explicit, reversible promotion; reproducibility snapshots.
+  before an explicit, reversible switch.
+- **Improve a model:** candidates trained from your review corrections, compared with the current
+  model under a rule fixed in advance; an explicit, reversible switch.
+- **Check the checking:** blind reference labels (model output hidden) with agreement between
+  reviewers, and reproducibility snapshots to compare a run with a reference.
 
 ## How QC and review fit together
 
