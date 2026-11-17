@@ -9,7 +9,8 @@
   in every review, not only blind labelling) and an **Advanced ▾** menu. Below it, three stages:
   **Section** (a verdict: looks fine, leave out an area by drawing around it, or leave out the
   whole section), **Fibers** (the plans as before, plus **click any fiber** to check it, then
-  back to the plan), and **Finish** (a summary, then finalize). The cohort dashboard, per-domain
+  back to the plan; the view stays where it is for a clicked fiber), and **Finish** (a summary,
+  then finalize). The cohort dashboard, per-domain
   section status, named regions and ROIs, and nuclei review are under Advanced and open as tabs
   beside the panel instead of stacking below it. The Section stage records the same section
   statuses and region exclusions as those panels, so finalization treats them identically;

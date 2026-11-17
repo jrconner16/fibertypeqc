@@ -97,12 +97,19 @@ def test_a_clicked_fiber_is_checked_then_the_plan_resumes(tmp_path, qt):
     project = _project(tmp_path)
     session = _session(project)
     session.current_image_id = "one"
-    widget = GuidedReviewWidget(project, FiberTypeReviewController(session))
+    centered = []  # whether the view would re-center for each fiber shown
+    widget = GuidedReviewWidget(
+        project,
+        FiberTypeReviewController(session),
+        object_changed=lambda _image, fiber: centered.append((fiber, widget.center_on_change)),
+    )
     widget.start_flagged_review()
     plan = widget.controller.session.active_queue
     position = widget.controller.session.queue_position
 
     assert widget.select_fiber("one", 2)
+    assert centered[-1] == (2, False)  # a clicked fiber is already on screen: no re-centering
+    assert widget.center_on_change
     assert widget.controller.session.active_queue == CLICKED_QUEUE
     assert widget.controller.current_item.fiber_id == 2
     widget._record_type("iia")

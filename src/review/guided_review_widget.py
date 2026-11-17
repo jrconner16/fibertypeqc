@@ -79,6 +79,8 @@ class GuidedReviewWidget(QWidget):
         self.controller = controller
         self.section_stage = section_stage
         self._return_to: tuple[tuple, str, int] | None = None  # the plan to resume after a click
+        # False while showing a clicked fiber: it is already on screen, so the view stays put.
+        self.center_on_change = True
         # Blind reference labelling: nothing derived from the model is shown or offered.
         self.blind = blind
         # (image_id, capture drawn shapes?) -> IDs of fibers inside the reviewer's drawn fields.
@@ -546,7 +548,11 @@ class GuidedReviewWidget(QWidget):
         self.controller.set_queue((item,), CLICKED_QUEUE)
         self._show_fibers()
         self.status.setText(f"Fiber {fiber_id} (clicked): decide, or → to return to the plan.")
-        self.refresh(notify=True)
+        self.center_on_change = False
+        try:
+            self.refresh(notify=True)
+        finally:
+            self.center_on_change = True
         return True
 
     def _resume_after_click(self) -> bool:

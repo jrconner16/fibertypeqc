@@ -476,7 +476,9 @@ def main(argv: list[str] | None = None) -> int:
         if selected is not None and labels is not None:
             selected.data = selected_fiber_outline_rgba(labels.data, fiber_id)
             coordinates = (labels.data == fiber_id).nonzero()
-            if len(coordinates[0]):
+            # A clicked fiber is already where the reviewer is looking: outline it, don't move.
+            center = all(guided.center_on_change for guided in guided_holder)
+            if center and len(coordinates[0]):
                 viewer.camera.center = tuple(float(values.mean()) for values in coordinates)
         review_widget.refresh()
 
@@ -653,6 +655,11 @@ def main(argv: list[str] | None = None) -> int:
             tabbed.add(id(dock))
         dock.show()
         dock.raise_()
+        # Qt only switches to a newly shown tab once the layout has settled, so raise it again
+        # on the next turn of the event loop; otherwise the new tab opens behind the panel.
+        from qtpy.QtCore import QTimer
+
+        QTimer.singleShot(0, dock.raise_)
 
     def open_dashboard() -> None:
         if args.blind:
