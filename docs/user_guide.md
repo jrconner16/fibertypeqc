@@ -175,7 +175,9 @@ uv run python -m fibertypeqc reference myproject/   # writes myproject/reference
 
 Blind mode hides model calls, confidence, QC reasons, and section and mouse names. Choose a
 reproducible random sample (150 fibers per section by default), a computer-placed field, or fields
-you draw. Blind labels are stored per reviewer and never change results. The export lists every
+you draw. The random sample is one list through every section and resumes where you left off; set
+its size under **Advanced review options**. For a first model, a few dozen per section is a
+reasonable start; the builder's label counts show what is still needed. Blind labels are stored per reviewer and never change results. The export lists every
 reviewer's labels beside the model's output, field coverage, reviewer agreement (percent and
 Cohen's kappa), and review time.
 

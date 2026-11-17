@@ -113,6 +113,13 @@
   date, or missing. "Next:" moves from blind labelling to `build`, `evaluate`, and `promote`,
   and now includes `--blind`. `review --blind --reviewer NAME` and `build --reviewer NAME` accept
   their options before or after the project folder.
+- Blind labelling says what its plans do (found while building a model from real images). The
+  random-sample button names its size and scope (for example **Label 150 random fibers from every
+  section**), and starting it reports how many fibers it holds and how many are already labelled,
+  and that it resumes at the first unlabelled fiber. The sample settings (Advanced review options)
+  can be changed before a plan starts. While labelling, the dock shows how many fibers in the plan
+  are labelled. **Go to next section** says that it only changes the section on screen. Which
+  fibers a sample contains is unchanged.
 
 ### Fixed
 
