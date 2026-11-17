@@ -22,7 +22,9 @@
 
 ### Added
 
-- **eMHC as a model-builder class** (#102): a panel with eMHC and no myosin marker gets the
+- **eMHC as a model-builder class** (experimental, #102): tested on synthetic images only; a
+  first real data set had too few eMHC⁺ fibers above its stain background to build from. A
+  panel with eMHC and no myosin marker gets the
   classes `emhc` and `negative` (shown as eMHC⁺ and eMHC⁻) in a project without a model, so
   regeneration panels can be labelled, built, evaluated, and promoted like fiber-type panels. The
   model reads the nine eMHC intensity measures only (not size, shape, or nuclei). `emhc` cannot be
