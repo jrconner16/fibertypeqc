@@ -63,7 +63,9 @@ machine, the check falls back to comparing fiber counts and class proportions wi
 uv run python -m fibertypeqc review path/to/fibertypeqc_demo/demo_project
 ```
 
-Choose **Review flagged fibers**. Each fiber is outlined in the color of its current call
+The review panel on the right opens on the **Section** stage (a verdict for the section on
+screen). Open **Fibers** and choose **Review flagged fibers**, or click any fiber in the image.
+Each fiber is outlined in the color of its current call
 (IIa green, IIb magenta, IIx orange), over the raw stain channels. Keys: `K` keep the model call,
 `2`/`3`/`4` = IIa/IIb/IIx, `X` exclude, Left/Right to move, `U` undo. Decisions save as you go.
 
