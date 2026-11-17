@@ -13,7 +13,14 @@ import yaml
 from fibertypeqc.cohort_report import build_cohort_report
 from src import cli
 from src.finalize_review_project import main as finalize_main
-from src.model_evaluation import EvaluationError, evaluate, evaluation_status, find_build_candidate
+from src.model_evaluation import (
+    EvaluationError,
+    evaluate,
+    evaluation_status,
+    find_build_candidate,
+    recall_warning,
+    recorded_recall_warning,
+)
 from src.promote_model import PromotionError, _test_check, promote, rollback
 from src.reference_snapshot import check as check_snapshot
 from src.reference_snapshot import freeze as freeze_snapshot
@@ -65,6 +72,21 @@ def _blind_labels(root):
     }
 
 
+def test_recall_warning_names_classes_below_the_bar(tmp_path):
+    assert recall_warning({}, 0.7, {}) == ""
+    text = recall_warning({"iib": 0.666, "negative": 0.5}, 0.7, {"negative": "IIa⁻/IIb⁻"})
+    assert "below 0.70" in text and "iib 0.67" in text and "IIa⁻/IIb⁻ 0.50" in text
+    folder = tmp_path / "models" / "evaluations" / "e1"
+    folder.mkdir(parents=True)
+    (folder / "evaluation.json").write_text(
+        json.dumps({"recall_bar": 0.7, "classes_below_recall_bar": {"iib": 0.6}})
+    )
+    assert "iib 0.60" in recorded_recall_warning(tmp_path, "models/evaluations/e1", {})
+    (folder / "evaluation.json").write_text(json.dumps({}))  # recorded before the bar was noted
+    assert recorded_recall_warning(tmp_path, "models/evaluations/e1", {}) == ""
+    assert recorded_recall_warning(tmp_path, "", {}) == ""
+
+
 def test_evaluate_promote_and_rollback_restore_the_project_exactly(
     built, monkeypatch, tmp_path_factory
 ):
@@ -78,6 +100,13 @@ def test_evaluate_promote_and_rollback_restore_the_project_exactly(
     assert result["labels"]["left_out"]["training_mice"] > 0  # training labels not read
     assert result["test_set_uses"] == 1
     assert set(result["pooled_recall_by_class"]) == set(CLASSES)
+    # The build's recall bar is recorded with the classes below it (a warning, never a block).
+    assert result["recall_bar"] == 0.70
+    assert result["classes_below_recall_bar"] == {
+        name: value
+        for name, value in result["pooled_recall_by_class"].items()
+        if value is not None and value < 0.70
+    }
     history = pd.read_csv(root / "models" / "evaluation_history.csv")
     assert len(history) == 1 and history.loc[0, "model_id"].endswith(chosen)
     assert _tree(root) == before  # evaluating changes nothing in the project

@@ -147,11 +147,13 @@ process on this computer, with its output in the log, so results are identical t
   still needed, and the latest build's scores per candidate with the rule it had to pass. When no
   model is recommended it says which class no model recognised well enough. It opens by itself
   when a build stops for too few labels.
-- **Check on test mice…** (`evaluate`) and **Switch…** (`promote`) ask before running. The check
-  says how many times the test mice have been used; the switch says that every section is typed
-  again and how to undo it, and shows progress. Under **More**, **Switch without a current
-  check…** asks for a reason, which is recorded (`promote --override --reason`), and **Undo the
-  last model switch…** runs `promote --rollback` after asking.
+- **Check on test mice…** (`evaluate`) and **Apply…** (`promote`, the step **Apply the new
+  model**) ask before running. The check says how many times the test mice have been used; Apply
+  says that every section is typed with the model and how to undo it, warns if any class's recall
+  on the test mice was below the bar `build` used to recommend candidates (a warning only), and
+  shows progress. Under **More**, **Apply without a current check…** asks for a reason, which is
+  recorded (`promote --override --reason`), and **Undo the last model change…** runs
+  `promote --rollback` after asking.
 - The launcher never submits cluster jobs. On a cluster, open it in a desktop session on a GPU
   node to run segmentation there, or on a CPU node for the other steps.
 
@@ -316,7 +318,9 @@ uv run python -m fibertypeqc promote  myproject/ --rollback # back to no model, 
   measurements already on disk; it changes nothing in the project. Results go to
   `models/evaluations/`, and every evaluation is logged in `models/evaluation_history.csv` with how
   many times the same test mice have been used. Choosing between models by their test scores makes
-  the test no longer independent.
+  the test no longer independent. If a class's recall on the test mice is below the bar `build`
+  used to recommend candidates (`minimum_pooled_class_recall` in the build's recipe), `evaluate`,
+  `status`, and the launcher say so. This is a warning only; it never blocks `promote`.
 - An evaluation is tied to the exact candidate file and to the test labels, masks, and
   measurements it used. If any of these change, it is out of date.
 - With test mice declared, `promote` requires a current evaluation of that candidate; `--override`

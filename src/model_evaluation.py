@@ -25,6 +25,7 @@ from fibertypeqc.semantic_model import predict_semantic_candidate
 from src.model_builder import (
     blind_label_sessions,
     combine_labels,
+    load_recipe,
     measurement_settings,
     mouse_metrics,
 )
@@ -141,6 +142,44 @@ def _history(root: Path) -> pd.DataFrame:
     return pd.read_csv(path, dtype=str, keep_default_na=False)
 
 
+def recall_bar(artifact: Path) -> float:
+    """Minimum pooled class recall in the recipe of the build that made this candidate."""
+    recipe_path = artifact.parents[2] / "recipe.yaml"
+    recipe = (
+        yaml.safe_load(recipe_path.read_text(encoding="utf-8"))
+        if recipe_path.is_file()
+        else load_recipe()
+    )
+    return float(recipe["recommendation_rule"]["minimum_pooled_class_recall"])
+
+
+def recorded_recall_warning(root: Path, evaluation: str, class_labels: dict[str, str]) -> str:
+    """``recall_warning`` for a recorded evaluation folder ('' if none, or recorded before
+    evaluations noted the bar)."""
+    path = root / evaluation / "evaluation.json"
+    if not evaluation or not path.is_file():
+        return ""
+    result = json.loads(path.read_text(encoding="utf-8"))
+    if "recall_bar" not in result:
+        return ""
+    return recall_warning(
+        result.get("classes_below_recall_bar") or {}, result["recall_bar"], class_labels
+    )
+
+
+def recall_warning(below: dict[str, float], bar: float, class_labels: dict[str, str]) -> str:
+    """One sentence naming the classes whose test recall was below the bar ('' if none)."""
+    if not below:
+        return ""
+    names = ", ".join(
+        f"{class_labels.get(name, name)} {value:.2f}" for name, value in below.items()
+    )
+    return (
+        f"test-mouse recall below {bar:.2f} (the bar 'build' used to recommend candidates): "
+        f"{names}. The model can still be applied; check these classes in review."
+    )
+
+
 def evaluation_status(root: Path, project: Project, artifact: Path) -> dict[str, Any]:
     """Whether the latest evaluation of this exact candidate still matches its inputs.
 
@@ -212,6 +251,10 @@ def evaluate(root: Path, project: Project, candidate: str) -> dict[str, Any]:
         )
         for name in classes
     }
+    # The recall the builder required to recommend a candidate, from the build's own recipe.
+    # Reported for a warning only: the test scores never block or change a promotion.
+    bar = recall_bar(artifact)
+    below = {name: value for name, value in pooled.items() if value is not None and value < bar}
     confusion = pd.crosstab(truth, predicted).reindex(index=classes, columns=classes, fill_value=0)
     confusion.index.name, confusion.columns.name = "labelled", "predicted"
 
@@ -242,6 +285,8 @@ def evaluate(root: Path, project: Project, candidate: str) -> dict[str, Any]:
         "labels": {"n_fibers": int(len(table)), **audit},
         "pooled_recall_by_class": pooled,
         "median_mouse_macro_f1": float(by_mouse["macro_f1"].median()),
+        "recall_bar": bar,
+        "classes_below_recall_bar": below,
         "test_set_uses": int(len(earlier)) + 1,
         "inputs": inputs,
         "caveat": CAVEAT,

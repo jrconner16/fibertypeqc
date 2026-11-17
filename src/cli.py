@@ -268,7 +268,11 @@ def builder_status(project: ProjectFolder) -> dict[str, Any]:
     builds = sorted((project.root / "models").glob("build_*/build_summary.json"))
     if not builds:
         return {}
-    from src.model_evaluation import evaluation_status, find_build_candidate
+    from src.model_evaluation import (
+        evaluation_status,
+        find_build_candidate,
+        recorded_recall_warning,
+    )
     from src.review.project import load_project
 
     summary = json.loads(builds[-1].read_text(encoding="utf-8"))
@@ -277,7 +281,12 @@ def builder_status(project: ProjectFolder) -> dict[str, Any]:
     if recommended:
         review = load_project(project.review_project)
         artifact = find_build_candidate(project.root, recommended)
-        found["evaluation"] = evaluation_status(project.root, review, artifact)["status"]
+        check = evaluation_status(project.root, review, artifact)
+        found["evaluation"] = check["status"]
+        if check["status"] == "current":
+            found["recall_warning"] = recorded_recall_warning(
+                project.root, check["evaluation"], review.class_labels
+            )
         history = project.root / "models" / "evaluation_history.csv"
         if history.is_file():
             uses = pd.read_csv(history, dtype=str, keep_default_na=False)["test_set_uses"]
@@ -313,7 +322,11 @@ def no_model_next_step(status: dict[str, Any]) -> tuple[str, str] | None:
             "with a warning.",
         )
     if evaluation == "current":
-        return (f"promote PROJECT {chosen}", "Switch the project to the evaluated candidate.")
+        return (
+            f"promote PROJECT {chosen}",
+            "Apply the evaluated candidate: the project has no model yet, and this types every "
+            "fiber with it (undo with promote --rollback).",
+        )
     why = (
         "Its evaluation is out of date (labels, masks, or measurements changed); evaluating "
         "again uses the test mice again."
@@ -392,6 +405,8 @@ def command_status(project: ProjectFolder) -> int:
             f"Test:    {status['recommended']}: {state}"
             + (f"; test mice used {uses} time(s)" if uses else "")
         )
+        if status.get("recall_warning"):
+            print(f"Warning: {status['recall_warning']}")
     command, explanation = next_step(project, status)
     print(f"Next:    python -m fibertypeqc {command.replace('PROJECT', str(project.root))}")
     print(f"         {explanation}")
