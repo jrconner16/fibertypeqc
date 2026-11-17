@@ -21,9 +21,13 @@ CLASS_COLORS = {
     "iix": ("#1baf7a", "#199e70"),
     "iib": ("#eda100", "#c98500"),
     "hybrid": ("#e87ba4", "#d55181"),
+    # Never shown with the myosin classes (eMHC is labelled on its own), so it reuses a slot.
+    "emhc": ("#eda100", "#c98500"),
 }
 OTHER_COLORS = ("#8a8984", "#a3a29c")
-CLASS_LABELS = {"i": "Type I", "iia": "IIa", "iix": "IIx", "iib": "IIb", "hybrid": "Hybrid"}
+CLASS_LABELS = {
+    "i": "Type I", "iia": "IIa", "iix": "IIx", "iib": "IIb", "emhc": "eMHC⁺", "hybrid": "Hybrid",
+}  # fmt: skip
 LABEL_MIN_SHARE = 0.08
 
 
@@ -116,7 +120,7 @@ def _composition_chart(
         y += group_gap
     height = y
     return (
-        f'<svg role="img" aria-label="Fiber-type composition per mouse, predicted and finalized" '
+        f'<svg role="img" aria-label="Composition per mouse, predicted and finalized" '
         f'viewBox="0 0 {label_w + bar_w + 10} {height}" width="100%" '
         f'style="max-width:{label_w + bar_w + 10}px">' + "".join(rows) + "</svg>"
     )
@@ -185,8 +189,8 @@ NUCLEI_NOTE = (
     "least halfway from its edge to its centre. <b>Peripheral</b>: inside a fiber, nearer its "
     "edge. <b>Interstitial</b>: outside every segmented fiber (this includes nuclei of fibers "
     "that were not segmented). <b>Ambiguous</b>: no fiber holds most of the nucleus. A centrally "
-    "nucleated fiber has at least one central nucleus; by fiber type, over resolved fibers of that "
-    "type. Nucleus counts are per whole image. The halfway cut-off has not yet been checked "
+    "nucleated fiber has at least one central nucleus; by class, over resolved fibers of that "
+    "class. Nucleus counts are per whole image. The halfway cut-off has not yet been checked "
     "against manual counts."
 )
 
@@ -257,6 +261,12 @@ def _class_notes(classes: list[str], labels: dict[str, str]) -> list[str]:
     if "negative" not in classes:
         return []
     name = html.escape(_label("negative", labels))
+    if "emhc" in classes:
+        return [
+            f'<p class="note">{html.escape(_label("emhc", labels))} and {name}: fibers with and '
+            "without eMHC stain, called from the eMHC signal only (not from fiber size or "
+            "nuclei).</p>"
+        ]
     return [
         f'<p class="note">{name}: negative for every myosin marker this panel measures. It is '
         "not inferred to be any other fiber type (for example IIx or IIb).</p>"

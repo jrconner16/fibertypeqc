@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         project = load_project(args.project)
-        markers = load_channel_config(args.panel_config).available_markers
+        markers = load_channel_config(args.panel_config).panel_markers
         sessions = blind_label_sessions(project, args.reviewer)
         run_dir = args.output_dir / datetime.now(UTC).strftime("build_%Y%m%dT%H%M%SZ")
         result = build(

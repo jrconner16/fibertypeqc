@@ -256,6 +256,14 @@ classes: [i, iia, negative]      # optional; this is the default for a Type I + 
   markers (for example I⁻/IIa⁻). It is never counted as IIx or IIb.
 - `unclassified` is not a class: it only means no model has typed the fiber yet. It is separate
   from a reviewer's `uncertain` and from the historical rule call `unknown`.
+- **Regeneration panels.** A panel with eMHC and no myosin marker (for example eMHC, laminin,
+  DAPI) gets the classes `emhc` and `negative`, shown as eMHC⁺ and eMHC⁻. The model reads the
+  eMHC stain only, never fiber size, shape, or nuclei, so eMHC⁺ means "has eMHC stain", not
+  "regenerating": fibers that kept central nuclei after eMHC faded stay eMHC⁻. Fiber size and
+  central nuclei are reported alongside (by class) in the results. eMHC is labelled on its own:
+  `emhc` cannot be combined with myosin classes or `hybrid`, and fiber-type models never read eMHC.
+  Skip fibers you are unsure about (`uncertain`), and exclude objects that are not fibers rather
+  than labelling them eMHC⁻.
 
 After `run` and `prepare`, label fibers with
 `uv run python -m fibertypeqc review myproject/ --blind --reviewer NAME`

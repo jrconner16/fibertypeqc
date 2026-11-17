@@ -163,7 +163,7 @@ def load_project_folder(folder: Path) -> ProjectFolder:
         )
     if no_model and panel.is_file():
         try:
-            markers = load_channel_config(panel).available_markers
+            markers = load_channel_config(panel).panel_markers
             classes = tuple(
                 validate_classes(raw["classes"], markers)
                 if "classes" in raw
