@@ -139,6 +139,12 @@
 
 ### Documentation and repository
 
+- **Model-builder demo** (roadmap E7): `fibertypeqc_builder_demo.zip` (release download, CC BY
+  4.0) holds fourteen cropped fields from seven mdx mice in a `model: none` project, already
+  segmented, with test mice set aside and 731 blind labels from one reviewer, ready for `build`,
+  `evaluate`, and `promote`. `docs/demo.md`, "Build a model", walks through it and says what to
+  expect. Checked from the zip on a fresh copy: the build recommends a model, and rollback
+  restores every file.
 - Install steps include installing `uv` (macOS/Linux and Windows PowerShell) and opening a new
   terminal afterwards. A Windows section (untested) covers one-line commands, Windows paths,
   keeping images and the project on one drive, closing files open in other programs, and WSL2

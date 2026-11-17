@@ -105,8 +105,9 @@ Decisions:
   model selection, and a recommended model is never promoted automatically.
 
 Status: E1–E6 merged, plus the launcher's builder steps and test mice set aside automatically
-(#84, closed). E7 is optional. Tracked in issue #71; follow-ups are #76 (hybrid classes) and #98
-(setting test mice in the samples table).
+(#84, closed). E7 done for v0.5.0: the builder demo (`fibertypeqc_builder_demo.zip`), built and
+checked from real images, end to end. Tracked in issue #71; follow-ups are #76 (hybrid classes),
+#98 (setting test mice in the samples table), and #106 (a project open in two windows).
 
 | ID | Task | Priority | Done when |
 |---|---|---|---|
