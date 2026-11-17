@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## v0.5.1
+
+### Release summary
+
+- **Review window, one stage at a time:** a verdict per section (looks fine, leave out an area,
+  or leave out the section), then the fibers (the flagged list, or click any fiber), then
+  finalize. napari's layer controls stay on the left, and each section's contrast is kept.
+  Advanced panels open as tabs beside the review panel.
+- No change to decisions, finalization, or outputs; v0.5.0 projects open unchanged. Docs and the
+  review screenshot show the new window.
 
 ### Changed
 
@@ -25,6 +34,14 @@
 
 - Saving or removing a region now refreshes the region-coverage overlay; the update was never
   reached.
+
+### Documentation
+
+- The review screenshot (README, `docs/demo.md`) shows the new window; the README, demo, review
+  guide, review reference, and user guide describe the stages and the Advanced menu.
+- The changelog's `v0.5.0` heading, lost when this section was added, is restored.
+
+## v0.5.0
 
 ### Release summary
 

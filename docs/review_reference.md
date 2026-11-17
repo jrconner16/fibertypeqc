@@ -350,9 +350,17 @@ explicit seeds, and sample sizes for reproducible study protocols.
 
 ### Guided review workflow
 
-Start by choosing **Review flagged fibers**, **Review this section**, or **View
-cohort QC**. The prominent **Navigate review** bar switches to the cohort,
-current section, and other domains. After selecting a plan, the dock shows one
+The review panel sits on the right, beside napari's layer controls and layer
+list on the left. Its top bar names the section on screen, with ◀ ▶ to move
+between sections and **Advanced ▾** for the cohort dashboard, per-domain section
+status, named regions and ROIs, and nuclei review (these open as tabs beside the
+panel). Below it, one stage is shown at a time: **Section** (a verdict for the
+section: looks fine, leave out an area, or leave out the section; implemented in
+`src/review/section_stage_widget.py`), **Fibers**, and **Finish** (a summary and
+finalization). In the Fibers stage, choose **Review flagged fibers** or **Review
+this section**, or click any fiber in the image: a clicked fiber is checked on
+its own, recorded with reason `clicked`, and the panel then returns to the plan
+and position it was on (clicking is off in blind labelling). The stage shows one
 fiber at a time with a short context line and plain-language primary action
 **Keep model call (K)**. Type corrections and navigation buttons show their
 hotkeys directly. Advanced queue controls and uncommon actions are grouped under
@@ -365,16 +373,15 @@ The visible shortcut legend is: Left/Right to navigate, `K` to keep the model
 call, `1`/`2`/`3`/`4` for I/IIa/IIb/IIx, `F` to center the current fiber, and
 `U` to undo the immediately prior decision.
 
-The persistent navigator moves between cohort QC, the current section, and
-domain-specific review. If a dock is closed accidentally, reopen it from the
-Napari **Workspace** menu; **Restore review workspace** returns the Guided
-Review dock and channel map without restarting. Raw data opens as individually
+If a panel is closed accidentally, reopen it from the napari **Review** menu;
+**Restore review workspace** returns the review panel and channel map without
+restarting. When a section opens, a stain channel is the selected layer, so the
+contrast controls act on it; each section's channel contrast is kept in
+`review/display_contrast.json` (display only) and restored on return. Raw data opens as individually
 toggleable, color-named stain channels (a fixed composite layer is available, hidden),
 with fibers outlined in the color of their current call.
-choices do not modify predictions or review data.
 The compact, fixed-width Channel Map identifies each role and source channel.
 These display choices do not modify predictions or review data.
-choices do not modify predictions or review data.
 
 The legacy `review_labels_napari` CSV layout remains readable through the
 `load_legacy_fiber_type_decisions` adapter. It is a migration input only; the
@@ -383,8 +390,10 @@ and masks are not part of this phase.
 
 ## Region Review (Phase 5)
 
-Open the project workspace and choose **Regions** in the persistent navigator,
-or use **Workspace → Show Region Review**. The image receives a yellow
+To leave out an area, the Section stage's **Leave out an area…** is enough (it
+records an `exclude_all_analysis` region). For other actions and named ROIs,
+choose **Advanced ▾ → Named regions and analysis ROIs**, or **Review → Advanced
+→ Named regions and analysis ROIs**. The image receives a yellow
 `review_region_shapes` layer and a translucent `review_region_coverage` layer.
 The coverage layer counts only saved reviewer polygons; it is not a QC score or
 biological measurement.
@@ -430,7 +439,8 @@ uv run python -m src.review_project_napari \
   --display-downsample 1
 ```
 
-Choose **Nuclei** in Guided Review, or use **Workspace → Show Nuclei Review**.
+Choose **Advanced ▾ → Nuclei review** in the review panel, or **Review → Advanced
+→ Nuclei review**.
 The selected image shows its configured raw-image channels (including DAPI/eMHC
 when present), fiber labels, reviewed nuclei labels, and an empty **Draft new
 nucleus** labels layer.

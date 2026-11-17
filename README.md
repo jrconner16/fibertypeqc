@@ -23,7 +23,7 @@ images ─► segment (Cellpose) ─► type (panel-specific model) ─► QC fl
 
 ## Status
 
-Version 0.5.0. Read before relying on results:
+Version 0.5.1. Read before relying on results:
 
 - **Models are panel-specific.** A model works only on the staining panel it was trained on; the
   pipeline refuses a mismatched panel. The default, `quad_four_class_rf_v1`, is for laminin, Type I,
@@ -77,8 +77,9 @@ troubleshooting, and single-image commands.
   its panel, features, and classes, and is identified by SHA-256.
 - **QC:** per-image checks (fiber count, uncertainty, inferred-class share, fiber size, channel
   crosstalk) and per-fiber flags (low confidence or margin, faint or thick laminin outline).
-- **Review:** a Napari workspace with a cohort dashboard, section pass/fail/exclude, a guided queue
-  of flagged fibers that says why each is shown, and drawn exclusion regions and analysis ROIs.
+- **Review:** a Napari window that works one stage at a time: a verdict per section (including
+  drawing areas to leave out), then the flagged fibers one by one with the reason each is shown,
+  or any fiber you click; a cohort dashboard and named analysis ROIs are under Advanced.
 - **Finalize:** applies review decisions and exclusions into new tables; every final value is
   labelled `predicted`, `reviewed`, `excluded`, or `unresolved`; refuses decisions made on inputs
   that have since changed.
@@ -153,8 +154,8 @@ validation/   Command wrappers over research validation tools
 
 If you use FiberTypeQC, please cite the version you used. Every release is archived on Zenodo:
 [10.5281/zenodo.23893717](https://doi.org/10.5281/zenodo.23893717) always resolves to the latest
-version, and each version's Zenodo page gives its own DOI (v0.4.0:
-[10.5281/zenodo.23893718](https://doi.org/10.5281/zenodo.23893718)). Cite the version DOI for a
+version, and each version's Zenodo page gives its own DOI (v0.5.0:
+[10.5281/zenodo.24321794](https://doi.org/10.5281/zenodo.24321794)). Cite the version DOI for a
 specific analysis. GitHub's "Cite this repository" button gives the citation from
 [CITATION.cff](CITATION.cff). MIT License; see
 [LICENSE](LICENSE). Questions and bug reports: open an
