@@ -93,6 +93,8 @@ uv run python -m fibertypeqc evaluate myproject/ logistic   # check the recommen
 uv run python -m fibertypeqc promote  myproject/ logistic   # apply it (promote --rollback undoes)
 ```
 
+<img src="docs/images/builder_build_results.png" width="640" alt="Build results in the launcher on the builder demo: labels per class and training mouse against the minimums, then each candidate model's leave-one-mouse-out scores against a majority-class baseline, and the recommended model">
+
 `build` recommends a model only when it beats a simple baseline by a margin fixed in advance and
 recognises every class; the test mice never take part in training or choosing. The
 [builder demo](docs/demo.md#build-a-model-no-model-to-start-from) runs these steps on public data
@@ -139,6 +141,14 @@ troubleshooting, and single-image commands.
   model under a rule fixed in advance; an explicit, reversible switch.
 - **Check the checking:** blind reference labels (model output hidden) with agreement between
   reviewers, and reproducibility snapshots to compare a run with a reference.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/report_composition_dark.png">
+  <img src="docs/images/report_composition_light.png" width="640" alt="The cohort report on the demo: provenance (model, code revision, SHA-256 of the final table), then each mouse's fiber-type composition as predicted by the model and as finalized after review">
+</picture>
+
+*The cohort report on the demo: each mouse's composition as the model predicted it and as
+finalized after review, with the model, code revision, and table digest it came from.*
 
 ## How QC and review fit together
 
