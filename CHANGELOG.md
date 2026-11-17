@@ -1,6 +1,30 @@
 # Changelog
 
-## v0.5.0
+## Unreleased
+
+### Changed
+
+- **Review window, one stage at a time.** napari's layer controls stay on the left; the review
+  panel moves to the right at full height. Its top bar shows the section on screen (◀ ▶ to move,
+  in every review, not only blind labelling) and an **Advanced ▾** menu. Below it, three stages:
+  **Section** (a verdict: looks fine, leave out an area by drawing around it, or leave out the
+  whole section), **Fibers** (the plans as before, plus **click any fiber** to check it, then
+  back to the plan; the view stays where it is for a clicked fiber), and **Finish** (a summary,
+  then finalize). The cohort dashboard, per-domain
+  section status, named regions and ROIs, and nuclei review are under Advanced and open as tabs
+  beside the panel instead of stacking below it. The Section stage records the same section
+  statuses and region exclusions as those panels, so finalization treats them identically;
+  saved decisions, queues, and outputs are unchanged. Clicking does not select fibers in blind
+  labelling, so reference labels are never hand-picked.
+- A stain channel is the selected layer when a section opens, so the contrast controls act on
+  it, and each section's channel contrast is kept (display only, in
+  `review/display_contrast.json`) and restored when you return to it.
+- The decision buttons are on two rows so none are cut off in a narrow panel.
+
+### Fixed
+
+- Saving or removing a region now refreshes the region-coverage overlay; the update was never
+  reached.
 
 ### Release summary
 

@@ -159,9 +159,12 @@ process on this computer, with its output in the log, so results are identical t
 
 ## Review
 
-The review workspace has four parts: cohort QC, per-section pass/fail/exclude, guided
-fiber-by-fiber review of flagged fibers (`K` keeps the model call, `1`–`4` set I/IIa/IIb/IIx), and
-regions (draw an area to exclude, or name analysis ROIs). Fibers are flagged for low model
+The review panel works one stage at a time: **Section** (set each channel's background with
+napari's contrast controls, then a verdict: looks fine, leave out an area, or leave out the
+section), **Fibers** (the flagged fibers one by one, or click any fiber; `K` keeps the model call,
+`1`–`4` set I/IIa/IIb/IIx), and **Finish** (finalize and open the report). The cohort dashboard,
+per-domain section status, named regions and analysis ROIs, and nuclei review are under
+**Advanced ▾**. Fibers are flagged for low model
 confidence or margin and for a faint or unusually thick laminin outline; "Why shown" names the
 reason. Workflow: [review_guide.md](review_guide.md); component details:
 [review_reference.md](review_reference.md).

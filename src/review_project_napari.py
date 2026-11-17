@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import webbrowser
 from pathlib import Path
 
@@ -162,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     from src.review.region_review import RegionReviewController
     from src.review.region_review_widget import RegionReviewWidget
     from src.review.schemas import RegionKind
+    from src.review.section_stage_widget import SectionStageWidget
     from src.review.storage import save_session
     from src.typing_display import normalize_for_display
 
@@ -197,6 +199,8 @@ def main(argv: list[str] | None = None) -> int:
     region_controller = RegionReviewController(project, session)
     loaded_image_id: str | None = None
     nuclear_widget: NuclearReviewWidget | None = None
+    guided_holder: list = []  # the guided panel, once built (show_image updates its section bar)
+    guided_docks: list = []  # its dock, beside which advanced panels open as tabs
 
     def _region_shape_data(image_id: str, kind: RegionKind) -> list[np.ndarray]:
         data: list[np.ndarray] = []
@@ -246,12 +250,12 @@ def main(argv: list[str] | None = None) -> int:
             coverage = viewer.layers["review_region_coverage"]
         except KeyError:
             return
-            coverage.data = region_controller.coverage_heatmap(
-                controller.current_image_id,
-                coverage.data.shape,
-                coordinate_scale=args.display_downsample,
-                kind=RegionKind.REVIEW,
-            )
+        coverage.data = region_controller.coverage_heatmap(
+            controller.current_image_id,
+            coverage.data.shape,
+            coordinate_scale=args.display_downsample,
+            kind=RegionKind.REVIEW,
+        )
 
     def _selected_region_geometry() -> dict | None:
         try:
@@ -306,8 +310,41 @@ def main(argv: list[str] | None = None) -> int:
             return
         layer.colormap = _call_colormap(image_id)
 
+    # Display only: each section's channel contrast, kept when the reviewer comes back to it.
+    contrast_path = project.review_directory / "display_contrast.json"
+    try:
+        section_contrast: dict[str, dict[str, list[float]]] = json.loads(
+            contrast_path.read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        section_contrast = {}
+
+    def _remember_contrast() -> None:
+        if loaded_image_id is None:
+            return
+        limits = {
+            layer.name: [float(value) for value in layer.contrast_limits]
+            for layer in viewer.layers
+            if layer.name.startswith("review_raw_")
+        }
+        if limits and limits != section_contrast.get(loaded_image_id):
+            section_contrast[loaded_image_id] = limits
+            try:
+                contrast_path.parent.mkdir(parents=True, exist_ok=True)
+                contrast_path.write_text(json.dumps(section_contrast, indent=1), encoding="utf-8")
+            except OSError:
+                pass  # display settings are a convenience, never required
+
+    def _select_first_channel() -> None:
+        """Make a stain channel the selected layer, so the contrast controls act on it."""
+        for layer in viewer.layers:
+            if layer.name.startswith("review_raw_"):
+                viewer.layers.selection.active = layer
+                return
+
     def show_image(image_id: str) -> None:
         nonlocal loaded_image_id
+        _remember_contrast()
         for layer in list(viewer.layers):
             if layer.name.startswith("review_"):
                 viewer.layers.remove(layer)
@@ -350,13 +387,17 @@ def main(argv: list[str] | None = None) -> int:
             rgb=True,
             visible=False,
         )
+        saved_contrast = section_contrast.get(image_id, {})
         for display in displays:
-            viewer.add_image(
+            name = f"review_raw_{display.role}_ch{display.channel}"
+            layer = viewer.add_image(
                 normalize_for_display(raw[display.channel]),
-                name=f"review_raw_{display.role}_ch{display.channel}",
+                name=name,
                 colormap=display.colormap,
                 blending="additive",
             )
+            if name in saved_contrast:
+                layer.contrast_limits = saved_contrast[name]
         if labels is not None:
             viewer.add_labels(labels, name="review_fiber_labels", opacity=0.25, visible=False)
             if not args.blind:
@@ -414,9 +455,12 @@ def main(argv: list[str] | None = None) -> int:
             visible=True,
         )
         loaded_image_id = image_id
+        _select_first_channel()
         region_widget.refresh()
         if nuclear_widget is not None:
             nuclear_widget.refresh()
+        for guided in guided_holder:
+            guided.section_changed()
 
     def show_object(image_id: str, fiber_id: int) -> None:
         controller.set_image(image_id)
@@ -432,7 +476,9 @@ def main(argv: list[str] | None = None) -> int:
         if selected is not None and labels is not None:
             selected.data = selected_fiber_outline_rgba(labels.data, fiber_id)
             coordinates = (labels.data == fiber_id).nonzero()
-            if len(coordinates[0]):
+            # A clicked fiber is already where the reviewer is looking: outline it, don't move.
+            center = all(guided.center_on_change for guided in guided_holder)
+            if center and len(coordinates[0]):
                 viewer.camera.center = tuple(float(values.mean()) for values in coordinates)
         review_widget.refresh()
 
@@ -538,12 +584,12 @@ def main(argv: list[str] | None = None) -> int:
         regions_changed=_refresh_region_shapes,
     )
     region_review_dock = _keep_dock(
-        viewer.window.add_dock_widget(region_widget, area="left", name="Region Review")
+        viewer.window.add_dock_widget(region_widget, area="right", name="Region Review")
     )
     region_review_dock.hide()
     review_widget = ImageReviewWidget(controller, image_changed=show_image)
     image_review_dock = _keep_dock(
-        viewer.window.add_dock_widget(review_widget, area="left", name="Image Review (advanced)")
+        viewer.window.add_dock_widget(review_widget, area="right", name="Image Review (advanced)")
     )
     image_review_dock.hide()
 
@@ -588,7 +634,7 @@ def main(argv: list[str] | None = None) -> int:
         add_enabled=args.display_downsample == 1,
     )
     nuclear_review_dock = _keep_dock(
-        viewer.window.add_dock_widget(nuclear_widget, area="left", name="Nuclei Review")
+        viewer.window.add_dock_widget(nuclear_widget, area="right", name="Nuclei Review")
     )
     has_nuclei = any("nuclei_labels" in image.outputs for image in project.images)
 
@@ -598,15 +644,30 @@ def main(argv: list[str] | None = None) -> int:
             show_image(controller.current_image_id)
     nuclear_review_dock.hide()
 
+    tabbed: set[int] = set()
+
+    def _open_beside_guided(dock) -> None:
+        """Open an advanced panel as a tab beside the guided panel, never stacked below it."""
+        qt_window = getattr(viewer.window, "_qt_window", None)
+        if qt_window is not None and guided_docks and id(dock) not in tabbed:
+            dock.setFloating(False)
+            qt_window.tabifyDockWidget(guided_docks[0], dock)
+            tabbed.add(id(dock))
+        dock.show()
+        dock.raise_()
+        # Qt only switches to a newly shown tab once the layout has settled, so raise it again
+        # on the next turn of the event loop; otherwise the new tab opens behind the panel.
+        from qtpy.QtCore import QTimer
+
+        QTimer.singleShot(0, dock.raise_)
+
     def open_dashboard() -> None:
         if args.blind:
             return
-        dashboard_dock.show()
-        dashboard_dock.raise_()
+        _open_beside_guided(dashboard_dock)
 
     def open_image_review() -> None:
-        image_review_dock.show()
-        image_review_dock.raise_()
+        _open_beside_guided(image_review_dock)
 
     def show_section() -> None:
         controller.session.active_scope = Scope.IMAGE
@@ -615,8 +676,7 @@ def main(argv: list[str] | None = None) -> int:
 
     def open_region_review() -> None:
         _ensure_image_loaded()
-        region_review_dock.show()
-        region_review_dock.raise_()
+        _open_beside_guided(region_review_dock)
 
     def open_nuclei_review() -> None:
         if not has_nuclei:
@@ -626,8 +686,7 @@ def main(argv: list[str] | None = None) -> int:
             return
         controller.set_domain(Domain.NUCLEI)
         _ensure_image_loaded()
-        nuclear_review_dock.show()
-        nuclear_review_dock.raise_()
+        _open_beside_guided(nuclear_review_dock)
 
     def show_domain(domain: Domain) -> None:
         if domain is Domain.NUCLEI and not has_nuclei:
@@ -656,6 +715,62 @@ def main(argv: list[str] | None = None) -> int:
         if not webbrowser.open(outcome.report_path.as_uri()):
             show_info(f"Open this file in a browser: {outcome.report_path}")
 
+    # --- the Section stage: drawing an area to leave out ------------------------------------
+
+    def _area_layer():
+        try:
+            return viewer.layers["review_region_shapes"]
+        except KeyError:
+            return None
+
+    def start_area_drawing() -> None:
+        _ensure_image_loaded()
+        layer = _area_layer()
+        if layer is None:
+            return
+        layer.visible = True
+        viewer.layers.selection.active = layer
+        layer.mode = "add_polygon"
+
+    def stop_area_drawing() -> None:
+        layer = _area_layer()
+        if layer is not None:
+            layer.mode = "pan_zoom"
+        _select_first_channel()
+
+    def drawn_area_geometry() -> dict | None:
+        """The newest shape drawn on this section that is not yet a saved region."""
+        layer = _area_layer()
+        if layer is None:
+            return None
+        saved = len(_region_shape_data(controller.current_image_id, RegionKind.REVIEW))
+        if layer.nshapes <= saved:
+            return None
+        points = np.asarray(layer.data[-1])
+        if points.ndim != 2 or points.shape[1] != 2 or len(points) < 3:
+            return None
+        ring = [
+            [float(x * args.display_downsample), float(y * args.display_downsample)]
+            for y, x in points
+        ]
+        if ring[0] != ring[-1]:
+            ring.append(ring[0])
+        return {"type": "Polygon", "coordinates": [ring]}
+
+    section_stage = (
+        None
+        if args.blind
+        else SectionStageWidget(
+            controller,
+            region_controller,
+            start_drawing=start_area_drawing,
+            stop_drawing=stop_area_drawing,
+            drawn_geometry=drawn_area_geometry,
+            regions_changed=_refresh_region_shapes,
+            go_to_fibers=lambda: [guided._show_fibers() for guided in guided_holder],
+        )
+    )
+
     guided_widget = GuidedReviewWidget(
         project,
         FiberTypeReviewController(session),
@@ -669,27 +784,62 @@ def main(argv: list[str] | None = None) -> int:
         focus_current_object=focus_current_object,
         blind=args.blind,
         reference_field_fibers=reference_field_fibers if args.blind else None,
-        show_image=go_to_image if args.blind else None,
+        show_image=go_to_image,
+        section_stage=section_stage,
     )
+    guided_holder.append(guided_widget)
     guided_dock = _keep_dock(
-        viewer.window.add_dock_widget(guided_widget, area="left", name="Guided Review")
+        viewer.window.add_dock_widget(guided_widget, area="right", name="Guided Review")
     )
+    guided_docks.append(guided_dock)
     dashboard_dock.hide()
+
+    # --- click a fiber to check it (not in blind labelling) --------------------------------
+
+    def _click_fiber(_viewer, event):
+        active = viewer.layers.selection.active
+        if getattr(active, "mode", "pan_zoom") not in ("pan_zoom", "transform"):
+            return  # drawing or editing: the click belongs to that tool
+        start = np.asarray(event.position, dtype=float)
+        yield
+        while event.type == "mouse_move":
+            yield
+        if np.abs(np.asarray(event.position, dtype=float) - start).max() > 3:
+            return  # a drag pans the image; only a click selects
+        try:
+            labels = viewer.layers["review_fiber_labels"]
+        except KeyError:
+            return
+        index = tuple(int(round(value)) for value in labels.world_to_data(event.position))
+        if len(index) != 2 or not all(
+            0 <= v < n for v, n in zip(index, labels.data.shape, strict=True)
+        ):
+            return
+        fiber_id = int(labels.data[index])
+        if fiber_id and loaded_image_id is not None:
+            guided_widget.select_fiber(loaded_image_id, fiber_id)
+
+    if not args.blind:
+        viewer.mouse_drag_callbacks.append(_click_fiber)
+    # Open on the current section, so the Section stage has an image to judge.
+    _ensure_image_loaded()
+    viewer.reset_view()
 
     qt_window = getattr(viewer.window, "_qt_window", None)
     if qt_window is not None:
-        workspace_menu = qt_window.menuBar().addMenu("Workspace")
-        workspace_menu.addAction("Show Guided Review", guided_dock.show)
-        cohort_action = workspace_menu.addAction("Show Cohort QC", open_dashboard)
+        workspace_menu = qt_window.menuBar().addMenu("Review")
+        workspace_menu.addAction("Show the review panel", guided_dock.show)
+        advanced = workspace_menu.addMenu("Advanced")
+        cohort_action = advanced.addAction("Cohort QC dashboard", open_dashboard)
         cohort_action.setEnabled(not args.blind)  # the dashboard shows model results
         # These panels name sections and mice, so they are unavailable in blind mode.
-        workspace_menu.addAction("Show Section Review", open_image_review).setEnabled(
+        advanced.addAction("Section status by domain", open_image_review).setEnabled(
             not args.blind
         )
-        workspace_menu.addAction("Show Region Review", open_region_review).setEnabled(
+        advanced.addAction("Named regions and analysis ROIs", open_region_review).setEnabled(
             not args.blind
         )
-        nuclei_action = workspace_menu.addAction("Show Nuclei Review", open_nuclei_review)
+        nuclei_action = advanced.addAction("Nuclei review", open_nuclei_review)
         nuclei_action.setEnabled(has_nuclei)
         workspace_menu.addAction("Show Channel Map", channel_map_dock.show)
 

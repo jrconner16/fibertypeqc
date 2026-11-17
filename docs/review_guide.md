@@ -14,15 +14,19 @@ uv run python -m scripts.review_project_napari \
 `--display-downsample` changes only what is drawn (use `2`, or `4` for very large sections); fiber
 IDs and saved decisions always refer to full-resolution masks.
 
-**Workspaces** (switch with the navigator bar or the **Workspace** menu; **Restore review
-workspace** brings back closed docks):
+**Layout.** napari's layer controls and layer list are on the left: set each channel's background
+there by raising its lower contrast limit (the stain channel is selected when a section opens, and
+your contrast is kept per section). The review panel is on the right. Its top bar shows the
+section on screen with ◀ ▶ to move between sections, and **Advanced ▾** for everything else.
+Below it, one stage at a time:
 
-1. **Cohort QC** — mice → sections → domains with PASS / REVIEW / FAIL, reasons, and the
-   provisional section selection. Read-only.
-2. **Image review** — mark a section Pass, Review, Fail, or Exclude per domain. Fail/Exclude for
-   fiber segmentation or fiber typing removes the whole section at finalization.
-3. **Guided fiber review** — start **Review flagged fibers** (or **Review this section**). One
-   fiber at a time, outlined in cyan. Keys: `K` keep the model call, `1`/`2`/`3`/`4` = I/IIa/IIb/IIx,
+1. **Section** — a verdict for the section on screen: **Looks fine**, **Leave out an area…** (draw
+   around a fold, tear, or damaged area, then **Save area**; fibers whose centers fall inside are
+   left out of the results), or **Leave out the whole section**. **Clear verdict** undoes it.
+   The automatic section checks are summarized above the buttons.
+2. **Fibers** — start **Review flagged fibers** (or **Review this section**), or **click any fiber
+   in the image** to check it; after a clicked fiber, the panel returns to the plan you were on.
+   One fiber at a time, outlined in cyan. Keys: `K` keep the model call, `1`/`2`/`3`/`4` = I/IIa/IIb/IIx,
    `X` exclude, Left/Right to move, `F` to center, `U` to undo. Uncertain/unresolved are under
    **Advanced review options**. The view opens on the raw stain channels with every fiber outlined
    in the color of its current call (the model call, or your decision once made; legend in the
@@ -40,7 +44,8 @@ workspace** brings back closed docks):
    (every fiber) or the random sample (**Label 150 random fibers from every section**; set the
    number under **Advanced review options** first). The random sample is one list that goes through
    every section in turn and resumes at the first fiber you have not labelled, so you can stop at
-   any time. **Go to next section** only changes the section on screen, for field labelling.
+   any time. ◀ ▶ only change the section on screen, for field labelling. Clicking a fiber does
+   not select it in blind labelling, so the labels are not hand-picked.
    These labels are saved per reviewer under
    `review/reference/<reviewer>/`, separately from review decisions, and finalization never uses
    them. Each session's decision count and active time are written to `review_sessions.csv`.
@@ -52,11 +57,22 @@ workspace** brings back closed docks):
    `fibertypeqc_project.yaml`: blind labelling is then limited to test mice, and guided review
    and `improve` to pool mice. Projects without a model get this file automatically; after a
    built model is promoted, guided review offers every mouse (see the user guide).
-4. **Regions** — draw a polygon in the yellow *Region shapes* layer, pick a domain and action, and
-   apply. *Exclude all analysis* / *ignore fiber typing* removes the fibers whose centers fall
-   inside (folds, tears, bad staining); *unresolved* marks them unresolved. **Analysis ROI** with a
-   name (e.g. `quad_1`) tags fibers for per-ROI results; once any ROI is drawn on a section, fibers
-   outside all ROIs are excluded.
+3. **Finish** — a summary (sections checked or left out, areas, fibers changed) and **Finalize
+   and build report**.
+
+**Advanced ▾** (also the **Review → Advanced** menu) opens these as tabs beside the review panel:
+
+- **Cohort QC dashboard** — mice → sections → domains with PASS / REVIEW / FAIL, reasons, and the
+  provisional section selection. Read-only.
+- **Section status by domain** and **Segmentation status** — mark a section Pass, Review, Fail,
+  or Exclude for each domain separately. Fail/Exclude for fiber segmentation or fiber typing
+  removes the whole section at finalization (the Section stage's verdicts set the same statuses).
+- **Named regions and analysis ROIs** — draw a polygon in the yellow *Region shapes* layer, pick
+  a domain and action, and apply. *Exclude all analysis* / *ignore fiber typing* removes the
+  fibers whose centers fall inside; *unresolved* marks them unresolved. **Analysis ROI** with a
+  name (e.g. `quad_1`) tags fibers for per-ROI results; once any ROI is drawn on a section,
+  fibers outside all ROIs are excluded.
+- **Nuclei review**, when the project has a DAPI channel.
 
 Everything is saved under `<project>/review/` (`review_state.json`, an append-only
 `review_events.csv`, and `review_regions.geojson`). Predictions are never edited. When a section is
@@ -64,8 +80,8 @@ first opened, the reviewer records digests of its label mask and fiber table; if
 change, it warns, and finalization refuses that section rather than applying decisions to the wrong
 fibers.
 
-When you are done (or want a look at interim results), click **Finalize and build report** in
-the Guided Review dock, or **Workspace → Finalize and build report**. It applies your decisions,
+When you are done (or want a look at interim results), click **Finalize and build report** on the
+Finish stage, or **Review → Finalize and build report**. It applies your decisions,
 writes the finalized tables and summaries, and opens the report; you can keep reviewing and do it
 again. The same thing from a terminal is `python -m fibertypeqc finalize PROJECT/`. Fibers you did not review keep the
 model call; flagged-but-unreviewed fibers are counted in the report.

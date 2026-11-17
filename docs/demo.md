@@ -77,7 +77,7 @@ which leaves those fibers out of the results (off by default for whole sections)
 
 ## 4. Finalize and read the report
 
-Click **Finalize and build report** in the Guided Review dock, or run:
+Open the **Finish** stage of the review panel and click **Finalize and build report**, or run:
 
 ```bash
 uv run python -m fibertypeqc finalize path/to/fibertypeqc_demo/demo_project
