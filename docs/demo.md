@@ -1,7 +1,9 @@
 # Demo: four cropped fields, start to report
 
 A small worked example of the whole workflow: segment and type four images, review flagged fibers
-in napari, finalize, and open the cohort report. It takes a few minutes on a laptop.
+in napari, finalize, and open the cohort report. It takes a few minutes on a laptop. A second
+download shows the model builder on fourteen fields with no model to start from
+([Build a model](#build-a-model-no-model-to-start-from)).
 
 The data are four cropped fields (1024 × 1024 px) from tibialis anterior sections of mdx mice, two
 at 1 month and two at 12 months, stained for Type IIb, Type IIa, and laminin. Type IIx is inferred
@@ -107,3 +109,54 @@ Its mouse-level summary (percent of resolved fibers, IIb / IIa / IIx):
 Nearly all exclusions are fibers cut off by the crop edge. Your own review will differ where your
 judgment does; the IIb/IIx split in particular depends on the absence of stain and is partly
 subjective.
+
+## Build a model (no model to start from)
+
+The second download, `fibertypeqc_builder_demo.zip`, shows the model builder: a panel with no
+model, blind labels, and a model built, checked, and applied from them. It uses the same stain
+panel (Type IIb, Type IIa, laminin) and needs no model file.
+
+The data are fourteen cropped fields (1024 × 1024 px) from tibialis anterior sections of seven mdx
+mice, two fields per mouse, at 1, 4, and 12 months, from the same source and under the same licence
+as the main demo (CC BY 4.0). The fields were placed by rule, not by eye: in each section the window
+with the most tissue, then the window elsewhere in the section with the most Type IIa signal. Class
+proportions here therefore do not represent whole muscles. These mice were not in the training data
+of the released TA model.
+
+```text
+fibertypeqc_builder_demo/
+  images/            # builder_section_01..14.tif
+  builder_project/   # model: none; segmented, measured, test mice set aside, 731 blind labels
+```
+
+The project is already segmented and measured, two of its seven mice are set aside as test mice
+(`evaluation_roles.csv`), and it holds 731 blind labels by one reviewer
+(`review/reference/reviewer_1/`), all from the random sample: 50 fibers in each section (81 in
+one). Because the labels
+belong to these exact fiber masks, do not run `run` again on this project.
+
+```bash
+P=path/to/fibertypeqc_builder_demo/builder_project
+uv run python -m fibertypeqc status   $P            # model none; classes iia, iib, negative
+uv run python -m fibertypeqc build    $P            # candidates, scored leave-one-mouse-out
+uv run python -m fibertypeqc evaluate $P logistic   # the recommended one, on the test mice
+uv run python -m fibertypeqc promote  $P logistic   # apply it: every fiber is typed
+uv run python -m fibertypeqc promote  $P --rollback # back to no model, exactly
+```
+
+Or open the project in the launcher (`uv run python -m fibertypeqc app $P`) and use **Build**,
+**Check on test mice…**, and **Apply…**; **More → Undo the last model change…** goes back.
+
+What to expect: `build` recommends `logistic` (median per-mouse macro-F1 about 0.85 on the training
+mice, against 0.23 for always guessing the most common class). On the two test mice its IIb recall
+is below the 0.70 bar that `build` uses, and `evaluate` and the launcher say so; the usual
+confusion is IIb against IIa⁻/IIb⁻, where the call depends on the absence of stain. A warning does
+not block applying the model. With no IIx stain, the builder labels those fibers by what is
+absent (IIa⁻/IIb⁻) rather than as inferred IIx. These numbers come from one reviewer on fourteen
+small fields and illustrate the workflow; they are not an accuracy estimate.
+
+To add labels of your own, open blind labelling under a new name
+(`uv run python -m fibertypeqc review $P --blind --reviewer YOUR_NAME`), then build again. The
+builder pools every reviewer's labels; a fiber that two reviewers labelled differently is left out
+of training and counted as a reviewer conflict, and
+`uv run python -m fibertypeqc reference $P` reports the reviewers' agreement.

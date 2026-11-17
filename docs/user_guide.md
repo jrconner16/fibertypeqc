@@ -147,11 +147,13 @@ process on this computer, with its output in the log, so results are identical t
   still needed, and the latest build's scores per candidate with the rule it had to pass. When no
   model is recommended it says which class no model recognised well enough. It opens by itself
   when a build stops for too few labels.
-- **Check on test mice…** (`evaluate`) and **Switch…** (`promote`) ask before running. The check
-  says how many times the test mice have been used; the switch says that every section is typed
-  again and how to undo it, and shows progress. Under **More**, **Switch without a current
-  check…** asks for a reason, which is recorded (`promote --override --reason`), and **Undo the
-  last model switch…** runs `promote --rollback` after asking.
+- **Check on test mice…** (`evaluate`) and **Apply…** (`promote`, the step **Apply the new
+  model**) ask before running. The check says how many times the test mice have been used; Apply
+  says that every section is typed with the model and how to undo it, warns if any class's recall
+  on the test mice was below the bar `build` used to recommend candidates (a warning only), and
+  shows progress. Under **More**, **Apply without a current check…** asks for a reason, which is
+  recorded (`promote --override --reason`), and **Undo the last model change…** runs
+  `promote --rollback` after asking.
 - The launcher never submits cluster jobs. On a cluster, open it in a desktop session on a GPU
   node to run segmentation there, or on a CPU node for the other steps.
 
@@ -175,7 +177,9 @@ uv run python -m fibertypeqc reference myproject/   # writes myproject/reference
 
 Blind mode hides model calls, confidence, QC reasons, and section and mouse names. Choose a
 reproducible random sample (150 fibers per section by default), a computer-placed field, or fields
-you draw. Blind labels are stored per reviewer and never change results. The export lists every
+you draw. The random sample is one list through every section and resumes where you left off; set
+its size under **Advanced review options**. For a first model, a few dozen per section is a
+reasonable start; the builder's label counts show what is still needed. Blind labels are stored per reviewer and never change results. The export lists every
 reviewer's labels beside the model's output, field coverage, reviewer agreement (percent and
 Cohen's kappa), and review time.
 
@@ -322,7 +326,9 @@ uv run python -m fibertypeqc promote  myproject/ --rollback # back to no model, 
   measurements already on disk; it changes nothing in the project. Results go to
   `models/evaluations/`, and every evaluation is logged in `models/evaluation_history.csv` with how
   many times the same test mice have been used. Choosing between models by their test scores makes
-  the test no longer independent.
+  the test no longer independent. If a class's recall on the test mice is below the bar `build`
+  used to recommend candidates (`minimum_pooled_class_recall` in the build's recipe), `evaluate`,
+  `status`, and the launcher say so. This is a warning only; it never blocks `promote`.
 - An evaluation is tied to the exact candidate file and to the test labels, masks, and
   measurements it used. If any of these change, it is out of date.
 - With test mice declared, `promote` requires a current evaluation of that candidate; `--override`
@@ -403,6 +409,12 @@ contain image IDs and counts from your data, so keep snapshots of private data p
 
 - **`No module named …`, or the wrong Python version**: you are not in the repository root.
 - **Not sure what to run next**: `uv run python -m fibertypeqc status myproject/`.
+- **`uv`: "Failed to initialize cache" … "Permission denied"**: `UV_CACHE_DIR` points at a folder
+  you cannot create, often an example path copied unchanged. Check with `echo $UV_CACHE_DIR`;
+  open a new terminal, and if it is still set, remove or correct the line in `~/.bashrc`. Unset,
+  `uv` uses `~/.cache/uv`. See [install.md](install.md#hpc-clusters-slurm-and-open-ondemand).
+- **`uv` fails on `–frozen` (for example "Failed to spawn")**: email or a word processor turned
+  the two hyphens into a dash; type `--frozen`.
 - **"distributed privately" / "not a registered model"**: pass `--model /path/to/model.joblib` or
   set `FIBERTYPEQC_MODEL_ROOT`; the file must be the registered model (checked by SHA-256).
 - **"contains N scenes"**: set `split_czi_scenes: true` in the project config (or add

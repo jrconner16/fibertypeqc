@@ -217,7 +217,9 @@ def test_only_the_current_step_has_a_main_button(qapp, tmp_path):
     window.close()
 
 
-def _built(root, monkeypatch, evaluation="missing", candidates=("logistic", "forest")):
+def _built(
+    root, monkeypatch, evaluation="missing", candidates=("logistic", "forest"), recall_warning=""
+):
     """A labelled builder project with one build (candidate files only) and its status."""
     _prepared(root)
     (root / "review/reference/ann").mkdir(parents=True)
@@ -235,7 +237,7 @@ def _built(root, monkeypatch, evaluation="missing", candidates=("logistic", "for
         "builder_status",
         lambda _p: {
             "build": "build_1", "recommended": candidates[0], "evaluation": evaluation,
-            "test_set_uses": 2,
+            "test_set_uses": 2, "recall_warning": recall_warning,
         },
     )  # fmt: skip
 
@@ -281,20 +283,23 @@ def test_builder_check_on_test_mice_asks_first(qapp, tmp_path, monkeypatch):
     window.close()
 
 
-def test_builder_switch_asks_first_and_can_be_undone(qapp, tmp_path, monkeypatch):
+def test_builder_apply_asks_first_and_can_be_undone(qapp, tmp_path, monkeypatch):
     root = _project(tmp_path, model="none")
-    _built(root, monkeypatch, evaluation="current")
+    warning = "test-mouse recall below 0.70 (the bar 'build' used): iib 0.67."
+    _built(root, monkeypatch, evaluation="current", recall_warning=warning)
     window = _window(qapp, root)
     started = []
     window.start_arguments = started.append
 
     promote = _row(window, "promote")
-    assert promote.step.state == "current" and promote.action_button.text() == "Switch…"
+    assert promote.step.title == "Apply the new model"
+    assert promote.step.state == "current" and promote.action_button.text() == "Apply…"
     asked = _answer(monkeypatch, True)
     promote.action_button.click()
     assert started == [["promote", str(root), "logistic"]]
-    assert "Undo the last model switch" in asked[0]
-    assert _menu_action(window, "Undo the last model switch…") is None  # nothing to undo yet
+    assert "Undo the last model change" in asked[0]
+    assert f"Warning: {warning}" in asked[0]  # a warning only: the model is still applied
+    assert _menu_action(window, "Undo the last model change…") is None  # nothing to undo yet
     window.close()
 
     # After a switch, the menu offers to undo it (only the latest, as rollback allows).
@@ -303,18 +308,18 @@ def test_builder_switch_asks_first_and_can_be_undone(qapp, tmp_path, monkeypatch
     ).to_csv(root / "models/model_history.csv", index=False)
     window = _window(qapp, root)
     window.start_arguments = started.append
-    undo = _menu_action(window, "Undo the last model switch…")
+    undo = _menu_action(window, "Undo the last model change…")
     asked = _answer(monkeypatch, True)
     undo.trigger()
     assert started[-1] == ["promote", str(root), "--rollback"]
-    assert "returns the project to none" in asked[-1]
+    assert "returns the project to having no model" in asked[-1]
     window.close()
     with open(root / "models/model_history.csv", "a") as history:
         history.write("rollback,built.v1,none,a1\n")
     assert ws.last_switch(cli.load_project_folder(root)) is None
 
 
-def test_switch_without_a_check_needs_a_typed_reason(qapp, tmp_path, monkeypatch):
+def test_apply_without_a_check_needs_a_typed_reason(qapp, tmp_path, monkeypatch):
     from qtpy.QtWidgets import QInputDialog, QMessageBox
 
     root = _project(tmp_path, model="none")
@@ -323,7 +328,7 @@ def test_switch_without_a_check_needs_a_typed_reason(qapp, tmp_path, monkeypatch
     window = _window(qapp, root)
     started = []
     window.start_arguments = started.append
-    action = _menu_action(window, "Switch without a current check…")
+    action = _menu_action(window, "Apply without a current check…")
     assert action.isEnabled()
 
     monkeypatch.setattr(QInputDialog, "getItem", lambda *a, **k: ("forest", True))

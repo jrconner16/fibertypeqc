@@ -209,8 +209,9 @@ class GuidedReviewWidget(QWidget):
         self.start_flagged_button.setVisible(not blind)
         self.random_sample_button = QPushButton("Label a random sample")
         self.random_sample_button.setToolTip(
-            "A reproducible random sample (by default 150 fibers from every section); change "
-            "its size, seed, and scope under Advanced review options."
+            "One list of computer-drawn fibers that goes through every section in turn. Labels "
+            "save as you go, and clicking again resumes at the first fiber you have not "
+            "labelled. Change the number, seed, and scope under Advanced review options."
         )
         self.random_sample_button.setVisible(blind)
         self.random_sample_button.clicked.connect(self.start_random_sample)
@@ -225,7 +226,8 @@ class GuidedReviewWidget(QWidget):
         plan_layout.addWidget(self.auto_field_button)
         self.next_section_button = QPushButton("Go to next section")
         self.next_section_button.setToolTip(
-            "Open the next section (shown by number only) for field labelling."
+            "Open the next section (shown by number only). This only changes the view: click a "
+            "field button to label fibers on it."
         )
         self.next_section_button.setVisible(blind and show_image is not None)
         self.next_section_button.clicked.connect(self.go_to_next_section)
@@ -370,6 +372,9 @@ class GuidedReviewWidget(QWidget):
             self.sample_spin.setValue(150)
             self.scope_combo.setCurrentText(RandomAuditScope.IMAGE.value)
         self._load_sample_settings()
+        self.sample_spin.valueChanged.connect(self._update_sample_button)
+        self.scope_combo.currentTextChanged.connect(self._update_sample_button)
+        self._update_sample_button()
         self._restore_saved_queue()
         self.tutorial_group.setVisible(not self._tutorial_seen())
         self.refresh()
@@ -386,10 +391,34 @@ class GuidedReviewWidget(QWidget):
         shortcut.setContext(Qt.ApplicationShortcut)
         self.shortcuts.append(shortcut)
 
+    def _sample_scope_text(self) -> str:
+        return {
+            RandomAuditScope.IMAGE.value: "from every section",
+            RandomAuditScope.MOUSE.value: "from every mouse",
+            RandomAuditScope.COHORT.value: "across the project",
+        }.get(self.scope_combo.currentText(), "")
+
+    def _update_sample_button(self, *_args) -> None:
+        self.random_sample_button.setText(
+            f"Label {self.sample_spin.value()} random fibers {self._sample_scope_text()}".strip()
+        )
+
     def start_random_sample(self) -> None:
         self._review_started = True
         self._set_queue(QueueSource.RANDOM_AUDIT)
-        self.status.setText("Started a random sample.")
+        count = len(self.controller.queue)
+        done = self._labelled_in_queue()
+        message = (
+            f"Random sample: {count} fibers ({self.sample_spin.value()} "
+            f"{self._sample_scope_text()}), {done} already labelled."
+        )
+        if done:
+            message += " Resuming at the first fiber you have not labelled."
+        self.status.setText(message)
+
+    def _labelled_in_queue(self) -> int:
+        decided = {(d.image_id, d.fiber_id) for d in self.controller.session.object_decisions}
+        return sum((item.image_id, item.fiber_id) in decided for item in self.controller.queue)
 
     def go_to_next_section(self) -> None:
         """Open the next section in the neutral blind order."""
@@ -400,7 +429,10 @@ class GuidedReviewWidget(QWidget):
         index = (order.index(current) + 1) % len(order) if current in order else 0
         self.controller.session.current_image_id = order[index]
         self.show_image(order[index])
-        self.status.setText(f"Showing section {index + 1} of {len(order)}.")
+        self.status.setText(
+            f"Showing section {index + 1} of {len(order)}. Click a field button to label fibers "
+            "on it; the random sample keeps its own order."
+        )
 
     def start_auto_field_review(self) -> None:
         if not self._section_allowed():
@@ -666,8 +698,11 @@ class GuidedReviewWidget(QWidget):
         # In blind mode the three labelling plans stay on screen, so switching is one click.
         self.plan_group.setVisible(self.blind or not self._review_started)
         self.change_plan_button.setVisible(self._review_started and not self.blind)
-        self.advanced_toggle.setVisible(self._review_started)
-        self.advanced_group.setVisible(self._review_started and self.advanced_toggle.isChecked())
+        # Blind labelling shows the sample settings before a plan starts, so the sample size can be
+        # set first.
+        show_advanced = self._review_started or self.blind
+        self.advanced_toggle.setVisible(show_advanced)
+        self.advanced_group.setVisible(show_advanced and self.advanced_toggle.isChecked())
         saved_count = len(self.controller.session.object_decisions)
         self.save_status.setText(
             f"Autosave is on · {saved_count} decision{'s' if saved_count != 1 else ''} saved"
@@ -675,7 +710,9 @@ class GuidedReviewWidget(QWidget):
         if not self._review_started:
             self.context.setText("Fiber typing · Choose a review plan")
             self.plan_message.setText(
-                "Label every fiber in the current section, or a random sample across the project."
+                "Choose how fibers are picked. The random sample is one list through every "
+                "section and resumes where you left off; a field covers every fiber in one area "
+                "of the section on screen ('Go to next section' changes the section)."
                 if self.blind
                 else f"{count} flagged fibers are ready for review. "
                 "Start there, review the current section, or inspect cohort QC."
@@ -701,7 +738,8 @@ class GuidedReviewWidget(QWidget):
             f"{self.controller.session.queue_position + 1}/{count}"
         )
         self.plan_message.setText(
-            f"{count} fibers are in the current plan. Switch plans with the buttons below."
+            f"{self._labelled_in_queue()} of {count} fibers in this plan are labelled. Labels save "
+            "as you go; switch plans with the buttons below."
             if self.blind
             else f"{count} fibers are in the current plan. Start with flagged fibers, "
             "or review every fiber in the current section."

@@ -50,7 +50,8 @@ TITLES = {
     "label": "Label fibers (blind)",
     "build": "Build a model",
     "evaluate": "Check on test mice",
-    "promote": "Switch to the new model",
+    # Only shown for a project without a model, so this is always the first model it gets.
+    "promote": "Apply the new model",
 }
 COMMANDS = {
     "run": "run PROJECT",

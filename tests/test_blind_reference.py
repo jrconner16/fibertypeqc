@@ -218,6 +218,10 @@ def test_blind_field_queue_and_saved_sample_settings(tmp_path, monkeypatch):
         )
 
     widget = new_widget()
+    # The sample settings are available, and the button names the sample, before a plan starts.
+    assert not widget.advanced_toggle.isHidden()
+    widget.sample_spin.setValue(2)
+    assert widget.random_sample_button.text() == "Label 2 random fibers from every section"
     widget.start_field_review()
     assert [item.fiber_id for item in widget.controller.queue] == [2, 4]
     assert widget.controller.session.active_queue == "reference_fields"
@@ -228,10 +232,13 @@ def test_blind_field_queue_and_saved_sample_settings(tmp_path, monkeypatch):
     widget.close()
 
     reopened = new_widget()
+    assert reopened.random_sample_button.text() == "Label 3 random fibers from every section"
     reopened.start_random_sample()
     application.processEvents()
     assert (reopened.seed_spin.value(), reopened.sample_spin.value()) == (7, 3)
     assert [item.fiber_id for item in reopened.controller.queue] == sample
+    assert "0 already labelled" in reopened.status.text()
+    assert reopened.plan_message.text().startswith(f"0 of {len(sample)} fibers in this plan")
     reopened.close()
 
 
