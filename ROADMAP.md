@@ -1,6 +1,6 @@
 # FiberTypeQC Roadmap
 
-- Updated: 2026-11-02
+- Updated: 2026-11-16
 - Status: **active.** Goal: a clean, citable repository and a submission to the Journal of Open
   Source Software (JOSS).
 - Supersedes: [docs/history/ROADMAP_v0.3.md](docs/history/ROADMAP_v0.3.md) (frozen 2026-10-14) and
@@ -20,15 +20,16 @@ Method validation is a separate track (D) and does not block JOSS unless it find
 ## Current state
 
 Done: Track A; B1 (`CITATION.cff` with ORCIDs and affiliations); B2 (Zenodo integration enabled);
-C1; C2. HPC use (Slurm batch, Open OnDemand review) is documented in `docs/install.md` and was
-checked on a cluster: the demo batch agreed with the macOS reference snapshot within tolerance.
+C1; C2; C3 (an outside user installed FiberTypeQC and ran the whole workflow on an HPC cluster
+through the launcher; their reports led to #83, #84, and #90, fixed in v0.5.0). HPC use (Slurm
+batch, Open OnDemand review) is documented in `docs/install.md` and was checked on a cluster: the
+demo batch agreed with the macOS reference snapshot within tolerance.
 
 v0.4.0 is released and archived on Zenodo (concept DOI 10.5281/zenodo.23893717; B3, B4 done).
 v0.5.0 (model builder, launcher, nuclei in results, images in subfolders) is in preparation. The
 paper only claims released features, so v0.5.0 is tagged before C5 is finished.
 
-In progress: C3 (outside install and demo run); C5 (paper). C3 fixes ship in a later release; the
-concept DOI covers every version.
+In progress: C5 (paper).
 
 ## Track A — Repository cleanup and presentation
 
