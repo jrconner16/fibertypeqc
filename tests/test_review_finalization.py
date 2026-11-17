@@ -439,8 +439,12 @@ def test_guided_review_finalize_button_calls_back(tmp_path, monkeypatch):
 
     assert calls == [1]
     assert not widget.plan_group.isVisibleTo(widget)
+    # Finalizing is the Finish stage; a reviewer without finalization has no Finish stage.
+    assert widget.stages.indexOf(widget.finish_page) >= 0
+    widget.stages.setCurrentWidget(widget.finish_page)
     assert widget.finalize_button.isVisibleTo(widget)
-    assert not hidden.finalize_button.isVisibleTo(hidden)
+    assert "Sections:" in widget.finish_summary.text()
+    assert hidden.stages.indexOf(hidden.finish_page) == -1
     for item in (widget, hidden):
         item.close()
         item.deleteLater()

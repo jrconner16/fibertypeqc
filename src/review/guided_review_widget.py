@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import replace
 from hashlib import sha256
 
 import pandas as pd
@@ -14,9 +15,11 @@ from qtpy.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QShortcut,
     QSpinBox,
+    QTabWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -34,11 +37,23 @@ from src.review.queues import (
 )
 from src.review.roles import POOL, TEST, allowed_images, held_out_mice_released
 from src.review.schemas import Domain, ObjectReviewStatus, Scope
+from src.review.section_stage_widget import left_out_areas, section_verdict
 from src.review.timing import ReviewTimer
+
+CLICKED_QUEUE = "clicked"
+PLAN_NAMES = {
+    QueueSource.FLAGGED.value: "flagged fibers",
+    QueueSource.FULL_AUDIT.value: "every fiber",
+    QueueSource.RANDOM_AUDIT.value: "random sample",
+}
 
 
 class GuidedReviewWidget(QWidget):
-    """One-task-at-a-time fiber reviewer with optional advanced controls."""
+    """Staged reviewer: Section (verdict, areas), Fibers (queue or click), Finish (finalize).
+
+    One stage is shown at a time; everything else (cohort dashboard, per-domain section status,
+    named regions and ROIs, nuclei) is under the Advanced menu.
+    """
 
     def __init__(
         self,
@@ -56,11 +71,14 @@ class GuidedReviewWidget(QWidget):
         blind: bool = False,
         reference_field_fibers: Callable[[str, bool | str], set[int]] | None = None,
         show_image: Callable[[str], None] | None = None,
+        section_stage: QWidget | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.project = project
         self.controller = controller
+        self.section_stage = section_stage
+        self._return_to: tuple[tuple, str, int] | None = None  # the plan to resume after a click
         # Blind reference labelling: nothing derived from the model is shown or offered.
         self.blind = blind
         # (image_id, capture drawn shapes?) -> IDs of fibers inside the reviewer's drawn fields.
@@ -95,6 +113,16 @@ class GuidedReviewWidget(QWidget):
             key=lambda image_id: sha256(f"{project.project_id}:{image_id}".encode()).hexdigest(),
         )
         self.section_codes = {image_id: n for n, image_id in enumerate(blind_images, start=1)}
+        # Section order for the section bar: neutral numbers in blind mode, project order otherwise.
+        self.section_order = (
+            sorted(self.section_codes, key=self.section_codes.get)
+            if blind
+            else [
+                image.image_id
+                for image in project.images
+                if self.allowed_images is None or image.image_id in self.allowed_images
+            ]
+        )
         # Only offer the classes this project's model produces (class names only; no calls). A
         # project without a model offers the classes named in its configuration instead.
         self.classes = set(project.review_classes) or (
@@ -123,7 +151,8 @@ class GuidedReviewWidget(QWidget):
             reviewer=controller.session.reviewer,
             mode="blind_reference" if blind else "guided_review",
         )
-        self._review_started = bool(self.controller.session.active_queue)
+        active = self.controller.session.active_queue
+        self._review_started = bool(active) and active != CLICKED_QUEUE
         self._settings = QSettings("FiberTypeQC", "FiberTypeQC")
         self.setMinimumWidth(410)
 
@@ -135,27 +164,40 @@ class GuidedReviewWidget(QWidget):
         )
         self.blind_banner.setWordWrap(True)
         self.blind_banner.setVisible(blind)
-        self.navigator_group = QGroupBox("Navigate review")
-        navigator = QHBoxLayout(self.navigator_group)
-        for label, callback in (
-            ("Cohort", self._show_dashboard),
-            ("Section", self._show_section),
-            ("Regions", self._show_region),
-            ("Fiber typing", self._show_fiber_typing),
-            ("Segmentation", lambda: self._show_domain(Domain.FIBER_SEGMENTATION)),
-            ("Nuclei", lambda: self._show_domain(Domain.NUCLEI)),
-        ):
-            button = QToolButton()
-            button.setText(label)
-            button.clicked.connect(callback)
-            # Blind mode hides every panel that names sections or mice or shows model results.
-            button.setVisible(not blind)
-            navigator.addWidget(button)
-        navigator.addStretch(1)
-        self.navigator = navigator
-        self.review_guide_button = QToolButton()
-        self.review_guide_button.setText("? Review guide")
-        navigator.addWidget(self.review_guide_button)
+        # Section bar: which section is on screen, and moving between sections.
+        self.section_label = QLabel()
+        self.section_label.setWordWrap(True)
+        self.previous_section_button = QPushButton("◀")
+        self.previous_section_button.setToolTip("Previous section")
+        self.next_section_bar_button = QPushButton("▶")
+        self.next_section_bar_button.setToolTip("Next section")
+        for button in (self.previous_section_button, self.next_section_bar_button):
+            button.setMaximumWidth(40)
+            button.setEnabled(show_image is not None)
+        self.previous_section_button.clicked.connect(lambda: self._go_section(-1))
+        self.next_section_bar_button.clicked.connect(lambda: self._go_section(1))
+        # Everything beyond the three stages lives here.
+        self.advanced_menu = QMenu(self)
+        if not blind:  # these panels name sections or mice, or show model results
+            self.advanced_menu.addAction("Cohort QC dashboard", self._show_dashboard)
+            self.advanced_menu.addAction("Section status by domain", self._show_section)
+            self.advanced_menu.addAction(
+                "Segmentation status", lambda: self._show_domain(Domain.FIBER_SEGMENTATION)
+            )
+            self.advanced_menu.addAction("Named regions and analysis ROIs", self._show_region)
+            self.advanced_menu.addAction("Nuclei review", lambda: self._show_domain(Domain.NUCLEI))
+            self.advanced_menu.addSeparator()
+        self.advanced_menu.addAction("Show the welcome guide", self._show_tutorial)
+        self.advanced_button = QToolButton()
+        self.advanced_button.setText("Advanced ▾")
+        self.advanced_button.setPopupMode(QToolButton.InstantPopup)
+        self.advanced_button.setMenu(self.advanced_menu)
+        section_bar = QHBoxLayout()
+        section_bar.addWidget(self.previous_section_button)
+        section_bar.addWidget(self.section_label, 1)
+        section_bar.addWidget(self.next_section_bar_button)
+        section_bar.addWidget(self.advanced_button)
+        self.section_bar = section_bar
         self.tutorial_group = QGroupBox(
             "Welcome to blind labelling" if blind else "Welcome to guided review"
         )
@@ -165,9 +207,11 @@ class GuidedReviewWidget(QWidget):
             "2. Label each fiber from the stain alone; the model's calls are hidden.\n"
             "3. Labels save immediately; Undo restores the last one."
             if blind
-            else "1. Choose a review plan.\n"
-            "2. Check the current fiber and keep or correct the model call.\n"
-            "3. Decisions save immediately; Undo restores the last one."
+            else "1. Section: set each channel's background (lower contrast limit, top left), "
+            "then give a verdict: looks fine, leave out an area, or leave out the section.\n"
+            "2. Fibers: work through the flagged fibers, or click any fiber that looks wrong, "
+            "and keep or correct the model call.\n"
+            "3. Finish: finalize and open the report. Everything saves as you go."
         )
         tutorial.setWordWrap(True)
         tutorial_layout.addWidget(tutorial)
@@ -229,7 +273,7 @@ class GuidedReviewWidget(QWidget):
             "Open the next section (shown by number only). This only changes the view: click a "
             "field button to label fibers on it."
         )
-        self.next_section_button.setVisible(blind and show_image is not None)
+        self.next_section_button.setVisible(False)  # the section bar's ▶ does this now
         self.next_section_button.clicked.connect(self.go_to_next_section)
         plan_layout.addWidget(self.next_section_button)
         self.field_button = QPushButton("Label every fiber in my drawn fields")
@@ -242,8 +286,10 @@ class GuidedReviewWidget(QWidget):
         self.field_button.clicked.connect(self.start_field_review)
         plan_layout.addWidget(self.field_button)
         plan_layout.addWidget(self.review_section_button)
-        plan_layout.addWidget(self.cohort_qc_button)
-        self.cohort_qc_button.setVisible(not blind)
+        self.cohort_qc_button.setVisible(False)  # Advanced ▸ Cohort QC dashboard
+        self.click_hint = QLabel("Or click any fiber in the image to check it.")
+        self.click_hint.setWordWrap(True)
+        self.click_hint.setVisible(not blind)
         self.finalize_button = QPushButton("Finalize and build report")
         self.finalize_button.setToolTip(
             "Apply your decisions and exclusions, write the result tables, and open the report. "
@@ -257,20 +303,23 @@ class GuidedReviewWidget(QWidget):
         decision_layout = QVBoxLayout(self.decision_group)
         decision_layout.addWidget(self.details)
         decision_layout.addWidget(self.legend_label)
-        primary = QHBoxLayout()
-        keep = QPushButton("Keep model call (K)")
-        keep.setVisible(not blind)
-        primary.addWidget(keep)
+        # Two rows so nothing is cut off in a narrow panel: the classes, then keep and exclude.
+        classes_row = QHBoxLayout()
         for key, name, fiber_type in self.class_buttons:
             button = QPushButton(f"{name} ({key})")
             button.clicked.connect(
                 lambda _checked=False, value=fiber_type: self._record_type(value)
             )
-            primary.addWidget(button)
+            classes_row.addWidget(button)
+        primary = QHBoxLayout()
+        keep = QPushButton("Keep model call (K)")
+        keep.setVisible(not blind)
+        primary.addWidget(keep)
         exclude = QPushButton("Exclude (X)")
         exclude.setToolTip("Leave this fiber out of the results (damaged, cut off, not a fiber).")
         exclude.clicked.connect(lambda: self._record_special(ObjectReviewStatus.EXCLUDED))
         primary.addWidget(exclude)
+        decision_layout.addLayout(classes_row)
         decision_layout.addLayout(primary)
         self.focus_button = QPushButton("Center current fiber (F)")
         self.focus_button.clicked.connect(self._focus_current_object)
@@ -328,28 +377,49 @@ class GuidedReviewWidget(QWidget):
         navigation.addWidget(previous)
         navigation.addWidget(next_button)
 
+        # Stage 2: fibers (also the whole panel in blind labelling).
+        self.fibers_page = QWidget()
+        fibers = QVBoxLayout(self.fibers_page)
+        fibers.addWidget(self.context)
+        fibers.addWidget(self.plan_group)
+        fibers.addWidget(self.change_plan_button)
+        fibers.addWidget(self.click_hint)
+        fibers.addWidget(self.decision_group)
+        fibers.addLayout(navigation)
+        fibers.addWidget(self.save_status)
+        fibers.addWidget(self.status)
+        fibers.addWidget(self.advanced_toggle)
+        fibers.addWidget(self.advanced_group)
+        fibers.addStretch(1)
+        fibers.addWidget(self.shortcut_label)
+        # Stage 3: finish.
+        self.finish_page = QWidget()
+        finish = QVBoxLayout(self.finish_page)
+        self.finish_summary = QLabel()
+        self.finish_summary.setWordWrap(True)
+        finish.addWidget(self.finish_summary)
+        finish.addStretch(1)
+        finish.addWidget(self.finalize_button)
+
+        self.stages = QTabWidget()
+        self.stages.setDocumentMode(True)
+        self.stages.setTabBarAutoHide(True)  # blind labelling has a single stage
+        if section_stage is not None and not blind:
+            self.stages.addTab(section_stage, "1  Section")
+        self.stages.addTab(self.fibers_page, "Fibers" if blind else "2  Fibers")
+        if finalize_requested is not None and not blind:
+            self.stages.addTab(self.finish_page, "3  Finish")
+        self.stages.currentChanged.connect(lambda _index: self._stage_changed())
+
         layout = QVBoxLayout(self)
         layout.addWidget(self.blind_banner)
-        layout.addWidget(self.context)
-        layout.addWidget(self.navigator_group)
+        layout.addLayout(section_bar)
         layout.addWidget(self.tutorial_group)
-        layout.addWidget(self.plan_group)
-        layout.addWidget(self.change_plan_button)
-        layout.addWidget(self.decision_group)
-        layout.addLayout(navigation)
-        layout.addWidget(self.save_status)
-        layout.addWidget(self.status)
-        layout.addWidget(self.advanced_toggle)
-        layout.addWidget(self.advanced_group)
-        layout.addStretch(1)
-        layout.addWidget(self.shortcut_label)
-        # Outside the plan box, which is hidden once a review is started or resumed.
-        layout.addWidget(self.finalize_button)
+        layout.addWidget(self.stages, 1)
 
         self.start_flagged_button.clicked.connect(self.start_flagged_review)
         self.review_section_button.clicked.connect(self.start_section_review)
         self.cohort_qc_button.clicked.connect(self._show_dashboard)
-        self.review_guide_button.clicked.connect(self._show_tutorial)
         self.change_plan_button.clicked.connect(self._change_plan)
         keep.clicked.connect(self._keep_model_call)
         self.undo_button.clicked.connect(self.undo)
@@ -377,11 +447,129 @@ class GuidedReviewWidget(QWidget):
         self._update_sample_button()
         self._restore_saved_queue()
         self.tutorial_group.setVisible(not self._tutorial_seen())
+        # A resumed plan opens on Fibers; a fresh review starts with the section.
+        if self._review_started:
+            self.stages.setCurrentWidget(self.fibers_page)
         self.refresh()
+        self.section_changed()
+
+    # --- stages and sections -------------------------------------------------------------
+
+    def _show_fibers(self) -> None:
+        self.stages.setCurrentWidget(self.fibers_page)
+
+    def _stage_changed(self) -> None:
+        if self.stages.currentWidget() is self.finish_page:
+            self.refresh_finish()
+
+    def section_changed(self) -> None:
+        """Update the section bar and summaries after the section on screen changes."""
+        image_id = self.controller.session.current_image_id
+        total = len(self.section_order)
+        if image_id in self.section_order:
+            number = self.section_order.index(image_id) + 1
+            if self.blind:
+                self.section_label.setText(f"Section {number} of {total}")
+            else:
+                image = self.project.image(image_id)
+                self.section_label.setText(
+                    f"Section {number} of {total} · {image.mouse_id} · {image_id}"
+                )
+        else:
+            self.section_label.setText(f"{total} sections")
+        refresh = getattr(self.section_stage, "refresh", None)
+        if refresh is not None:
+            refresh()
+        if self.stages.currentWidget() is self.finish_page:
+            self.refresh_finish()
+
+    def _go_section(self, offset: int) -> int | None:
+        """Show the next or previous section; returns its position, or None."""
+        order = self.section_order
+        if not order or self.show_image is None:
+            return None
+        current = self.controller.session.current_image_id
+        index = (order.index(current) + offset) % len(order) if current in order else 0
+        self.controller.session.current_image_id = order[index]
+        self.show_image(order[index])
+        self.section_changed()
+        return index
+
+    def refresh_finish(self) -> None:
+        session = self.controller.session
+        verdicts = [
+            section_verdict(self.project, session, image_id) for image_id in self.section_order
+        ]
+        areas = sum(len(left_out_areas(session, image_id)) for image_id in self.section_order)
+        decisions = session.object_decisions
+        changed = sum(
+            1
+            for decision in decisions
+            if decision.review_status
+            in (ObjectReviewStatus.CORRECTED, ObjectReviewStatus.EXCLUDED)
+        )
+        self.finish_summary.setText(
+            f"Sections: {verdicts.count('fine')} look fine, "
+            f"{verdicts.count('left_out')} left out, "
+            f"{verdicts.count('not_checked')} not checked yet "
+            f"(of {len(verdicts)}).\n"
+            f"Areas left out: {areas}.\n"
+            f"Fibers checked: {len(decisions)} ({changed} changed or excluded).\n\n"
+            "Finalizing applies these decisions, writes the result tables, and opens the "
+            "report. Model calls are never overwritten, and you can keep reviewing and finalize "
+            "again."
+        )
+
+    def select_fiber(self, image_id: str, fiber_id: int) -> bool:
+        """Check one clicked fiber, then return to the plan that was under way.
+
+        Not offered in blind labelling: hand-picked fibers would bias the reference labels.
+        """
+        if self.blind:
+            return False
+        if self.allowed_images is not None and image_id not in self.allowed_images:
+            self.status.setText("This section is not part of guided review in this project.")
+            return False
+        rows = self.rows[self.rows["image_id"].eq(image_id) & self.rows["fiber_id"].eq(fiber_id)]
+        if rows.empty:
+            return False
+        item = replace(
+            build_fiber_type_queue(rows, QueueSource.FULL_AUDIT)[0], reason_code=CLICKED_QUEUE
+        )
+        if self.controller.session.active_queue != CLICKED_QUEUE:
+            self._return_to = (
+                self.controller.queue,
+                self.controller.session.active_queue,
+                self.controller.session.queue_position,
+            )
+        self._review_started = True
+        self.controller.set_queue((item,), CLICKED_QUEUE)
+        self._show_fibers()
+        self.status.setText(f"Fiber {fiber_id} (clicked): decide, or → to return to the plan.")
+        self.refresh(notify=True)
+        return True
+
+    def _resume_after_click(self) -> bool:
+        if self.controller.session.active_queue != CLICKED_QUEUE:
+            return False
+        if self._return_to is None or not self._return_to[1]:
+            # No plan was under way: back to choosing one.
+            self._return_to = None
+            self._review_started = False
+            self.controller.set_queue((), "")
+            self._restore_saved_queue()
+            self.refresh()
+            return True
+        queue, name, position = self._return_to
+        self._return_to = None
+        self.controller.set_queue(queue, name, position=position)
+        self.refresh(notify=True)
+        return True
 
     def start_flagged_review(self) -> None:
         self._review_started = True
         self._set_queue(QueueSource.FLAGGED)
+        self._show_fibers()
         self.status.setText("Started flagged-fiber review.")
 
     def _add_shortcut(self, sequence: str, callback: Callable[[], None]) -> None:
@@ -406,6 +594,7 @@ class GuidedReviewWidget(QWidget):
     def start_random_sample(self) -> None:
         self._review_started = True
         self._set_queue(QueueSource.RANDOM_AUDIT)
+        self._show_fibers()
         count = len(self.controller.queue)
         done = self._labelled_in_queue()
         message = (
@@ -421,17 +610,18 @@ class GuidedReviewWidget(QWidget):
         return sum((item.image_id, item.fiber_id) in decided for item in self.controller.queue)
 
     def go_to_next_section(self) -> None:
-        """Open the next section in the neutral blind order."""
-        order = sorted(self.section_codes, key=self.section_codes.get)
-        if not order or self.show_image is None:
+        """Open the next section (in the neutral order in blind labelling)."""
+        index = self._go_section(1)
+        if index is None:
             return
-        current = self.controller.session.current_image_id
-        index = (order.index(current) + 1) % len(order) if current in order else 0
-        self.controller.session.current_image_id = order[index]
-        self.show_image(order[index])
         self.status.setText(
-            f"Showing section {index + 1} of {len(order)}. Click a field button to label fibers "
-            "on it; the random sample keeps its own order."
+            f"Showing section {index + 1} of {len(self.section_order)}. "
+            + (
+                "Click a field button to label fibers on it; the random sample keeps its own "
+                "order."
+                if self.blind
+                else "Give it a verdict, or check its fibers."
+            )
         )
 
     def start_auto_field_review(self) -> None:
@@ -445,6 +635,7 @@ class GuidedReviewWidget(QWidget):
             return
         self._review_started = True
         self.controller.set_queue(queue, "reference_fields", position=self._first_undecided(queue))
+        self._show_fibers()
         self.status.setText(f"Started labelling {len(queue)} fibers in a computer-placed field.")
         self.refresh(notify=True)
 
@@ -476,6 +667,7 @@ class GuidedReviewWidget(QWidget):
             return
         self._review_started = True
         self.controller.set_queue(queue, "reference_fields", position=self._first_undecided(queue))
+        self._show_fibers()
         self.status.setText(f"Started labelling {len(queue)} fibers in the drawn fields.")
         self.refresh(notify=True)
 
@@ -498,6 +690,7 @@ class GuidedReviewWidget(QWidget):
         if not self._section_allowed():
             return
         self._review_started = True
+        self._show_fibers()
         image_id = self.controller.session.current_image_id
         section_rows = self.rows[self.rows["image_id"].eq(image_id)]
         queue = build_fiber_type_queue(section_rows, QueueSource.FULL_AUDIT)
@@ -664,6 +857,10 @@ class GuidedReviewWidget(QWidget):
             self.controller.save(self.project, event)
             self.undo_button.setEnabled(True)
             self.timer.activity(decision=True)
+            if self._resume_after_click():
+                self.controller.save(self.project)
+                self.status.setText("Saved the clicked fiber; back to the plan. Undo available.")
+                return
             self.controller.move(1)
             self.controller.save(self.project)
             self.status.setText("Autosaved. Moved to the next fiber; Undo is available.")
@@ -683,6 +880,9 @@ class GuidedReviewWidget(QWidget):
             self.status.setText(str(exc))
 
     def _move(self, offset: int) -> None:
+        if self._resume_after_click():  # arrows leave a clicked fiber and return to the plan
+            self.controller.save(self.project)
+            return
         try:
             self.controller.move(offset)
         except ValueError as exc:
@@ -708,19 +908,19 @@ class GuidedReviewWidget(QWidget):
             f"Autosave is on · {saved_count} decision{'s' if saved_count != 1 else ''} saved"
         )
         if not self._review_started:
-            self.context.setText("Fiber typing · Choose a review plan")
+            self.context.setText("Choose which fibers to check")
             self.plan_message.setText(
                 "Choose how fibers are picked. The random sample is one list through every "
                 "section and resumes where you left off; a field covers every fiber in one area "
-                "of the section on screen ('Go to next section' changes the section)."
+                "of the section on screen (◀ ▶ at the top change the section)."
                 if self.blind
-                else f"{count} flagged fibers are ready for review. "
-                "Start there, review the current section, or inspect cohort QC."
+                else f"{count} flagged fibers are ready for review. Start there, or check every "
+                "fiber in this section."
             )
             self.decision_group.setEnabled(False)
             return
         if item is None:
-            self.context.setText("Fiber typing | No objects in this review plan")
+            self.context.setText("No fibers in this plan")
             self.plan_message.setText(
                 "No fibers match the selected plan. Choose another review plan."
             )
@@ -732,17 +932,21 @@ class GuidedReviewWidget(QWidget):
             if self.blind
             else f"{item.mouse_id} · {item.image_id}"
         )
+        plan = (
+            "clicked fiber"
+            if self.controller.session.active_queue == CLICKED_QUEUE
+            else PLAN_NAMES.get(item.queue_source.value, item.queue_source.value.replace("_", " "))
+        )
         self.context.setText(
-            f"{where} · Fiber typing · "
-            f"{item.queue_source.value.replace('_', ' ')} · "
-            f"{self.controller.session.queue_position + 1}/{count}"
+            f"{where} · {plan} · {self.controller.session.queue_position + 1} of {count}"
         )
         self.plan_message.setText(
             f"{self._labelled_in_queue()} of {count} fibers in this plan are labelled. Labels save "
             "as you go; switch plans with the buttons below."
             if self.blind
-            else f"{count} fibers are in the current plan. Start with flagged fibers, "
-            "or review every fiber in the current section."
+            else "A clicked fiber: decide, or press → to return to your plan."
+            if self.controller.session.active_queue == CLICKED_QUEUE
+            else f"{count} fibers are in the current plan; click any fiber to check it instead."
         )
         if self.blind:
             note = " | cut off by the image edge" if "cut_by_image_edge" in item.reason_code else ""
