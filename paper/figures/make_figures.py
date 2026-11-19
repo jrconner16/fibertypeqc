@@ -5,9 +5,9 @@ the raw stain image, the Cellpose outlines, per-fiber measurements, the model's 
 flags, and the composition before and after the example review (demo_section_a). Only the
 layout, labels, and arrows are drawn here; every image and data point comes from the demo files.
 
-Figure 2 (review_window.png) and Figure 3 (gui_panels.png) combine unedited screenshots from
-docs/images/ (crops only): the review window; the project launcher, the cohort report, and the
-model builder's Build results.
+Figure 2 (review_window.png: the review window over the cohort report) and Figure 3
+(gui_panels.png: the launcher on the builder demo and its Build results) place the screenshots in
+paper/figures/screens/, made by capture_screenshots.py. They are resized and framed, not edited.
 
 Run from the repository root, with the v0.5.2 demo download unpacked somewhere:
     uv run python paper/figures/make_figures.py --demo path/to/fibertypeqc_demo
@@ -31,6 +31,7 @@ from skimage.segmentation import find_boundaries  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent
+SCREENS = OUT / "screens"
 SECTION = "demo_section_a"
 MOUSE = "demo_mouse_1"
 
@@ -269,9 +270,9 @@ def workflow_figure(path: Path, data: dict) -> None:
         elif i == 4:
             ax.imshow(thumbs["flags"], interpolation="nearest")
         elif i == 5:
-            shot = Image.open(ROOT / "docs/images/demo_review_workspace.png").convert("RGB")
+            shot = _screen("review.png")
             # The panel's stage tabs and the current fiber, with why it is shown (a crop).
-            ax.imshow(np.asarray(shot.crop((1402, 205, 1790, 640))), interpolation="lanczos")
+            ax.imshow(np.asarray(shot.crop((1800, 420, 2600, 1290))), interpolation="lanczos")
         else:
             s = data["summary"]
             classes = ["iib", "iia", "iix"]
@@ -377,8 +378,9 @@ def workflow_figure(path: Path, data: dict) -> None:
         fontsize=5.6,
         linespacing=1.05,
     )
-    arrow(ov, (ends[-1] + 0.02, yb + h / 2), (px - 0.02, py + ph - 0.12), color=BUILD)
-    arrow(ov, (iends[-1] + 0.02, yi + h / 2), (px - 0.02, py + 0.12), color=IMPROVE)
+    # Straight arrows at each lane's own height; both lie within the Promote box.
+    arrow(ov, (ends[-1] + 0.02, yb + h / 2), (px - 0.04, yb + h / 2), color=BUILD)
+    arrow(ov, (iends[-1] + 0.02, yi + h / 2), (px - 0.04, yi + h / 2), color=IMPROVE)
 
     # Provenance strip.
     ov.add_patch(
@@ -428,43 +430,41 @@ def save_canvas(canvas, path, letters):
     plt.close(fig)
 
 
+def _screen(name: str) -> Image.Image:
+    return Image.open(SCREENS / name).convert("RGB")
+
+
+def _framed(image: Image.Image, edge=(203, 213, 225), width: int = 3) -> Image.Image:
+    """A thin light frame, so a white page and a white screenshot stay distinct."""
+    framed = Image.new("RGB", (image.width + 2 * width, image.height + 2 * width), edge)
+    framed.paste(image, (width, width))
+    return framed
+
+
 def review_figure(path: Path) -> None:
-    shot = Image.open(ROOT / "docs/images/demo_review_workspace.png").convert("RGB")
-    # Crop only: napari's layer list and controls (left) and the status bar (bottom).
-    shot = shot.crop((298, 0, shot.width, shot.height - 40))
-    canvas = Image.new("RGB", (shot.width, shot.height), "white")
-    canvas.paste(shot, (0, 0))
-    fig = plt.figure(figsize=(9.0, 9.0 * canvas.height / canvas.width))
-    ax = fig.add_axes((0, 0, 1, 1))
-    ax.imshow(canvas)
-    ax.axis("off")
-    fig.savefig(path, dpi=240, facecolor="white")
-    plt.close(fig)
+    """(a) The review window; (b) the cohort report below it, both at full width."""
+    width, gap, margin = 2600, 60, 70
+    review = _screen("review.png")
+    review = review.resize((width, round(review.height * width / review.width)), Image.LANCZOS)
+    report = _framed(_screen("cohort_report.png"))
+    report = report.resize((width, round(report.height * width / report.width)), Image.LANCZOS)
+    layout = [(0, 0), (0, review.height + gap)]
+    canvas = labelled_canvas([review, report], layout, width, margin=margin)
+    save_canvas(canvas, path, [("a", (4, 4)), ("b", (4, review.height + gap + 4))])
 
 
 def gui_figure(path: Path) -> None:
-    launcher = Image.open(ROOT / "docs/images/launcher_steps.png").convert("RGB")
-    report = Image.open(ROOT / "docs/images/report_composition_light.png").convert("RGB")
-    builder = Image.open(ROOT / "docs/images/builder_build_results.png").convert("RGB")
-    width, gap, margin = 1800, 70, 56
-    # Top row: launcher (a) and Build results (b) at one height; below: the report (c).
-    ratio_l = launcher.width / launcher.height
-    ratio_b = builder.width / builder.height
-    row_h = round((width - gap) / (ratio_l + ratio_b))
-    launcher = launcher.resize((round(row_h * ratio_l), row_h), Image.LANCZOS)
-    builder = builder.resize((width - gap - launcher.width, row_h), Image.LANCZOS)
-    report_w = round(width * 0.64)
-    report = report.resize(
-        (report_w, round(report.height * report_w / report.width)), Image.LANCZOS
-    )
-    report_x = (width - report_w) // 2
-    layout = [(0, 0), (launcher.width + gap, 0), (report_x, row_h + gap)]
-    canvas = labelled_canvas([launcher, builder, report], layout, width, margin=margin)
-    letters = [
-        ("a", (4, 4)),
-        ("b", (margin + launcher.width + 12, 4)),
-        ("c", (margin + report_x - 52, row_h + gap + 4)),
-    ]
+    """(a) The launcher on the builder demo after a build; (b) its Build results window."""
+    gap, margin = 60, 70
+    launcher = _framed(_screen("launcher_builder.png"))
+    results = _framed(_screen("build_results.png"))
+    height = min(launcher.height, results.height)
+    launcher = launcher.resize((round(launcher.width * height / launcher.height), height))
+    results = results.resize((round(results.width * height / results.height), height))
+    width = launcher.width + gap + margin + results.width
+    layout = [(0, 0), (launcher.width + gap + margin, 0)]
+    canvas = labelled_canvas([launcher, results], layout, width, margin=margin)
+    letters = [("a", (4, 4)), ("b", (margin + launcher.width + gap + 4, 4))]
     save_canvas(canvas, path, letters)
 
 
