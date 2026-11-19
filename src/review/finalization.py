@@ -248,6 +248,23 @@ def _image_exclusion(
     return ""
 
 
+def _allowed_classes(project: Project, predictions: pd.DataFrame) -> set[str] | None:
+    """Classes a reviewed call may take: the project's review classes, else the model's.
+
+    The model's classes are its ``prob_<class>`` columns with any value, the convention the
+    summaries use (absent classes are written as empty placeholder columns). Returns None when
+    neither is known (rule-only runs), in which case no class check is made.
+    """
+    if project.review_classes:
+        return {normalize_review_label(value) for value in project.review_classes}
+    model_classes = {
+        normalize_review_label(column.removeprefix("prob_"))
+        for column in predictions.columns
+        if column.startswith("prob_") and predictions[column].notna().any()
+    }
+    return model_classes or None
+
+
 def finalize_image(
     project: Project,
     session: ReviewSession,
@@ -299,6 +316,9 @@ def finalize_image(
             "longer match the fiber table; predictions changed after review."
         )
 
+    allowed = _allowed_classes(project, predictions)
+    unsupported: list[tuple[int, str]] = []
+
     image_reason = _image_exclusion(session, image, selected_image_ids)
     region_excluded, region_unresolved, roi = _region_effects(session, image.image_id, centroids)
     flagged = (
@@ -344,10 +364,21 @@ def finalize_image(
             elif status is ObjectReviewStatus.ACCEPTED:
                 row.update(value_source="reviewed")
             else:
+                if allowed is not None and reviewed and reviewed not in allowed:
+                    unsupported.append((fiber_id, reviewed))
                 row.update(final_type=reviewed or model_call, value_source="reviewed")
         elif fiber_id in region_unresolved:
             row.update(final_type="", value_source="unresolved")
         rows.append(row)
+    if unsupported:
+        # A reviewed call outside the project's classes (e.g. Type I on a panel without a Type I
+        # stain) must not become a final type silently.
+        listed = ", ".join(f"fiber {fiber_id} as {label!r}" for fiber_id, label in unsupported)
+        raise FinalizationError(
+            f"{image.image_id}: {len(unsupported)} review decisions use a class this project "
+            f"cannot produce ({listed}); allowed classes are {sorted(allowed or ())}. Review "
+            "those fibers again, or mark them uncertain, before finalizing."
+        )
 
     final = pd.DataFrame(rows, columns=list(FINAL_COLUMNS), index=predictions.index)
     clashing = sorted(set(FINAL_COLUMNS) & set(predictions.columns))

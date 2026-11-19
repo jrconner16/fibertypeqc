@@ -20,8 +20,10 @@ Method validation is a separate track (D) and does not block JOSS unless it find
 ## Current state
 
 Done: Track A; B1 (`CITATION.cff` with ORCIDs and affiliations); B2 (Zenodo integration enabled);
-C1; C2; C3 (an outside user installed FiberTypeQC and ran the whole workflow on an HPC cluster
-through the launcher; their reports led to #83, #84, and #90, fixed in v0.5.0). HPC use (Slurm
+C1; C2; C3 (an outside researcher installed FiberTypeQC and ran the demonstration workflow on the
+example data; their experience informed usability changes in v0.5.0, tracked by the developer in
+#83, #84, and #90. This was a usability test, not research adoption, and the finished launcher has
+not yet been evaluated by an outside user). HPC use (Slurm
 batch, Open OnDemand review) is documented in `docs/install.md` and was checked on a cluster: the
 demo batch agreed with the macOS reference snapshot within tolerance.
 

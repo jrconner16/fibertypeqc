@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from pathlib import Path
@@ -39,6 +40,10 @@ def _write_image(directory: Path, image_id: str) -> None:
             "label": list(MODEL_CALLS),
             "fiber_type": list(MODEL_CALLS.values()),
             "prob_iia": [0.9, 0.1, 0.1, 0.2],
+            # One probability column per model class, as the pipeline writes them.
+            "prob_iib": [0.05, 0.8, 0.2, 0.1],
+            "prob_i": [0.03, 0.05, 0.6, 0.0],
+            "prob_iix": [0.02, 0.05, 0.1, 0.7],
             "model_confidence": [0.9, 0.8, 0.6, 0.7],
             "needs_review": [False, False, True, True],
         }
@@ -231,6 +236,59 @@ def test_excluded_image_and_unselected_sections_are_excluded(tmp_path):
         "three": "section_not_selected",
     }
     assert manifest["section_selection_applied"] is True
+
+
+def test_reviewed_class_the_project_cannot_produce_is_refused(tmp_path):
+    # A three-class model (no Type I stain): its fiber table has no Type I probabilities.
+    project = _project(tmp_path)
+    fibers_path = project.images[0].outputs["fiber_table"]
+    table = pd.read_csv(fibers_path)
+    table["prob_i"] = np.nan
+    table.loc[2, "fiber_type"] = "iix"
+    table.to_csv(fibers_path, index=False)
+    session = _session(project)
+    session.record_fiber_type_decision(
+        FiberTypeDecision(
+            image_id="one",
+            fiber_id=3,
+            model_fiber_type="iix",
+            reviewed_fiber_type="i",
+            review_status="corrected",
+            reviewer="reviewer_a",
+        )
+    )
+
+    with pytest.raises(FinalizationError, match=r"fiber 3 as 'i'.*'iia', 'iib', 'iix'"):
+        finalize_image(project, session, project.images[0])
+
+    # Marking the fiber uncertain resolves it without inventing a class; the log keeps both.
+    _decide(session, 1, "corrected", reviewed="iib")
+    session.record_fiber_type_decision(
+        FiberTypeDecision(
+            image_id="one",
+            fiber_id=3,
+            model_fiber_type="iix",
+            reviewed_fiber_type="",
+            review_status="uncertain",
+            reviewer="reviewer_a",
+        )
+    )
+    finalized = _by_id(finalize_image(project, session, project.images[0]))
+    assert finalized.loc[3, ["final_type", "value_source"]].tolist() == ["", "unresolved"]
+    assert finalized.loc[1, ["final_type", "value_source"]].tolist() == ["iib", "reviewed"]
+
+
+def test_reviewed_class_is_checked_against_review_classes_without_a_model(tmp_path):
+    project = _project(tmp_path)
+    project = dataclasses.replace(project, review_classes=("iia", "iib", "negative"))
+    session = _session(project)
+    _decide(session, 1, "corrected", reviewed="negative")
+    assert _by_id(finalize_image(project, session, project.images[0])).loc[1, "final_type"] == (
+        "negative"
+    )
+    _decide(session, 2, "corrected", reviewed="iix")
+    with pytest.raises(FinalizationError, match="fiber 2 as 'iix'"):
+        finalize_image(project, session, project.images[0])
 
 
 def test_changed_inputs_and_changed_predictions_are_refused(tmp_path):

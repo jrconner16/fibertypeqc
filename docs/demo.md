@@ -104,13 +104,22 @@ Its mouse-level summary (percent of resolved fibers, IIb / IIa / IIx):
 | Mouse | Age | Fibers | Excluded | Reviewed | Model calls | After review |
 |---|---|---|---|---|---|---|
 | demo_mouse_1 | 1 month | 334 | 61 | 102 | 64 / 11 / 26 | 72 / 12 / 16 |
-| demo_mouse_2 | 1 month | 531 | 72 | 183 | 46 / 9 / 45 | 51 / 11 / 38 |
+| demo_mouse_2 | 1 month | 531 | 72 | 182 | 46 / 9 / 45 | 51 / 11 / 38 |
 | demo_mouse_3 | 12 months | 550 | 70 | 55 | 74 / 1 / 26 | 72 / 1 / 26 |
 | demo_mouse_4 | 12 months | 560 | 55 | 66 | 45 / 14 / 42 | 44 / 14 / 42 |
 
 Nearly all exclusions are fibers cut off by the crop edge. Your own review will differ where your
 judgment does; the IIb/IIx split in particular depends on the absence of stain and is partly
 subjective.
+
+**Correction (from the v0.5.2 download).** The example review had recorded one fiber
+(`demo_section_b`, fiber 39) as Type I, a class this three-class panel cannot produce; an older
+review window offered every class. That fiber is now marked uncertain, so it is unresolved rather
+than given a class, and demo_mouse_2 has 182 reviewed fibers instead of 183. The earlier
+decisions remain in `review/review/review_events.csv`. The correction was made with
+`uv run python -m scripts.mark_fiber_uncertain demo_project_completed/review/project.yaml
+demo_section_b 39 --reason unsupported_class_type_i_on_ta_panel`, then `finalize`. Finalization
+now refuses such a class instead of using it.
 
 ## Build a model (no model to start from)
 
