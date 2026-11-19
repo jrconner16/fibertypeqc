@@ -109,7 +109,7 @@ def workflow_figure(path: Path) -> None:
     )
 
     # Explicit promotion, directly below the classifier it replaces.
-    bh = 1.15
+    bh = 1.3
     box(ax, x[3], row2, w, bh, "Explicit\npromotion\n(recorded,\nundoable)", MODEL, size=7)
     arrow(ax, (x[3] + w / 2, row2 + bh), (x[3] + w / 2, row1), ls="--")
 
@@ -117,8 +117,8 @@ def workflow_figure(path: Path) -> None:
     build = [
         "Segment and\nmeasure only\n(model: none)",
         "Blind labels\n(test mice set\naside first)",
-        "Build\ncandidates\n(fixed recipe)",
-        "Evaluate on\nheld-out\ntest mice",
+        "Build\ncandidates\n(by-mouse CV,\nfixed recipe)",
+        "Evaluate on\nheld-out test\nmice (blind\nlabels)",
     ]
     for i, label in enumerate(build):
         box(ax, x[i], row3, w, bh, label, MODEL, size=7)
@@ -133,7 +133,7 @@ def workflow_figure(path: Path) -> None:
     improve = {
         6: "Reviewed\ncorrections",
         5: "Train\ncandidates\n(fixed recipe)",
-        4: "Compare with\ncurrent model\n(declared rule)",
+        4: "Compare with\ncurrent model\n(by-mouse CV,\nreview labels)",
     }
     for i, label in improve.items():
         box(ax, x[i], row3, w, bh, label, MODEL, size=7)
@@ -141,7 +141,13 @@ def workflow_figure(path: Path) -> None:
         arrow(ax, (x[i], row3 + bh / 2), (x[i - 1] + w, row3 + bh / 2))
     arrow(ax, (x[4] + 0.3, row3 + bh), (x[3] + w, row2 + bh / 2))
     arrow(ax, (x[5] + w - 0.3, row1), (x[6] + w - 0.3, row3 + bh), ls=":", color="#7a7a7a")
-    ax.text(x[4] + 0.5, row3 + bh + 0.25, "Improve from corrections", fontsize=8, fontweight="bold")
+    ax.text(
+        x[4] + 0.5,
+        row3 + bh + 0.25,
+        "Improve from review corrections",
+        fontsize=8,
+        fontweight="bold",
+    )
 
     # Provenance band.
     ax.add_patch(
@@ -158,9 +164,9 @@ def workflow_figure(path: Path) -> None:
     ax.text(
         9.0,
         0.45,
-        "Provenance throughout: panel and feature checks · model SHA-256 · input digests "
-        "on review decisions\nappend-only review log · every final value labelled by "
-        "source (predicted, reviewed, excluded, unresolved)",
+        "Provenance throughout: panel and feature checks · model SHA-256 · versioned recipes "
+        "and model history\ninput digests and an append-only log for review decisions · the "
+        "source of every finalized fiber type (value_source)",
         ha="center",
         va="center",
         fontsize=6.8,
@@ -173,13 +179,15 @@ def workflow_figure(path: Path) -> None:
 def review_and_report_figure(path: Path) -> None:
     review = Image.open(ROOT / "docs/images/demo_review_workspace.png").convert("RGB")
     report = Image.open(ROOT / "docs/images/report_composition_light.png").convert("RGB")
-    # Top of the report: provenance header, legend, and the first mouse. A crop, not an edit.
-    report = report.crop((0, 0, report.width, 806))
+    # Crops only, no edits: drop napari's layer list and layer controls (the left 298 px) so the
+    # image and the review panel are larger in print; the report image is used whole
+    # (provenance header and every mouse's composition before and after review).
+    review = review.crop((298, 0, review.width, review.height))
 
-    # Stack the two unedited images on one white canvas: the review window full width, the report
-    # scaled to 70% of that width and centred, with a left margin for the panel letters.
+    # Stack the two images on one white canvas: the review window full width, the report scaled
+    # to 80% of that width and centred, with a left margin for the panel letters.
     margin, gap = 70, 40
-    scale = 0.70 * review.width / report.width
+    scale = 0.80 * review.width / report.width
     report = report.resize((round(report.width * scale), round(report.height * scale)))
     width = margin + review.width
     height = review.height + gap + report.height
