@@ -211,6 +211,7 @@ Two public demonstrations distributed with the release run end to end: four fiel
 a reviewed cohort report, and a model-builder project taken from blind labels through building,
 test evaluation, promotion, and exact rollback.
 
+[Pending: an outside demonstration run is in progress; confirm this sentence before submission.]
 An outside researcher installed FiberTypeQC and ran the demonstration workflow on the example
 data; their feedback informed usability changes, such as numbering image channels from one as
 microscope software does. This was a usability test, not research adoption, and the graphical
@@ -248,9 +249,11 @@ AUTHOR NOTES (REMOVE BEFORE SUBMISSION)
 - "train new models from the modest number of labels a laboratory can realistically collect": the
   builder demo uses 731 blind labels; the recipe minimum is 30 per class. This is a design
   rationale, not a performance claim; cut it if a reviewer reads it otherwise.
-- Outside tester sentence: the user's account (2026-11-19) is that they ran the demonstration
-  workflow on example data and later could not evaluate the launcher. ROADMAP C3 is corrected in
-  PR #117. The issues #83, #84, #90 were filed by the developer, so the paper does not present
+- Outside tester sentence (marked pending in the text): the first outside tester may have only
+  installed the software and run the synthetic reference test. A demonstration run by an outside
+  researcher is in progress (a retry, or a second tester); a co-author's run does not count as
+  outside. Once it is done, rewrite the sentence to match what was actually run and remove the
+  bracket. ROADMAP C3 is corrected in PR #117. The issues #83, #84, #90 were filed by the developer, so the paper does not present
   them as outside contributions. Confirm that channel numbering came from their feedback, and get
   consent before thanking them by name.
 - Figure 2b and the demo: the released v0.5.1 demo had one fiber (demo_section_b, label 39)
