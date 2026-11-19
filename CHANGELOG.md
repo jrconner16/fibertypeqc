@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Finalize refuses a reviewed class the project cannot produce.** A review decision whose class
+  is not one of the project's classes (the model's classes, or `review_classes` for a project
+  without a model) now stops finalization and names the fibers, instead of becoming a final type.
+  Example: Type I on a panel with no Type I stain. Review such fibers again, or mark them
+  uncertain. The current review window already offers only the project's classes; older review
+  sessions could hold other classes.
+- **Version label in outputs.** `fibertypeqc.__version__`, written as `application_version` in
+  run artifacts, still said 0.5.0 in v0.5.1; it now matches `pyproject.toml`, and a test keeps
+  the two and `CITATION.cff` in step.
+
+### Documentation
+
+- ROADMAP: the outside test (C3) is described as what it was: an install and a demonstration
+  run on the example data, not an evaluation of the launcher or research adoption.
+
 ## v0.5.1
 
 ### Release summary
