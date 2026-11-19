@@ -45,13 +45,18 @@ DRAFT STATUS: REMOVE THIS COMMENT, ALL AUTHOR NOTES, AND THE CLAIM MAP BEFORE SU
   marker-negative builder class explained; Figure 1 labels and Figure 2 (corrected demo report,
   napari layer panel cropped) regenerated.
 - v0.5.2 pass 2026-11-19: body trimmed to about 1,660 words; the Finalized outputs paragraph
-  states the unsupported-class refusal (merged in #117, ships in v0.5.2). Figure 2b is captured
-  from the v0.5.2 demo download (finalized at 43a3365).
+  states the unsupported-class refusal (merged in #117, ships in v0.5.2).
+- Figures reworked 2026-11-19 (three figures): Figure 1 is a visual pipeline built from the demo's
+  own data; Figure 2 is the review window; Figure 3 is the launcher, Build results, and the cohort
+  report. Regenerate with `uv run python paper/figures/make_figures.py --demo
+  path/to/fibertypeqc_demo` (the v0.5.2 demo download).
 - Bracketed placeholders [like this] in the text must be filled or removed by the authors.
 - Leave out of the paper: eMHC builder classes (experimental, synthetic tests only); nuclei in
-  results (experimental, central cut-off unchecked); any accuracy figures.
-- JOSS limit: "between 750-1750 words". The guidelines do not say whether captions count, so
-  keep body plus captions under 1,750.
+  results (experimental, central cut-off unchecked); accuracy figures in the text. Figure 3b
+  shows the builder demo's own Build results window, whose candidate scores the caption says are
+  not an accuracy estimate (author's choice, 2026-11-19).
+- JOSS limit: "between 750-1750 words". The guidelines do not say whether captions count; the
+  body is kept comfortably under 1,750 and captions are extra.
 -->
 
 # Summary
@@ -117,12 +122,12 @@ flexibility than a general-purpose platform; the benefit is safeguards that appl
 
 \autoref{fig:workflow} summarizes the workflow.
 
-![FiberTypeQC workflow. Top: analysis from images to finalized tables and report. Lower left: building a model for a panel without one from blind labels, checked on test animals set aside before labelling. Lower right: improving a model from review corrections, compared with the current model on those review labels. Both change the project's model only through explicit, reversible promotion.\label{fig:workflow}](figures/workflow.png)
+![FiberTypeQC workflow. Top: the analysis of one demonstration section, from the raw stain image through Cellpose outlines, per-fiber IIa and IIb measurements, the model's calls, QC flags, and staged review to the animal's composition before and after review; every image and data point is the demonstration's own output. Bottom: building a model for a panel without one, checked on test animals set aside before labelling, and improving a model from review corrections, compared with the current model on those labels. Both change the project's model only through explicit, reversible promotion.\label{fig:workflow}](figures/workflow.png)
 
 **Project-level workflow.** A command-line interface runs initialization, image analysis, QC
 preparation, review, finalization, and reporting on a project folder and reports the next step;
-an experimental desktop launcher runs the same commands, so results do not depend on the
-interface. Staging adds workflow management but keeps the analysis state and outstanding review
+an experimental desktop launcher (\autoref{fig:gui}a) runs the same commands, so results do not
+depend on the interface. Staging adds workflow management but keeps the analysis state and outstanding review
 explicit across a cohort. Batch processing has been run in Slurm [@Yoo2003Slurm] jobs and review
 in Open OnDemand [@Hudak2018OnDemand] remote desktops.
 
@@ -148,7 +153,7 @@ Flags do not invalidate measurements, and unflagged predictions are not guarante
 how efficiently the criteria capture classification errors, compared with random review, has not
 yet been measured.
 
-**Non-destructive, staged review.** The napari window (\autoref{fig:review}a) works one stage at a
+**Non-destructive, staged review.** The napari window (\autoref{fig:review}) works one stage at a
 time: a verdict on each section (accept it, draw areas to leave out, or leave it out), then the
 flagged fibers in priority order, with any other fiber available by clicking it, then
 finalization. Section and area verdicts use the same exclusion records that finalization already
@@ -161,13 +166,15 @@ a results table but keeps human interventions distinguishable from model outputs
 and measured but unclassified. Before any labels exist, some animals are set aside for testing. A
 reviewer then labels a random sample of fibers blind, so labels cannot be steered by a model's
 answer or by hand-picking. Candidates are compared by leave-one-animal-out validation on the
-training animals against a majority-class baseline, under criteria fixed in a recipe before
+training animals against a majority-class baseline (\autoref{fig:gui}b), under criteria fixed in a recipe before
 training. The recommended candidate is then evaluated on the test animals, which take no part in
 training or selection; adopting it is an explicit promotion, recorded and exactly reversible.
 Classes follow the panel's stains: a fiber negative for every measured myosin marker is labelled
 marker-negative (for example IIa$^{-}$/IIb$^{-}$), not IIx, because absence of staining implies a
 fiber identity only under assumptions that a released model declares. Building requires up-front
 labelling, but researchers are no longer limited to the panels for which models are distributed.
+
+![The staged review window on a demonstration section. Fibers are outlined in the color of their current call over the raw stain channels; the panel shows the review stage, why the current fiber was flagged, and the decision controls.\label{fig:review}](figures/review_window.png)
 
 **Controlled model improvement.** For a panel that already has a model, candidates retrained from
 reviewed corrections are compared with the current model by leave-one-animal-out validation on
@@ -176,17 +183,16 @@ queue and the reviewer, mostly hard cases, so this comparison guides model choic
 unbiased accuracy estimate; blind reference labels are kept separately for that purpose.
 Promotion is again explicit and reversible.
 
-![Outputs on the public demonstration data. (a) The review window: fibers outlined in the color of their current call; the panel shows the stage, why the current fiber was flagged, and the decision controls. (b) The cohort report: provenance, and each animal's composition before and after an example review. The shifts reflect one reviewer's decisions on demonstration fields, not a validation.\label{fig:review}](figures/review_and_report.png)
-
 **Finalized outputs.** Finalization writes new tables; each fiber keeps its model prediction and
 morphometry (area, Feret diameters) beside its final type, whose source is recorded as
 `predicted`, `reviewed`, `excluded`, or `unresolved`. A reviewed class the project's model cannot
-produce is refused rather than finalized. Summary tables report counts,
-composition, and fiber size per image, animal, region of interest, and cohort, with exclusions
-counted by reason. A self-contained HTML report (\autoref{fig:review}b) records the model, code
-revision, and final-table digest and compares predicted with finalized composition. Every
-fiber-type call traces to the model or a reviewer, and measurements to the recorded run settings
-and code version.
+produce is refused rather than finalized. Summary tables report counts, composition, and fiber
+size per image, animal, region of interest, and cohort, with exclusions counted by reason. A
+self-contained HTML report (\autoref{fig:gui}c) records the model, code revision, and final-table
+digest and compares predicted with finalized composition. Every fiber-type call traces to the
+model or a reviewer, and measurements to the recorded run settings and code version.
+
+![Other interfaces, on public demonstration data. (a) The experimental project launcher: each step's state, read from the project's files, and the actions for the next step. (b) Build results in the model-builder demonstration: blind label counts against the recipe's minimums, and candidates compared by leave-one-animal-out validation with a majority-class baseline; these scores compare candidates and are not an accuracy estimate. (c) The cohort report: provenance, and each animal's composition before and after one reviewer's example review.\label{fig:gui}](figures/gui_panels.png)
 
 **Verification and reproducibility.** Continuous integration checks supported commands,
 repository boundaries, and synthetic reference analyses; a locked environment defines
@@ -256,11 +262,12 @@ AUTHOR NOTES (REMOVE BEFORE SUBMISSION)
   bracket. ROADMAP C3 is corrected in PR #117. The issues #83, #84, #90 were filed by the developer, so the paper does not present
   them as outside contributions. Confirm that channel numbering came from their feedback, and get
   consent before thanking them by name.
-- Figure 2b and the demo: the released v0.5.1 demo had one fiber (demo_section_b, label 39)
+- Figure 3c and the demo: the released v0.5.1 demo had one fiber (demo_section_b, label 39)
   finalized as Type I on the three-class panel. PR #117 adds the finalization check, corrects the
   demo with scripts/mark_fiber_uncertain.py (fiber unresolved, no class chosen). The v0.5.2
   fibertypeqc_demo.zip was rebuilt from the v0.5.1 download with the docs/demo.md commands at
-  43a3365; Figure 2b and docs/images/report_composition_*.png are captured from it.
+  43a3365; Figure 1 (thumbnails), Figure 3c, and docs/images/report_composition_*.png come from
+  it.
 - Version label: v0.5.1 outputs record application_version 0.5.0 (fibertypeqc/__init__.py).
   Fixed in #117, with a consistency test (tests/test_version_consistency.py).
 - Unsupported-class refusal: src/review/finalization.py (_allowed_classes);
@@ -314,11 +321,16 @@ Claim-to-evidence map (REMOVE BEFORE SUBMISSION)
 - Model evidence: docs/model_cards/.
 - Demos: release downloads fibertypeqc_demo.zip and fibertypeqc_builder_demo.zip; docs/demo.md.
   Builder demo checked from the zip: build recommends a model; rollback restores every file.
-- Figure 1 is a schematic drawn by paper/figures/make_figures.py. Figure 2 combines the unedited
-  screenshots docs/images/demo_review_workspace.png (napari's layer panel cropped off) and
-  docs/images/report_composition_light.png (whole; captured from the v0.5.2 demo download);
-  values match demo_project_completed/results/mouse_summary.csv (e.g. demo_mouse_1 IIx 25.6%
-  predicted, 15.8% finalized).
+- Figures, all from paper/figures/make_figures.py --demo <v0.5.2 demo folder>:
+  - Figure 1 thumbnails are demo_section_a data: images/demo_section_a.tif (display gamma only),
+    batch/demo_section_a/*_cellpose_labels.tif outlines, *_fibers.csv (type1_p75 = IIb,
+    type2_p75 = IIa, fiber_type, needs_review), a crop of docs/images/demo_review_workspace.png,
+    and results/mouse_summary.csv for demo_mouse_1 (prop_predicted_* and prop_final_*; IIx 25.6%
+    predicted, 15.8% finalized). The 320 px window is chosen by a fixed rule (most IIa, IIx, and
+    flagged fibers), not by eye.
+  - Figure 2: docs/images/demo_review_workspace.png, cropped (layer panel and status bar).
+  - Figure 3: docs/images/launcher_steps.png, builder_build_results.png (builder demo), and
+    report_composition_light.png, resized and placed, not edited.
 - Builder vs improver evaluation: builder: manifests/builder/recipe.v1.yaml (leave_one_mouse_out
   on training mice; test mice from evaluation_roles.csv, src/model_evaluation.py); improver:
   src/model_improver.py docstring and docs/user_guide.md "Adapt the model from your review"
