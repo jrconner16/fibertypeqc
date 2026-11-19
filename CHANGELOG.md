@@ -14,6 +14,15 @@
   run artifacts, still said 0.5.0 in v0.5.1; it now matches `pyproject.toml`, and a test keeps
   the two and `CITATION.cff` in step.
 
+### Demo data
+
+- The completed demo's example review had one fiber (`demo_section_b`, fiber 39) recorded as
+  Type I on the three-class TA panel. It is now marked uncertain (unresolved, no class chosen)
+  with `scripts/mark_fiber_uncertain.py`, the project is finalized again, and the earlier
+  decisions stay in the event log. demo_mouse_2 has 182 reviewed fibers instead of 183; rounded
+  compositions are unchanged. The corrected `fibertypeqc_demo.zip` ships with the next release;
+  the README report images are regenerated from it.
+
 ### Documentation
 
 - ROADMAP: the outside test (C3) is described as what it was: an install and a demonstration
