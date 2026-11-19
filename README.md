@@ -17,13 +17,7 @@ helps you build one from a sample of fibers you label; if a model does poorly on
 review corrections can train a better one. Either way the new model is checked on mice set aside
 for testing, and switching to it is your decision and can be undone.
 
-```text
-images ─► segment (Cellpose) ─► type (panel-specific model) ─► QC flags
-       ─► guided review (Napari) ─► finalize (predictions untouched) ─► tables + HTML report
-
-no model for your stains:   label fibers blind ─► build ─► check on test mice ─► apply (undoable)
-model does poorly:          review corrections ─► improve ─► compare by a fixed rule ─► switch
-```
+![FiberTypeQC workflow on a demo section. Analysis: image, Cellpose segmentation, per-fiber fluorescence measurements, panel-specific classification, QC flags with reasons, staged review in napari, and finalized tables and report with the source of each call. Models: with no model for the panel, test animals are set aside, a random sample is labelled blind, candidates are compared by animal, and the chosen one is evaluated on the test animals; a model that does poorly can be improved from review corrections. Either way the project's model changes only by an explicit, recorded, undoable promotion.](paper/figures/workflow.png)
 
 ![Review workspace on a demo field: each fiber outlined in the color of its current call over the raw stain channels](docs/images/demo_review_workspace.png)
 
