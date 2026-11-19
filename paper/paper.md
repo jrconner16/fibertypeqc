@@ -219,16 +219,16 @@ conditions remains future work.
 
 # AI usage disclosure
 
-Generative AI tools were used during development of the software and this manuscript: ChatGPT
-[model and version], OpenAI Codex [model and version], and Claude Code with Anthropic Claude Opus
-models [versions]. They assisted with code implementation and refactoring, debugging, test
-scaffolding, documentation, and drafting and editing of manuscript text.
+Generative AI tools were used during the development of FiberTypeQC and preparation of this
+manuscript. These included OpenAI ChatGPT (GPT-6 Astra), OpenAI Codex (GPT-5.6 Sol, Terra, and
+Luna), and Anthropic Claude Code (Claude Opus 5.5). Assistance included software implementation,
+refactoring, debugging, test development, documentation, and manuscript drafting and editing.
 
-James R. Conner directed the scientific objectives, software architecture, and development
-priorities and made the core design decisions. All AI-assisted code,
-documentation, and text were reviewed, edited, and validated by the authors, including through the
-software's test suite and research analyses. The authors take full responsibility for the
-accuracy, originality, and licensing of the software and manuscript.
+James R. Conner directed the scientific objectives, software architecture, analytical workflows,
+and development priorities, and retained responsibility for core design decisions. AI-assisted
+contributions were reviewed, revised, and validated through code inspection, automated testing,
+and application to research data. The authors take responsibility for the accuracy, originality,
+and integrity of the software and manuscript.
 
 # Acknowledgements
 
