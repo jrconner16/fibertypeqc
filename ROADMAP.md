@@ -1,6 +1,6 @@
 # FiberTypeQC Roadmap
 
-- Updated: 2026-11-17
+- Updated: 2026-11-19
 - Status: **active.** Goal: a clean, citable repository and a submission to the Journal of Open
   Source Software (JOSS).
 - Supersedes: [docs/history/ROADMAP_v0.3.md](docs/history/ROADMAP_v0.3.md) (frozen 2026-10-14) and
@@ -30,7 +30,9 @@ demo batch agreed with the macOS reference snapshot within tolerance.
 v0.4.0 is released and archived on Zenodo (concept DOI 10.5281/zenodo.23893717; B3, B4 done).
 v0.5.0 (model builder, launcher, nuclei in results, images in subfolders, builder demo) is released
 (DOI 10.5281/zenodo.24321794). v0.5.1 makes the review window one stage at a time, with
-click-to-check. The paper describes v0.5.1 and claims only released features.
+click-to-check (DOI 10.5281/zenodo.24325302). v0.5.2 makes finalization refuse reviewed classes
+the project cannot produce and corrects the demo download. The paper describes v0.5.2 and claims
+only released features.
 
 In progress: C5 (paper).
 

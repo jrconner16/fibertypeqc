@@ -31,8 +31,9 @@ bibliography: paper.bib
 
 <!--
 DRAFT STATUS: REMOVE THIS COMMENT, ALL AUTHOR NOTES, AND THE CLAIM MAP BEFORE SUBMISSION.
-- Describes v0.5.1 (released 2026-11-17; Zenodo concept DOI 10.5281/zenodo.23893717). The paper
-  claims released features only. Set `date` to the submission date.
+- Describes v0.5.2 (release PR prepared 2026-11-19; not yet tagged; Zenodo concept DOI
+  10.5281/zenodo.23893717). The paper claims released features only, so submit after the v0.5.2
+  tag. Set `date` to the submission date.
 - Submit after 2026-11-30: JOSS requires the repository to have been public for more than six
   months (created 2026-05-31).
 - Revised 2026-11-19: positive contribution statement in State of the field; new Software design
@@ -43,10 +44,9 @@ DRAFT STATUS: REMOVE THIS COMMENT, ALL AUTHOR NOTES, AND THE CLAIM MAP BEFORE SU
   to finalized fiber-type decisions; QC wording no longer implies validated enrichment;
   marker-negative builder class explained; Figure 1 labels and Figure 2 (corrected demo report,
   napari layer panel cropped) regenerated.
-- Release dependency: PR #117 (finalize refuses unsupported classes, corrected demo,
-  application_version) should ship as v0.5.2 before or during review. Figure 2b already shows the
-  corrected demo report. After v0.5.2: say "Describes v0.5.2", and the Finalized outputs paragraph
-  may add that a reviewed class the model cannot produce is refused rather than finalized.
+- v0.5.2 pass 2026-11-19: body trimmed to about 1,660 words; the Finalized outputs paragraph
+  states the unsupported-class refusal (merged in #117, ships in v0.5.2). Figure 2b is captured
+  from the v0.5.2 demo download (finalized at 43a3365).
 - Bracketed placeholders [like this] in the text must be filled or removed by the authors.
 - Leave out of the paper: eMHC builder classes (experimental, synthetic tests only); nuclei in
   results (experimental, central cut-off unchecked); any accuracy figures.
@@ -57,15 +57,14 @@ DRAFT STATUS: REMOVE THIS COMMENT, ALL AUTHOR NOTES, AND THE CLAIM MAP BEFORE SU
 # Summary
 
 FiberTypeQC is an open-source Python workflow for skeletal muscle immunofluorescence analysis that
-combines Cellpose segmentation [@Stringer2021Cellpose; @Stringer2025Cellpose3], feature-based
-fiber-type classification, morphometry, and guided quality-control review. It uses panel-specific
-scikit-learn [@Pedregosa2011sklearn] models to classify fibers and a napari [@napari] interface to
-inspect questionable results. Rather than replacing automated predictions with manual corrections,
-FiberTypeQC preserves both and records their provenance in finalized per-fiber and cohort-level
-tables and an HTML report. Researchers whose staining panel has no released model can build one
-from blind reference labels and adopt it through an explicit, reversible step. Its purpose is to
-make high-throughput fiber typing practical without sacrificing human oversight or traceability.
-The software is archived on Zenodo [@Conner2026FiberTypeQC].
+combines Cellpose segmentation [@Stringer2021Cellpose; @Stringer2025Cellpose3], fiber-type
+classification with panel-specific scikit-learn [@Pedregosa2011sklearn] models, morphometry, and
+guided quality-control review in a napari [@napari] interface. Automated predictions and reviewer
+corrections are kept side by side, and finalized per-fiber and cohort-level tables and an HTML
+report record which is which. Researchers whose staining panel has no released model can build one
+from blind reference labels and adopt it through an explicit, reversible step. The aim is
+high-throughput fiber typing without sacrificing human oversight or traceability. The software is
+archived on Zenodo [@Conner2026FiberTypeQC].
 
 # Statement of need
 
@@ -75,18 +74,18 @@ thresholds, and differences in staining intensity, image quality, and threshold 
 complicate comparisons between experimental cohorts.
 
 FiberTypeQC originated from the need to analyze large collections of muscle sections without
-manually inspecting every fiber; one internal analysis involved approximately 200,000 fibers.
-Automation reduced this workload but introduced a different problem: classifiers could produce
-plausible predictions on images whose staining characteristics differed from their training data.
+inspecting every fiber; one internal analysis involved approximately 200,000 fibers. Automation
+reduced this workload but introduced a different problem: classifiers could produce plausible
+predictions on images whose staining differed from their training data.
 
 Type IIx illustrates the difficulty. In commonly used staining panels, IIx is inferred from the
 absence of other myosin heavy-chain signals. A weakly stained IIa or IIb fiber may therefore
 resemble an IIx fiber, despite representing a different biological phenotype.
 
-The practical challenge is not simply automating classification, but identifying where automation
-may be unreliable, directing expert attention there, and keeping a record of what the expert
-changed. FiberTypeQC is intended for muscle laboratories analyzing cohorts too large for
-exhaustive manual typing, and for the computational staff who support them.
+The challenge is therefore not only automating classification but identifying where it may be
+unreliable, directing expert attention there, and recording what the expert changed. FiberTypeQC
+is intended for muscle laboratories analyzing cohorts too large for exhaustive manual typing, and
+for the computational staff who support them.
 
 # State of the field
 
@@ -94,21 +93,19 @@ Muscle-specific tools including MyoSight [@Babcock2020MyoSight], Myosoft
 [@EncarnacionRivera2020Myosoft], MuscleJ [@MayeufLouchart2018MuscleJ], MuscleJ2
 [@Danckaert2023MuscleJ2], QuantiMus [@Kastenschmidt2019QuantiMus], and FiNuTyper
 [@Lundquist2023FiNuTyper] provide automated or semi-automated segmentation, fiber typing,
-morphometry, and related measurements, mostly as Fiji plugins or standalone applications.
-General-purpose platforms such as QuPath [@Bankhead2017QuPath] and ilastik [@Berg2019ilastik]
+morphometry, and related measurements. General-purpose platforms such as QuPath [@Bankhead2017QuPath] and ilastik [@Berg2019ilastik]
 support segmentation, feature extraction, interactive classification, and model training.
 
 FiberTypeQC contributes a muscle-specific analysis system in which three properties are enforced by
 the software rather than left to laboratory convention. First, defined quality-control criteria
 prioritize potentially problematic fibers and sections for expert review, each with a visible
-reason, and reviewer decisions are stored beside, never over, the model's predictions. Second,
-researchers can build a classifier for a staining panel that has none, checked on animals set
-aside before labelling, or improve an existing classifier from review corrections; in both cases
-candidates are judged by criteria fixed in a versioned recipe, and the project's model changes
-only through an explicit, recorded, reversible promotion. Third, provenance carries from model
-identity and input digests to the source of every finalized fiber-type decision. FiberTypeQC
-builds on established components (Cellpose, scikit-learn, napari) and does not introduce new
-segmentation or classification algorithms.
+reason, and reviewer decisions are stored beside, never over, model predictions. Second,
+researchers can build a classifier for a panel that has none, checked on animals set aside before
+labelling, or improve an existing one from review corrections; either way, candidates are judged
+by criteria fixed in a versioned recipe, and the model changes only through explicit, recorded,
+reversible promotion. Third, provenance carries from model identity and input digests to the
+source of every finalized fiber-type decision. FiberTypeQC builds on established components and
+introduces no new segmentation or classification algorithms.
 
 We built a new tool rather than extending an existing one because these properties require owning
 the data path from prediction through review to finalized tables across a whole project. Existing
@@ -118,105 +115,101 @@ flexibility than a general-purpose platform; the benefit is safeguards that appl
 
 # Software design
 
-FiberTypeQC's design balances automation, interpretability, adaptability, and reproducibility
-(\autoref{fig:workflow}).
+\autoref{fig:workflow} summarizes the workflow.
 
 ![FiberTypeQC workflow. Top: analysis from images to finalized tables and report. Lower left: building a model for a panel without one from blind labels, checked on test animals set aside before labelling. Lower right: improving a model from review corrections, compared with the current model on those review labels. Both change the project's model only through explicit, reversible promotion.\label{fig:workflow}](figures/workflow.png)
 
-**Project-level workflow.** A command-line interface manages initialization, image analysis, QC
-preparation, review, finalization, and reporting for a project folder, and reports the next step.
-An experimental desktop launcher runs the same steps as the same commands, so results do not
-depend on the interface. This staged approach requires more workflow management than a single
-processing command, but makes the analysis state and outstanding review explicit across a cohort.
-The same commands run on a workstation or a cluster: batch processing has been run in Slurm
-[@Yoo2003Slurm] jobs and review in Open OnDemand [@Hudak2018OnDemand] remote desktops.
+**Project-level workflow.** A command-line interface runs initialization, image analysis, QC
+preparation, review, finalization, and reporting on a project folder and reports the next step;
+an experimental desktop launcher runs the same commands, so results do not depend on the
+interface. Staging adds workflow management but keeps the analysis state and outstanding review
+explicit across a cohort. Batch processing has been run in Slurm [@Yoo2003Slurm] jobs and review
+in Open OnDemand [@Hudak2018OnDemand] remote desktops.
 
 **Interpretable feature-based classification.** Cellpose segments fibers from the laminin
-channel, while fiber typing uses conventional supervised models (logistic regression, random
-forests, gradient boosting) trained on explicit fluorescence measurements, including intensity
-percentiles, high-signal coverage, and signal-to-noise summaries for each marker. This was
-preferred over an end-to-end neural-network classifier because researchers can inspect the
-measurements behind an ambiguous prediction, investigate staining-related failures, and train new
-models from the modest number of labels a laboratory can realistically collect. The tradeoff is
-dependence on feature quality and staining consistency; interpretable inputs do not guarantee
-accurate predictions.
+channel; fiber typing uses conventional supervised models (logistic regression, random forests,
+gradient boosting) trained on explicit fluorescence measurements such as intensity percentiles,
+high-signal coverage, and signal-to-noise summaries for each marker. Compared with an end-to-end
+neural-network classifier, this lets researchers inspect the measurements behind an ambiguous
+prediction, investigate staining-related failures, and train models from the modest number of
+labels a laboratory can collect. The tradeoff is dependence on feature quality and staining
+consistency; interpretable inputs do not guarantee accurate predictions.
 
 **Panel-specific models.** A model is associated with a declared staining panel, feature schema,
 and extraction settings, and is identified by a SHA-256 digest; incompatible configurations are
-rejected, so no classifier is assumed to transfer across antibody and channel combinations. This
-limits immediate generality but reduces the risk of silently applying a model to unsuitable data.
-Where a released model infers IIx by exclusion, the output labels it as inferred.
+rejected rather than assumed to transfer. This limits immediate generality but reduces the risk
+of silently applying a model to unsuitable data. Where a released model infers IIx by exclusion,
+the output labels it as inferred.
 
 **Quality-control triage.** Defined image- and fiber-level criteria, including classification
 uncertainty, staining characteristics, and segmentation-related features, flag potentially
-problematic observations and order the review queue, and each flagged fiber is shown with the
-reason it was flagged. Flags do not invalidate measurements, and unflagged predictions are not
-guaranteed to be correct; how efficiently the criteria capture classification errors, compared
-with random review, has not yet been measured.
+problematic observations and order the review queue; each flagged fiber is shown with its reason.
+Flags do not invalidate measurements, and unflagged predictions are not guaranteed to be correct;
+how efficiently the criteria capture classification errors, compared with random review, has not
+yet been measured.
 
 **Non-destructive, staged review.** The napari window (\autoref{fig:review}a) works one stage at a
 time: a verdict on each section (accept it, draw areas to leave out, or leave it out), then the
 flagged fibers in priority order, with any other fiber available by clicking it, then
-finalization. Section and area verdicts are stored as the same exclusion records that finalization
-already applies, so the simpler window adds no second path through the data. Decisions are kept in
-review state and an append-only event log, separately from predictions, and input digests prevent
-them from being silently applied to changed masks or measurements. This costs more bookkeeping than
-editing a results table, but keeps human interventions distinguishable from model outputs.
+finalization. Section and area verdicts use the same exclusion records that finalization already
+applies, so the simpler window adds no second data path. Decisions are kept, separately from
+predictions, in review state and an append-only event log, and input digests prevent them from
+being silently applied to changed masks or measurements. This costs more bookkeeping than editing
+a results table but keeps human interventions distinguishable from model outputs.
 
-![Outputs on the public demonstration data. (a) The review window: fibers outlined in the color of their current call; the panel shows the stage, why the current fiber was flagged, and the decision controls. (b) The cohort report: provenance, and each animal's composition before and after an example review. The shifts reflect one reviewer's decisions on demonstration fields, not a validation.\label{fig:review}](figures/review_and_report.png)
-
-**Building a model for a new panel.** A project can start without a model: fibers are segmented
-and measured but left unclassified. Before any labels exist, some animals are set aside for
-testing. A reviewer then labels a random sample of fibers blind, so labels cannot be steered by a
-model's answer or by hand-picking. Candidates are compared by leave-one-animal-out validation on
-the training animals against a majority-class baseline, under criteria fixed in a recipe before
+**Building a model for a new panel.** A project can start without a model, with fibers segmented
+and measured but unclassified. Before any labels exist, some animals are set aside for testing. A
+reviewer then labels a random sample of fibers blind, so labels cannot be steered by a model's
+answer or by hand-picking. Candidates are compared by leave-one-animal-out validation on the
+training animals against a majority-class baseline, under criteria fixed in a recipe before
 training. The recommended candidate is then evaluated on the test animals, which take no part in
-training or selection, and is adopted only by explicit promotion, which is recorded and can be
-rolled back exactly. Classes follow the panel's stains: a fiber negative for every measured myosin
-marker is labelled marker-negative (for example IIa$^{-}$/IIb$^{-}$), not IIx, because absence of staining
-implies a fiber identity only under assumptions that a released model declares. Building requires
-up-front labelling, but researchers are no longer limited to the panels for which models are
-distributed; requirements are documented with the software.
+training or selection; adopting it is an explicit promotion, recorded and exactly reversible.
+Classes follow the panel's stains: a fiber negative for every measured myosin marker is labelled
+marker-negative (for example IIa$^{-}$/IIb$^{-}$), not IIx, because absence of staining implies a
+fiber identity only under assumptions that a released model declares. Building requires up-front
+labelling, but researchers are no longer limited to the panels for which models are distributed.
 
 **Controlled model improvement.** For a panel that already has a model, candidates retrained from
 reviewed corrections are compared with the current model by leave-one-animal-out validation on
 those labels, under a promotion rule in a versioned recipe. Reviewed fibers are selected by the QC
 queue and the reviewer, mostly hard cases, so this comparison guides model choice but is not an
 unbiased accuracy estimate; blind reference labels are kept separately for that purpose.
-Promotion is again explicit and reversible: less automatic than continuous updating, but
-auditable.
+Promotion is again explicit and reversible.
 
-**Finalized outputs.** Finalization writes new tables, leaving analysis outputs untouched: each
-fiber keeps its model prediction and morphometry (area, Feret diameters) beside its final type,
-whose source is recorded as `predicted`, `reviewed`, `excluded`, or `unresolved`. Summary tables
-report counts, composition, and fiber size per image, animal, region of interest, and cohort, with
-exclusions counted by reason. A self-contained HTML report (\autoref{fig:review}b) records the model, code
-revision, and final-table digest, and compares predicted with finalized composition. The tables
-are ready for downstream statistics: every fiber-type call traces to the model or to a reviewer,
-and measurements to the recorded run settings and code version.
+![Outputs on the public demonstration data. (a) The review window: fibers outlined in the color of their current call; the panel shows the stage, why the current fiber was flagged, and the decision controls. (b) The cohort report: provenance, and each animal's composition before and after an example review. The shifts reflect one reviewer's decisions on demonstration fields, not a validation.\label{fig:review}](figures/review_and_report.png)
+
+**Finalized outputs.** Finalization writes new tables; each fiber keeps its model prediction and
+morphometry (area, Feret diameters) beside its final type, whose source is recorded as
+`predicted`, `reviewed`, `excluded`, or `unresolved`. A reviewed class the project's model cannot
+produce is refused rather than finalized. Summary tables report counts,
+composition, and fiber size per image, animal, region of interest, and cohort, with exclusions
+counted by reason. A self-contained HTML report (\autoref{fig:review}b) records the model, code
+revision, and final-table digest and compares predicted with finalized composition. Every
+fiber-type call traces to the model or a reviewer, and measurements to the recorded run settings
+and code version.
 
 **Verification and reproducibility.** Continuous integration checks supported commands,
 repository boundaries, and synthetic reference analyses; a locked environment defines
 dependencies. On the public demonstration images, batch outputs from a Linux cluster (NVIDIA GPU)
 agreed with a macOS reference (Apple GPU) within snapshot tolerances: fiber counts differed by at
 most 0.36% and fiber-type proportions by at most 0.29 percentage points per section. These checks
-support computational reproducibility; they do not replace biological validation.
+concern computational reproducibility, not biological validity.
 
 # Research impact statement
 
-FiberTypeQC is used within an active skeletal muscle research laboratory, in mouse tibialis
-anterior and quadriceps studies covering segmentation, classification, morphometry, QC review, and
-cohort-level outputs; the two released models correspond to these staining panels. This in-house
-use established research-scale operation, not classification performance.
+FiberTypeQC is used in an active skeletal muscle research laboratory for mouse tibialis anterior
+and quadriceps studies, from segmentation through QC review to cohort-level outputs; the two
+released models correspond to these staining panels. This establishes research-scale operation,
+not classification performance.
 
 FiberTypeQC has also been applied retrospectively to imaging data from published JAG1 muscle
 research [@deSouzaLeite2025JAG1], comparing its morphometric and fiber-typing outputs with an
-established threshold-based analysis. This comparison informed the emphasis on explicit quality
-control and review; it is not presented as evidence of superior accuracy.
+established threshold-based analysis. It informed the emphasis on explicit quality control and
+review and is not presented as evidence of superior accuracy.
 
 Two public demonstrations distributed with the release run end to end: four fields from images to
-a reviewed cohort report, and a model-builder project with blind labels taken from no model
-through building, test evaluation, promotion, and exact rollback.
+a reviewed cohort report, and a model-builder project taken from blind labels through building,
+test evaluation, promotion, and exact rollback.
 
 An outside researcher installed FiberTypeQC and ran the demonstration workflow on the example
 data; their feedback informed usability changes, such as numbering image channels from one as
@@ -231,8 +224,8 @@ Generative AI tools were used during development of the software and this manusc
 models [versions]. They assisted with code implementation and refactoring, debugging, test
 scaffolding, documentation, and drafting and editing of manuscript text.
 
-James R. Conner directed the scientific objectives, software architecture, analytical workflows,
-and development priorities, and made the core design decisions. All AI-assisted code,
+James R. Conner directed the scientific objectives, software architecture, and development
+priorities and made the core design decisions. All AI-assisted code,
 documentation, and text were reviewed, edited, and validated by the authors, including through the
 software's test suite and research analyses. The authors take full responsibility for the
 accuracy, originality, and licensing of the software and manuscript.
@@ -262,11 +255,14 @@ AUTHOR NOTES (REMOVE BEFORE SUBMISSION)
   consent before thanking them by name.
 - Figure 2b and the demo: the released v0.5.1 demo had one fiber (demo_section_b, label 39)
   finalized as Type I on the three-class panel. PR #117 adds the finalization check, corrects the
-  demo with scripts/mark_fiber_uncertain.py (fiber unresolved, no class chosen), and regenerates
-  docs/images/report_composition_*.png, which this branch carries too. The corrected demo zip
-  must be attached to v0.5.2 so readers' downloads match Figure 2b.
+  demo with scripts/mark_fiber_uncertain.py (fiber unresolved, no class chosen). The v0.5.2
+  fibertypeqc_demo.zip was rebuilt from the v0.5.1 download with the docs/demo.md commands at
+  43a3365; Figure 2b and docs/images/report_composition_*.png are captured from it.
 - Version label: v0.5.1 outputs record application_version 0.5.0 (fibertypeqc/__init__.py).
-  Fixed in PR #117, with a consistency test; ships in v0.5.2.
+  Fixed in #117, with a consistency test (tests/test_version_consistency.py).
+- Unsupported-class refusal: src/review/finalization.py (_allowed_classes);
+  tests/test_review_finalization.py (test_reviewed_class_the_project_cannot_produce_is_refused,
+  test_reviewed_class_is_checked_against_review_classes_without_a_model).
 
 Claim-to-evidence map (REMOVE BEFORE SUBMISSION)
 - One CLI over a project folder; status reports the next step: src/cli.py (build_parser).
@@ -317,7 +313,7 @@ Claim-to-evidence map (REMOVE BEFORE SUBMISSION)
   Builder demo checked from the zip: build recommends a model; rollback restores every file.
 - Figure 1 is a schematic drawn by paper/figures/make_figures.py. Figure 2 combines the unedited
   screenshots docs/images/demo_review_workspace.png (napari's layer panel cropped off) and
-  docs/images/report_composition_light.png (whole; captured from the corrected demo, PR #117);
+  docs/images/report_composition_light.png (whole; captured from the v0.5.2 demo download);
   values match demo_project_completed/results/mouse_summary.csv (e.g. demo_mouse_1 IIx 25.6%
   predicted, 15.8% finalized).
 - Builder vs improver evaluation: builder: manifests/builder/recipe.v1.yaml (leave_one_mouse_out
@@ -328,6 +324,6 @@ Claim-to-evidence map (REMOVE BEFORE SUBMISSION)
   tests/test_model_builder_other_panels.py (IIx refused as a builder class on panels without a
   IIx stain; all-negative fibers are `negative`).
 - value_source is per finalized fiber-type decision: src/review/finalization.py (VALUE_SOURCES).
-- Releases: v0.5.0 (Zenodo 10.5281/zenodo.24321794), v0.5.1 (2026-11-17); concept DOI
-  10.5281/zenodo.23893717.
+- Releases: v0.5.0 (Zenodo 10.5281/zenodo.24321794), v0.5.1 (10.5281/zenodo.24325302), v0.5.2
+  (pending tag); concept DOI 10.5281/zenodo.23893717.
 -->

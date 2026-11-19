@@ -563,7 +563,7 @@ wheels = [
 
 [[package]]
 name = "fibertypeqc"
-version = "0.5.1"
+version = "0.5.2"
 source = { virtual = "." }
 dependencies = [
     { name = "cellpose" },
