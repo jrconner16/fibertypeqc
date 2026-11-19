@@ -19,13 +19,16 @@ authors:
     family-names: Kunkel
     orcid: "https://orcid.org/0000-0001-6126-0242"
     affiliation: "Division of Genetics and Genomics, Boston Children's Hospital, Boston, MA, USA; The Manton Center for Orphan Disease Research, Boston Children's Hospital, Boston, MA, USA"
-version: "0.5.1"
-date-released: "2026-11-17"
+version: "0.5.2"
+date-released: "2026-11-19"
 doi: "10.5281/zenodo.23893717"
 identifiers:
   - type: doi
     value: "10.5281/zenodo.23893717"
     description: "Concept DOI: all versions, resolves to the latest"
+  - type: doi
+    value: "10.5281/zenodo.24325302"
+    description: "FiberTypeQC v0.5.1"
   - type: doi
     value: "10.5281/zenodo.24321794"
     description: "FiberTypeQC v0.5.0"

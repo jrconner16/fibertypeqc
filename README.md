@@ -29,7 +29,7 @@ model does poorly:          review corrections ─► improve ─► compare by 
 
 ## Status
 
-Version 0.5.1. Read before relying on results:
+Version 0.5.2. Read before relying on results:
 
 - **Models are panel-specific.** A model works only on the staining panel it was trained on, and
   the pipeline refuses a mismatched panel. Two are released:
