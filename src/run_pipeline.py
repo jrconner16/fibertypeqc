@@ -16,6 +16,7 @@ from fibertypeqc.artifacts import (
     can_reuse_fiber_labels,
     file_sha256,
     load_run_manifest,
+    output_stem,
     portable_path,
     write_run_manifest,
 )
@@ -510,7 +511,7 @@ def main() -> None:
     image_id = args.image_id if args.image_id is not None else args.input.stem
     if not image_id.strip() or "/" in image_id or "\\" in image_id or image_id in {".", ".."}:
         raise SystemExit(f"Invalid --image-id: {image_id!r}")
-    stem = image_id.strip().replace(" ", "_")
+    stem = output_stem(image_id)
     preflight_qc_path = output_dir / f"{stem}_preflight_qc.json"
     preflight_checks: list[dict[str, object]] = []
     preflight_context: dict[str, object] = {"input": portable_path(args.input)}

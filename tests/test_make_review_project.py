@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
+import numpy as np
 import pandas as pd
+import tifffile
 import yaml
 
 from src.make_review_project import main
+from src.model_builder import _run_record, join_features
+from src.reference_snapshot import section_snapshot
+from src.review.finalization import nuclear_inputs
 
 
 def _image_outputs(batch: Path, image_id: str) -> None:
@@ -87,6 +93,91 @@ def test_builds_project_with_split_sections_and_conditions(tmp_path, capsys):
     assert images["slide_section-01"]["mouse_id"] == "m2"
     assert images["slide_section-01"]["condition"] == {"genotype": "mdx"}
     assert "skipped broken: batch status failed" in capsys.readouterr().out
+
+
+def _prepare_args(batch: Path, sheet: Path, panel: Path, project_dir: Path) -> list[str]:
+    return [
+        "--batch-dir", str(batch),
+        "--sample-sheet", str(sheet),
+        "--panel-config", str(panel),
+        "--project-dir", str(project_dir),
+    ]  # fmt: skip
+
+
+def test_builds_project_when_image_names_contain_spaces(tmp_path):
+    image_id = "my slide (20x)_section-01"
+    stem = "my_slide_(20x)_section-01"
+    batch = tmp_path / "batch"
+    out = batch / image_id
+    out.mkdir(parents=True)
+    (out / f"{stem}_cellpose_labels.tif").write_bytes(b"labels")
+    (out / f"{stem}_fibers.csv").write_text("label,fiber_type\n1,iia\n")
+    (out / f"{stem}_run.json").write_text(
+        json.dumps({"model_manifest_path": "manifests/models/quad_four_class_rf_v1.yaml"})
+    )
+    scenes = batch / "raw_scene_exports" / "my slide (20x)"
+    scenes.mkdir(parents=True)
+    (scenes / f"{image_id}.tif").write_bytes(b"scene")
+    pd.DataFrame({"image_name": [image_id], "status": ["success"]}).to_csv(
+        batch / "batch_summary.csv", index=False
+    )
+    sheet = tmp_path / "samples.csv"
+    pd.DataFrame(
+        {
+            "image_id": ["my slide (20x)"],
+            "mouse_id": ["m1"],
+            "raw_image_path": ["my slide (20x).czi"],
+        }
+    ).to_csv(sheet, index=False)
+    panel = tmp_path / "panel.yaml"
+    panel.write_text("channels: {}\n")
+    project_dir = tmp_path / "project"
+
+    assert main(_prepare_args(batch, sheet, panel, project_dir)) == 0
+
+    image = yaml.safe_load((project_dir / "project.yaml").read_text())["images"][0]
+    assert image["image_id"] == image_id
+    assert image["outputs"] == {
+        "fiber_labels": f"{stem}_cellpose_labels.tif",
+        "fiber_table": f"{stem}_fibers.csv",
+    }
+
+
+def test_no_usable_image_error_says_why_each_was_skipped(tmp_path, capsys):
+    batch = tmp_path / "batch"
+    batch.mkdir()
+    pd.DataFrame({"image_name": ["known"], "status": ["success"]}).to_csv(
+        batch / "batch_summary.csv", index=False
+    )
+    sheet = tmp_path / "samples.csv"
+    pd.DataFrame({"image_id": ["known"], "mouse_id": ["m1"], "raw_image_path": ["k.tif"]}).to_csv(
+        sheet, index=False
+    )
+    panel = tmp_path / "panel.yaml"
+    panel.write_text("channels: {}\n")
+
+    assert main(_prepare_args(batch, sheet, panel, tmp_path / "project")) == 2
+    assert "skipped known: fiber labels or table missing" in capsys.readouterr().err
+
+
+def test_later_steps_find_outputs_of_images_with_spaces(tmp_path):
+    image_id, stem = "my slide", "my_slide"
+    folder = tmp_path / image_id
+    (folder / "nuclear").mkdir(parents=True)
+    (folder / f"{stem}_run.json").write_text(json.dumps({"classifier_sha256": "abc"}))
+    (folder / f"{stem}_fibers.csv").write_text("label,fiber_type\n1,iia\n")
+    (folder / f"{stem}_feature_diagnostics.csv").write_text("label,feature\n1,0.5\n")
+    tifffile.imwrite(folder / f"{stem}_cellpose_labels.tif", np.ones((2, 2), dtype=np.uint16))
+    (folder / "nuclear" / f"{stem}_fiber_nuclei.csv").write_text("fiber_id\n1\n")
+    (folder / "nuclear" / f"{stem}_nuclei.csv").write_text("nucleus_id\n1\n")
+    image = SimpleNamespace(image_id=image_id, prediction_directory=folder, outputs={})
+    project = SimpleNamespace(image=lambda _image_id: image)
+
+    assert _run_record(project, image_id)["classifier_sha256"] == "abc"
+    assert section_snapshot(folder, image_id)["n_fibers"] == 1
+    assert nuclear_inputs(image) is not None
+    table = pd.DataFrame({"image_id": [image_id], "fiber_id": [1], "label": ["I"]})
+    assert join_features(project, table, ["feature"])["feature"].tolist() == [0.5]
 
 
 def test_refuses_to_overwrite_project_or_nest_inside_batch(tmp_path):

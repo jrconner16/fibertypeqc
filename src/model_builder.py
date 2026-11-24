@@ -23,7 +23,7 @@ import yaml
 from sklearn.metrics import f1_score
 from sklearn.model_selection import LeaveOneGroupOut
 
-from fibertypeqc.artifacts import file_sha256, git_commit
+from fibertypeqc.artifacts import file_sha256, git_commit, output_stem
 from fibertypeqc.feature_schema import (
     MULTIPANEL_FEATURE_SCHEMA,
     SEMANTIC_DIAGNOSTIC_SUFFIXES,
@@ -295,7 +295,7 @@ def check_minimums(table: pd.DataFrame, classes: list[str], recipe: dict[str, An
 
 def _run_record(project: Project, image_id: str) -> dict[str, Any]:
     image = project.image(image_id)
-    path = image.prediction_directory / f"{image_id}_run.json"
+    path = image.prediction_directory / f"{output_stem(image_id)}_run.json"
     if not path.is_file():
         raise BuilderError(f"{image_id}: run record not found ({path.name}).")
     return json.loads(path.read_text(encoding="utf-8"))
@@ -330,7 +330,7 @@ def join_features(
     parts = []
     for image_id, group in table.groupby("image_id", sort=True):
         image = project.image(str(image_id))
-        path = image.prediction_directory / f"{image_id}_feature_diagnostics.csv"
+        path = image.prediction_directory / f"{output_stem(str(image_id))}_feature_diagnostics.csv"
         if not path.is_file():
             raise BuilderError(f"{image_id}: measurements not found ({path.name}).")
         diagnostics = pd.read_csv(path, low_memory=False)

@@ -19,7 +19,7 @@ from typing import Any
 import pandas as pd
 import yaml
 
-from fibertypeqc.artifacts import file_sha256, git_commit
+from fibertypeqc.artifacts import file_sha256, git_commit, output_stem
 from fibertypeqc.model_manifest import load_model_manifest
 from fibertypeqc.semantic_model import predict_semantic_candidate
 from src.model_builder import (
@@ -124,7 +124,7 @@ def evaluation_inputs(
         sections[image_id] = {
             "fiber_labels": file_sha256(image.outputs["fiber_labels"]),
             "measurements": file_sha256(
-                image.prediction_directory / f"{image_id}_feature_diagnostics.csv"
+                image.prediction_directory / f"{output_stem(image_id)}_feature_diagnostics.csv"
             ),
         }
     return {
@@ -231,7 +231,8 @@ def evaluate(root: Path, project: Project, candidate: str) -> dict[str, Any]:
     for image_id, group in labels.groupby("image_id", sort=True):
         image = project.image(str(image_id))
         diagnostics = pd.read_csv(
-            image.prediction_directory / f"{image_id}_feature_diagnostics.csv", low_memory=False
+            image.prediction_directory / f"{output_stem(str(image_id))}_feature_diagnostics.csv",
+            low_memory=False,
         )
         predicted = predict_semantic_candidate(diagnostics, artifact, manifest)
         calls = predicted[["label", "model_prediction"]].rename(

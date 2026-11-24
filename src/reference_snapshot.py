@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 import tifffile
 
-from fibertypeqc.artifacts import git_commit
+from fibertypeqc.artifacts import git_commit, output_stem
 
 SNAPSHOT_SCHEMA = "fibertypeqc.reference_snapshot.v1"
 DEFAULT_COUNT_TOLERANCE = 0.02  # relative difference in fiber count
@@ -46,14 +46,15 @@ def _calls_digest(fibers: pd.DataFrame) -> str:
 
 
 def section_snapshot(section_dir: Path, image_id: str) -> dict[str, Any]:
-    fibers = pd.read_csv(section_dir / f"{image_id}_fibers.csv")
-    run = json.loads((section_dir / f"{image_id}_run.json").read_text(encoding="utf-8"))
+    stem = output_stem(image_id)
+    fibers = pd.read_csv(section_dir / f"{stem}_fibers.csv")
+    run = json.loads((section_dir / f"{stem}_run.json").read_text(encoding="utf-8"))
     counts = fibers["fiber_type"].astype(str).value_counts().sort_index()
     return {
         "image_id": image_id,
         "n_fibers": int(len(fibers)),
         "class_counts": {str(name): int(value) for name, value in counts.items()},
-        "mask_sha256": _mask_digest(section_dir / f"{image_id}_cellpose_labels.tif"),
+        "mask_sha256": _mask_digest(section_dir / f"{stem}_cellpose_labels.tif"),
         "calls_sha256": _calls_digest(fibers),
         "model_sha256": run.get("classifier_sha256"),
         "source_image_sha256": run.get("source_image_sha256"),

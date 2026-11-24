@@ -32,7 +32,7 @@ import pandas as pd
 import tifffile
 from skimage.measure import regionprops
 
-from fibertypeqc.artifacts import file_sha256, git_commit
+from fibertypeqc.artifacts import file_sha256, git_commit, output_stem
 from src.fiber_type_labels import normalize_review_label
 from src.nuclear_association import AMBIGUOUS, CENTRAL, INTERSTITIAL, PERIPHERAL, position_name
 from src.review.fiber_type_review import load_legacy_fiber_type_decisions
@@ -116,10 +116,9 @@ def image_input_fingerprints(image: ProjectImage) -> dict[str, str]:
 def nuclear_inputs(image: ProjectImage) -> tuple[Path, Path] | None:
     """The nuclear stage's per-fiber and per-nucleus tables for an image, when it ran."""
     folder = image.prediction_directory / "nuclear"
-    fibers = (
-        image.outputs.get("fiber_nuclei_summary") or folder / f"{image.image_id}_fiber_nuclei.csv"
-    )
-    nuclei = image.outputs.get("nuclei_table") or folder / f"{image.image_id}_nuclei.csv"
+    stem = output_stem(image.image_id)
+    fibers = image.outputs.get("fiber_nuclei_summary") or folder / f"{stem}_fiber_nuclei.csv"
+    nuclei = image.outputs.get("nuclei_table") or folder / f"{stem}_nuclei.csv"
     return (fibers, nuclei) if fibers.is_file() and nuclei.is_file() else None
 
 

@@ -30,6 +30,11 @@ RECORDED_DISTRIBUTIONS = (
 LEGACY_OUTPUT_SCHEMA_VERSION = "legacy_fibers.v1"
 
 
+def output_stem(image_id: str) -> str:
+    """Filename prefix of an image's pipeline outputs (its folder keeps the image ID as given)."""
+    return image_id.strip().replace(" ", "_")
+
+
 def decide_artifact_reuse(
     *,
     panel_changed: bool = False,
