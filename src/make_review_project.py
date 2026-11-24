@@ -27,6 +27,7 @@ from typing import Any
 import pandas as pd
 import yaml
 
+from fibertypeqc.artifacts import output_stem
 from src.fiber_type_labels import class_labels_for
 
 REQUIRED_COLUMNS = ("image_id", "mouse_id", "raw_image_path")
@@ -106,8 +107,9 @@ def build_project(
             continue
         sample = rows[base_id]
         prediction_dir = batch_dir / image_id
-        labels = prediction_dir / f"{image_id}_cellpose_labels.tif"
-        fibers = prediction_dir / f"{image_id}_fibers.csv"
+        stem = output_stem(image_id)
+        labels = prediction_dir / f"{stem}_cellpose_labels.tif"
+        fibers = prediction_dir / f"{stem}_fibers.csv"
         if not labels.is_file() or not fibers.is_file():
             warnings.append(
                 f"skipped {image_id}: fiber labels or table missing (run_batch --retain-mode full)"
@@ -129,7 +131,7 @@ def build_project(
             if not raw_image.is_absolute():
                 raw_image = (sample_sheet.parent / raw_image).resolve()
             section_id = sample.get("section_id") or "s1"
-        model_versions.add(_model_version(prediction_dir / f"{image_id}_run.json"))
+        model_versions.add(_model_version(prediction_dir / f"{stem}_run.json"))
         condition = {
             column: value
             for column, value in sample.items()
@@ -148,7 +150,11 @@ def build_project(
             }
         )
     if not images:
-        raise ValueError("No successful batch images matched the sample sheet")
+        reasons = "; ".join(warnings[:5]) + (" …" if len(warnings) > 5 else "")
+        raise ValueError(
+            "No successful batch images matched the sample sheet"
+            + (f": {reasons}" if reasons else "")
+        )
     if len(model_versions) != 1:
         raise ValueError(f"Batch images used different models: {sorted(model_versions)}")
     project = {

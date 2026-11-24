@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from fibertypeqc.artifacts import output_stem
 from fibertypeqc.model_resolution import default_model_id, resolve_model_argument
 from src.fiber_type_labels import normalize_review_label
 from src.model_evaluation import (
@@ -237,7 +238,7 @@ def _retype(
             if not old.iloc[:, 0].equals(new.iloc[:, 0]):
                 raise PromotionError(f"{image.image_id}: fiber IDs changed during re-typing.")
             if check_features is not None:
-                name = f"{image.image_id}_feature_diagnostics.csv"
+                name = f"{output_stem(image.image_id)}_feature_diagnostics.csv"
                 if not _same_measurements(
                     image.prediction_directory / name, out / name, check_features
                 ):

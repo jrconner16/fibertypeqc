@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from fibertypeqc.artifacts import file_sha256
+from fibertypeqc.artifacts import file_sha256, output_stem
 from fibertypeqc.model_resolution import default_model_id, resolve_model_argument
 from src.model_improver import ImproverError, improve, load_recipe
 from src.review.project import Project, load_project
@@ -43,7 +43,8 @@ def extract_features(
     image = project.image(image_id)
     labels, fibers = image.outputs["fiber_labels"], image.outputs["fiber_table"]
     folder = cache / image_id
-    table = folder / f"{image_id}_feature_diagnostics.csv"
+    stem = output_stem(image_id)
+    table = folder / f"{stem}_feature_diagnostics.csv"
     stamp = folder / "inputs.json"
     inputs = {"labels": file_sha256(labels), "fibers": file_sha256(fibers), "model": model}
     if not (table.is_file() and stamp.is_file() and json.loads(stamp.read_text()) == inputs):
@@ -67,7 +68,7 @@ def extract_features(
     # The recomputed calls must be the calls that were reviewed; otherwise the features are not
     # the ones the current model saw.
     original = pd.read_csv(fibers, low_memory=False)
-    recomputed = pd.read_csv(folder / f"{image_id}_fibers.csv", low_memory=False)
+    recomputed = pd.read_csv(folder / f"{stem}_fibers.csv", low_memory=False)
     key = "fiber_id" if "fiber_id" in original.columns else "label"
     same = (
         len(original) == len(recomputed) == len(features)

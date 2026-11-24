@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from fibertypeqc.artifacts import file_sha256
+from fibertypeqc.artifacts import file_sha256, output_stem
 from fibertypeqc.czi_scenes import discover_czi_scenes, export_czi_scenes
 from fibertypeqc.model_resolution import default_model_id, resolve_model_argument
 
@@ -224,11 +224,6 @@ def build_batch_command(
             cmd.extend([flag, str(value)])
 
     return cmd
-
-
-def output_stem(image_id: str) -> str:
-    """Match src.run_pipeline output filename normalization for --image-id."""
-    return image_id.strip().replace(" ", "_")
 
 
 def _error_tail(stderr: str | None, max_lines: int = 8, max_chars: int = 1500) -> str:
