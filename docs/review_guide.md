@@ -80,6 +80,15 @@ first opened, the reviewer records digests of its label mask and fiber table; if
 change, it warns, and finalization refuses that section rather than applying decisions to the wrong
 fibers.
 
+**Starting over.** *Undo last decision* in the review window reverses only the last fiber-type decision. To go
+back to the model calls, close the reviewer and rename `<project>/review/` (for example to
+`review_old/`), then reopen the reviewer. It starts with no decisions. Nothing else needs to change:
+predictions, QC, and section choices are kept elsewhere, and a blind reference review lives
+separately under `<project>/reference/`. Finalize again to rebuild `final/` and the report from the
+model calls. To return to the earlier review, rename the folder back. There is no way yet to roll
+back to a point partway through a review, so if you want a fallback, copy `<project>/review/`
+before a risky session.
+
 When you are done (or want a look at interim results), click **Finalize and build report** on the
 Finish stage, or **Review → Finalize and build report**. It applies your decisions,
 writes the finalized tables and summaries, and opens the report; you can keep reviewing and do it
